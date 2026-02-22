@@ -19,10 +19,10 @@ type FlashcardsView = 'generate' | 'overview' | 'study';
 
 /* ── Count options for generation ── */
 const countOptions = [
-    { value: 10, label: 'Quick review' },
-    { value: 20, label: 'Standard set' },
-    { value: 30, label: 'Comprehensive' },
-    { value: 50, label: 'Deep dive' },
+    { value: 5, label: 'Quick review' },
+    { value: 10, label: 'Standard set' },
+    { value: 15, label: 'Comprehensive' },
+    { value: 20, label: 'Deep dive' },
 ];
 
 interface FlashcardsPanelProps {
@@ -39,7 +39,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     const [error, setError] = useState<string | null>(null);
 
     /* ── Generation form state ── */
-    const [selectedCount, setSelectedCount] = useState(20);
+    const [selectedCount, setSelectedCount] = useState(10);
     const [instructions, setInstructions] = useState('');
 
     /* ── Load existing flashcards for this note ── */

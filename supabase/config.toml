@@ -365,6 +365,22 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
+# ── Edge Functions: disable JWT verification for AI proxy functions ──
+# These functions only call the Gemini API and don't access the database,
+# so they don't need JWT auth. The frontend ProtectedRoute already
+# ensures only authenticated users can reach these features.
+[functions.chat]
+verify_jwt = false
+
+[functions.generate-flashcards]
+verify_jwt = false
+
+[functions.generate-quiz]
+verify_jwt = false
+
+[functions.generate-podcast]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

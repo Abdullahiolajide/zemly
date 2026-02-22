@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
+import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TextStyleKit } from '@tiptap/extension-text-style';
@@ -75,6 +76,7 @@ const NotePage: React.FC = () => {
                 placeholder: 'Start writing your note…',
             }),
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
+            Underline,
             Highlight.configure({ multicolor: true }),
             Image,
             Table.configure({ resizable: true }),

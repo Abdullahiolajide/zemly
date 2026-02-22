@@ -30,6 +30,25 @@ export interface PodcastLine {
 /* ── API calls ── */
 
 /**
+ * Extract a meaningful error message from a Supabase Edge Function error.
+ * The Supabase client returns a generic "Edge Function returned a non-2xx status code"
+ * in `error.message`, but the actual error body is inside `error.context` (a Response).
+ */
+async function extractErrorMessage(
+    error: { message?: string; context?: unknown },
+    fallback: string,
+): Promise<string> {
+    try {
+        const ctx = error.context;
+        if (ctx && typeof (ctx as Response).json === 'function') {
+            const body = await (ctx as Response).json();
+            if (body?.error) return body.error;
+        }
+    } catch { /* ignore parse failures */ }
+    return error.message || fallback;
+}
+
+/**
  * Chat with the AI about a note's content.
  * Maintains conversation history via the `messages` array.
  */
@@ -41,7 +60,7 @@ export async function chatWithNote(
         body: { noteContent, messages },
     });
 
-    if (error) throw new Error(error.message || 'Chat request failed');
+    if (error) throw new Error(await extractErrorMessage(error, 'Chat request failed'));
     return data.reply;
 }
 
@@ -56,7 +75,7 @@ export async function generateFlashcards(
         body: { noteContent, count },
     });
 
-    if (error) throw new Error(error.message || 'Flashcard generation failed');
+    if (error) throw new Error(await extractErrorMessage(error, 'Flashcard generation failed'));
     return data.flashcards;
 }
 
@@ -71,7 +90,7 @@ export async function generateQuiz(
         body: { noteContent, count },
     });
 
-    if (error) throw new Error(error.message || 'Quiz generation failed');
+    if (error) throw new Error(await extractErrorMessage(error, 'Quiz generation failed'));
     return data.questions;
 }
 
@@ -85,6 +104,6 @@ export async function generatePodcast(
         body: { noteContent },
     });
 
-    if (error) throw new Error(error.message || 'Podcast generation failed');
+    if (error) throw new Error(await extractErrorMessage(error, 'Podcast generation failed'));
     return data.script;
 }
