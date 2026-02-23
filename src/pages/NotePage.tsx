@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -14,6 +14,7 @@ import 'prosemirror-view/style/prosemirror.css';
 import { getNote, updateNote } from '../lib/notesService';
 import type { Note } from '../types';
 import FlashcardsPanel from '../components/FlashcardsPanel';
+import QuizPanel from '../components/QuizPanel';
 
 import { MdAutoAwesome } from 'react-icons/md';
 import { IoDocumentTextOutline, IoEyeOutline } from 'react-icons/io5';
@@ -42,26 +43,39 @@ import ThemeModal from '../components/ThemeModal';
 
 /* ── Note-page sidebar nav items ── */
 const noteSidebarLinks = [
-    { icon: IoDocumentTextOutline, label: 'Document' },
-    { icon: BsChatDots, label: 'Chat Bot' },
-    { icon: BsMic, label: 'Podcast' },
-    { icon: TbCards, label: 'Flashcards' },
-    { icon: PiExam, label: 'Quiz' },
+    { icon: IoDocumentTextOutline, label: 'Document', slug: '' },
+    { icon: BsChatDots, label: 'Chat Bot', slug: 'chat' },
+    { icon: BsMic, label: 'Podcast', slug: 'podcast' },
+    { icon: TbCards, label: 'Flashcards', slug: 'flashcards' },
+    { icon: PiExam, label: 'Quiz', slug: 'quiz' },
 ];
 
 type SidebarSection = 'Document' | 'Chat Bot' | 'Podcast' | 'Flashcards' | 'Quiz';
 
+/** Map URL slug → sidebar section label */
+const slugToSection: Record<string, SidebarSection> = {
+    '': 'Document',
+    chat: 'Chat Bot',
+    podcast: 'Podcast',
+    flashcards: 'Flashcards',
+    quiz: 'Quiz',
+};
+
 const NotePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuthStore();
+
+    /* ── Derive active section from the URL ── */
+    const pathSlug = location.pathname.split(`/notes/${id}/`)[1] || '';
+    const activeSection: SidebarSection = slugToSection[pathSlug] || 'Document';
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [note, setNote] = useState<Note | null>(null);
     const [loading, setLoading] = useState(true);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [themeModalOpen, setThemeModalOpen] = useState(false);
-    const [activeSection, setActiveSection] = useState<SidebarSection>('Document');
 
     /* Force toolbar re-render on every editor state change (mark toggles, selection, etc.) */
     const [, setEditorKey] = useState(0);
@@ -204,7 +218,7 @@ const NotePage: React.FC = () => {
                             {noteSidebarLinks.map((link) => (
                                 <button
                                     key={link.label}
-                                    onClick={() => setActiveSection(link.label as SidebarSection)}
+                                    onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
                                     className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ${activeSection === link.label
                                         ? 'bg-indigo-500/12 text-indigo-400'
                                         : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200'
@@ -498,8 +512,17 @@ const NotePage: React.FC = () => {
                         </div>
                     )}
 
+                    {activeSection === 'Quiz' && id && (
+                        <div className="flex-1 overflow-y-auto">
+                            <QuizPanel
+                                noteId={Number(id)}
+                                getNoteText={() => editor?.getText() || ''}
+                            />
+                        </div>
+                    )}
+
                     {/* Placeholder for other sections */}
-                    {activeSection !== 'Document' && activeSection !== 'Flashcards' && (
+                    {activeSection !== 'Document' && activeSection !== 'Flashcards' && activeSection !== 'Quiz' && (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4">
                             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900/60">
                                 <MdAutoAwesome className="h-8 w-8 text-indigo-400" />

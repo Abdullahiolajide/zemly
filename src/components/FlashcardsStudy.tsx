@@ -22,12 +22,14 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
     const [isFlipped, setIsFlipped] = useState(false);
     const [showMastery, setShowMastery] = useState(false);
 
+    const unfamiliarCount = cards.filter((c) => c.status === 'unfamiliar').length;
     const newCount = cards.filter((c) => c.status === 'new').length;
     const learningCount = cards.filter((c) => c.status === 'learning').length;
     const masteredCount = cards.filter((c) => c.status === 'mastered').length;
 
-    // Build the study queue: new cards first, then learning
+    // Build the study queue: unfamiliar first, then new, then learning
     const studyQueue = [
+        ...cards.filter((c) => c.status === 'unfamiliar'),
         ...cards.filter((c) => c.status === 'new'),
         ...cards.filter((c) => c.status === 'learning'),
     ];
@@ -53,7 +55,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                 }
             } else {
                 newKnowCount = 0;
-                newStatus = 'learning';
+                newStatus = 'unfamiliar';
             }
 
             onCardUpdate(currentCard.id, newStatus, newKnowCount);
@@ -98,7 +100,11 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                 </button>
 
                 {/* Status badges */}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-red-400">
+                        <span className="h-2 w-2 rounded-full bg-red-400" />
+                        {unfamiliarCount} Unfamiliar
+                    </span>
                     <span className="flex items-center gap-1.5 text-[12px] font-semibold text-blue-400">
                         <span className="h-2 w-2 rounded-full bg-blue-400" />
                         {newCount} New
@@ -146,11 +152,11 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                     </div>
 
                     {/* Flip hint */}
-                    {!isFlipped && (
+                    {/* {!isFlipped && ( */}
                         <p className="mb-6 text-center text-[12px] text-zinc-600">
                             Click the card to reveal the answer
                         </p>
-                    )}
+                    {/* )} */}
 
                     {/* ── Answer Buttons ── */}
                     <div className="flex items-center justify-center gap-4">
@@ -179,6 +185,18 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                     </div>
                 </div>
             ) : null}
+
+            {/* ── Reset Progress (always visible when all mastered) ── */}
+            {allMastered && (
+                <div className="mt-6 flex items-center justify-center">
+                    <button
+                        onClick={handleReset}
+                        className="flex items-center gap-2 rounded-xl border border-zinc-800/60 px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:bg-zinc-800/50 hover:text-zinc-200"
+                    >
+                        Reset Progress
+                    </button>
+                </div>
+            )}
 
             {/* ── Mastery Modal ── */}
             <MasteryModal

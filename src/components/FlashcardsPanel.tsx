@@ -7,9 +7,11 @@ import {
     saveFlashcardSet,
     getLatestFlashcardSet,
     getFlashcards,
+    addCardsToSet,
     updateFlashcardStatus,
     resetFlashcardProgress,
-    deleteFlashcardSet,
+    deleteFlashcard,
+    updateFlashcardContent,
 } from '../lib/flashcardsService';
 import FlashcardsOverview from './FlashcardsOverview';
 import FlashcardsStudy from './FlashcardsStudy';
@@ -65,7 +67,15 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         return () => { cancelled = true; };
     }, [noteId]);
 
-    /* ── Generate flashcards ── */
+/* ── Similarity check to deduplicate flashcards on the frontend ── */
+function isTooSimilar(a: string, b: string): boolean {
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const na = normalize(a);
+    const nb = normalize(b);
+    return na === nb || na.includes(nb) || nb.includes(na);
+}
+
+/* ── Generate flashcards ── */
     const handleGenerate = useCallback(async () => {
         const text = getNoteText();
         if (!text.trim()) {
@@ -81,22 +91,39 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                 ? `${text}\n\nSpecial instructions: ${instructions}`
                 : text;
 
-            // Delete old set if exists
-            if (setId) {
-                await deleteFlashcardSet(setId);
-            }
-
             // Generate via AI
             const generated: Flashcard[] = await generateFlashcards(noteText, selectedCount);
 
-            // Save to Supabase
-            const { set, cards: savedCards } = await saveFlashcardSet(
-                noteId,
-                generated.map((c) => ({ front: c.front, back: c.back })),
+            // Deduplicate against existing cards on the frontend
+            const existingFronts = cards.map((c) => c.front);
+            const uniqueCards = generated.filter(
+                (card) => !existingFronts.some((existing) => isTooSimilar(existing, card.front)),
             );
 
-            setSetId(set.id);
-            setCards(savedCards);
+            if (uniqueCards.length === 0 && cards.length > 0) {
+                setError('All generated cards were too similar to existing ones. Try again or add different instructions.');
+                return;
+            }
+
+            const cardsToSave = uniqueCards.length > 0 ? uniqueCards : generated;
+
+            if (setId) {
+                // Append to existing set
+                const newCards = await addCardsToSet(
+                    setId,
+                    cardsToSave.map((c) => ({ front: c.front, back: c.back })),
+                );
+                setCards((prev) => [...prev, ...newCards]);
+            } else {
+                // Create a brand new set
+                const { set, cards: savedCards } = await saveFlashcardSet(
+                    noteId,
+                    cardsToSave.map((c) => ({ front: c.front, back: c.back })),
+                );
+                setSetId(set.id);
+                setCards(savedCards);
+            }
+
             setView('overview');
             setInstructions('');
         } catch (err) {
@@ -107,7 +134,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         } finally {
             setIsGenerating(false);
         }
-    }, [getNoteText, instructions, selectedCount, noteId, setId]);
+    }, [getNoteText, instructions, selectedCount, noteId, setId, cards]);
 
     /* ── Handle Know / Don't Know ── */
     const handleCardUpdate = useCallback(
@@ -145,6 +172,48 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         }
     }, [setId]);
 
+    /* ── Delete a single card ── */
+    const handleDeleteCard = useCallback(async (cardId: number) => {
+        // Optimistic remove
+        setCards((prev) => {
+            const updated = prev.filter((c) => c.id !== cardId);
+            // If we deleted the last card, go back to generate view
+            if (updated.length === 0) setView('generate');
+            return updated;
+        });
+
+        try {
+            await deleteFlashcard(cardId);
+        } catch (err) {
+            console.error('Failed to delete card:', err);
+            // Revert on error
+            if (setId) {
+                const fresh = await getFlashcards(setId);
+                setCards(fresh);
+                if (fresh.length > 0) setView('overview');
+            }
+        }
+    }, [setId]);
+
+    /* ── Edit a single card's content ── */
+    const handleEditCard = useCallback(async (cardId: number, front: string, back: string) => {
+        // Optimistic update
+        setCards((prev) =>
+            prev.map((c) => (c.id === cardId ? { ...c, front, back } : c)),
+        );
+
+        try {
+            await updateFlashcardContent(cardId, front, back);
+        } catch (err) {
+            console.error('Failed to update card:', err);
+            // Revert on error
+            if (setId) {
+                const fresh = await getFlashcards(setId);
+                setCards(fresh);
+            }
+        }
+    }, [setId]);
+
     /* ── Loading state ── */
     if (isLoading) {
         return (
@@ -173,14 +242,16 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
             <FlashcardsOverview
                 cards={cards}
                 onStartStudying={() => setView('study')}
-                onRegenerate={() => setView('generate')}
+                onCreateMore={() => setView('generate')}
+                onDeleteCard={handleDeleteCard}
+                onEditCard={handleEditCard}
             />
         );
     }
 
     /* ── Generate view (default) ── */
     return (
-        <div className="mx-auto w-full max-w-2xl px-8 py-12 lg:px-16">
+        <div className="mx-auto w-full max-w-4xl px-8 py-12 lg:px-16">
             {/* ── Header ── */}
             <div className="mb-10 text-center">
                 <h2 className="mb-3 text-3xl font-bold text-zinc-100">

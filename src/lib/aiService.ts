@@ -81,17 +81,49 @@ export async function generateFlashcards(
 
 /**
  * Generate a multiple-choice quiz from note content.
+ * The model decides how many questions to create (capped at 20).
  */
 export async function generateQuiz(
     noteContent: string,
-    count = 5,
 ): Promise<QuizQuestion[]> {
     const { data, error } = await supabase.functions.invoke('generate-quiz', {
-        body: { noteContent, count },
+        body: { noteContent },
     });
 
     if (error) throw new Error(await extractErrorMessage(error, 'Quiz generation failed'));
     return data.questions;
+}
+
+/**
+ * Generate an explanation for why the correct answer is correct.
+ * Called on-demand when the user clicks "Correct Answer Explained".
+ */
+export async function generateQuizExplanation(
+    question: string,
+    options: string[],
+    correctIndex: number,
+    noteContent: string,
+): Promise<string> {
+    const { data, error } = await supabase.functions.invoke('chat', {
+        body: {
+            noteContent,
+            messages: [
+                {
+                    role: 'user',
+                    content: `Explain why the correct answer to this quiz question is correct. Be concise (2-3 sentences max).
+
+Question: ${question}
+Options: ${options.map((o, i) => `${i + 1}. ${o}`).join('\n')}
+Correct answer: ${options[correctIndex]}
+
+Explain why "${options[correctIndex]}" is correct.`,
+                },
+            ],
+        },
+    });
+
+    if (error) throw new Error(await extractErrorMessage(error, 'Failed to generate explanation'));
+    return data.reply;
 }
 
 /**

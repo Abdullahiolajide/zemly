@@ -20,7 +20,7 @@ const AppRouter: React.FC = () => {
                     }
                 />
                 <Route
-                    path="/notes/:id"
+                    path="/notes/:id/*"
                     element={
                         <ProtectedRoute>
                             <NotePage />

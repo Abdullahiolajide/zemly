@@ -42,6 +42,29 @@ export async function saveFlashcardSet(
 }
 
 /**
+ * Add new cards to an existing flashcard set.
+ * Returns the newly inserted cards.
+ */
+export async function addCardsToSet(
+    setId: number,
+    cards: { front: string; back: string }[],
+): Promise<FlashcardCard[]> {
+    const cardRows = cards.map((c) => ({
+        set_id: setId,
+        front: c.front,
+        back: c.back,
+    }));
+
+    const { data, error } = await supabase
+        .from('flashcards')
+        .insert(cardRows)
+        .select();
+
+    if (error) throw error;
+    return (data ?? []) as FlashcardCard[];
+}
+
+/**
  * Fetch the most recent flashcard set for a note (if any).
  */
 export async function getLatestFlashcardSet(
@@ -134,6 +157,36 @@ export async function deleteFlashcardSet(
         .from('flashcard_sets')
         .delete()
         .eq('id', setId);
+
+    if (error) throw error;
+}
+
+/**
+ * Delete a single flashcard by its id.
+ */
+export async function deleteFlashcard(
+    cardId: number,
+): Promise<void> {
+    const { error } = await supabase
+        .from('flashcards')
+        .delete()
+        .eq('id', cardId);
+
+    if (error) throw error;
+}
+
+/**
+ * Update the front and/or back content of a single flashcard.
+ */
+export async function updateFlashcardContent(
+    cardId: number,
+    front: string,
+    back: string,
+): Promise<void> {
+    const { error } = await supabase
+        .from('flashcards')
+        .update({ front, back })
+        .eq('id', cardId);
 
     if (error) throw error;
 }

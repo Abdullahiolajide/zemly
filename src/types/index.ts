@@ -26,7 +26,7 @@ export interface AuthState {
     logout: () => void;
 }
 
-export type FlashcardStatus = 'new' | 'learning' | 'mastered';
+export type FlashcardStatus = 'new' | 'learning' | 'mastered' | 'unfamiliar';
 
 export interface FlashcardSet {
     id: number;
@@ -41,6 +41,28 @@ export interface FlashcardCard {
     front: string;
     back: string;
     status: FlashcardStatus;
+    know_count: number;
+    created_at: string;
+}
+
+/* ── Quiz types ── */
+
+export type QuizStatus = 'new' | 'unfamiliar' | 'learning' | 'mastered';
+
+export interface QuizSet {
+    id: number;
+    note_id: number;
+    user_id: string;
+    created_at: string;
+}
+
+export interface QuizQuestionRow {
+    id: number;
+    set_id: number;
+    question: string;
+    options: string[];
+    correct_index: number;
+    status: QuizStatus;
     know_count: number;
     created_at: string;
 }
