@@ -27,10 +27,9 @@ serve(async (req: Request) => {
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
-- Decide the number of questions based on how much content there is (minimum 5, maximum 20).
+- Decide the number of questions based on how much content there is min-5, max-20.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
-- Do NOT include explanations — they will be generated separately on demand.
 - Return ONLY valid JSON, no markdown fences.
 
 Return format: {"questions":[{"question":"...","options":["A","B","C","D"],"correctIndex":0}]}

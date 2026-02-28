@@ -52,10 +52,19 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
 
     const currentCard = cards[currentIndex];
 
+    // Navigate cards
     const goNext = () => setCurrentIndex((i) => Math.min(i + 1, cards.length - 1));
     const goPrev = () => setCurrentIndex((i) => Math.max(i - 1, 0));
 
-    /* ── Group cards by status (Unfamiliar → Learning → New → Mastered) ── */
+    // Handle Editing "Current Preview Card"
+    const handleEditCurrent = () => {
+        if (!currentCard) return;
+        setEditingId(currentCard.id);
+        setEditFront(currentCard.front);
+        setEditBack(currentCard.back);
+    };
+
+    /* ── Group cards just for the list view below ── */
     const groupedCards = (['unfamiliar', 'learning', 'new', 'mastered'] as const).map((status) => ({
         status,
         ...statusConfig[status],
@@ -63,12 +72,6 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
     })).filter((g) => g.cards.length > 0);
 
     /* ── Edit helpers ── */
-    const startEditing = (card: FlashcardCard) => {
-        setEditingId(card.id);
-        setEditFront(card.front);
-        setEditBack(card.back);
-    };
-
     const cancelEditing = () => {
         setEditingId(null);
         setEditFront('');
@@ -83,85 +86,132 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
     };
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-8 py-10 lg:px-16">
+        <div className="mx-auto w-full max-w-5xl px-6 py-6 lg:px-12">
             {/* ── Header ── */}
-            <div className="mb-8 flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400/20 to-purple-500/20">
-                    <TbCards className="h-7 w-7 text-indigo-400" />
+            <div className="mb-6 flex flex-col gap-1">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        <TbCards className="h-6 w-6" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Flashcards</h2>
                 </div>
-                <div>
-                    <h2 className="text-2xl font-bold text-zinc-100">Flashcards</h2>
-                    <p className="text-[13px] text-zinc-500">{cards.length} Total Flashcards</p>
+                <p className="ml-14 text-sm text-zinc-500">{cards.length} Total Flashcards</p>
+            </div>
+
+            {/* ── Status Pills (Centered) ── */}
+            <div className="mb-8 flex justify-center">
+                <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-600 dark:bg-blue-500/20 dark:text-blue-300">
+                        {newCount} New
+                    </span>
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-600 dark:bg-amber-500/20 dark:text-amber-300">
+                        {learningCount} Learning
+                    </span>
+                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-600 dark:bg-green-500/20 dark:text-green-300">
+                        {masteredCount} Mastered
+                    </span>
                 </div>
             </div>
 
-            {/* ── Status Badges ── */}
-            <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400">
-                    {unfamiliarCount} Unfamiliar
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400">
-                    {newCount} New
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400">
-                    {learningCount} Learning
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400">
-                    {masteredCount} Mastered
-                </span>
+            {/* ── Main Card Carousel ── */}
+            <div className="relative mx-auto mb-10 w-full max-w-3xl">
+                {currentCard ? (
+                    <div className="group relative flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-zinc-200 bg-zinc-50 p-12 text-center shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900/40">
+                         {/* Card Content or Edit Form */}
+                         {editingId === currentCard.id ? (
+                             <div className="w-full space-y-4">
+                                 <div>
+                                    <label className="text-xs font-bold uppercase text-zinc-400">Front</label>
+                                    <textarea
+                                        value={editFront}
+                                        onChange={(e) => setEditFront(e.target.value)} 
+                                        rows={3}
+                                        className="mt-1 w-full rounded-xl border border-zinc-300 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                                    />
+                                 </div>
+                                 <div className="border-t border-zinc-200 dark:border-zinc-800 pt-4">
+                                    <label className="text-xs font-bold uppercase text-zinc-400">Back</label>
+                                    <textarea
+                                        value={editBack}
+                                        onChange={(e) => setEditBack(e.target.value)}
+                                        rows={3} 
+                                        className="mt-1 w-full rounded-xl border border-zinc-300 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+                                    />
+                                 </div>
+                                 <div className="flex justify-end gap-2 pt-2">
+                                     <button onClick={cancelEditing} className="px-3 py-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">Cancel</button>
+                                     <button onClick={saveEditing} className="rounded-lg bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-600">Save</button>
+                                 </div>
+                             </div>
+                         ) : (
+                             <>
+                                <h3 className="text-xl font-medium leading-relaxed text-zinc-700 dark:text-zinc-200">
+                                    {currentCard.front}
+                                </h3>
+                                {/* Small hint of back content on hover could go here, or just keep it simple as a preview */}
+                             </>
+                         )}
+                    </div>
+                ) : (
+                    <div className="flex h64 w-full items-center justify-center rounded-3xl border border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/20">
+                        <p className="text-zinc-400">No cards available.</p>
+                    </div>
+                )}
             </div>
 
-            {/* ── Card Preview ── */}
-            {currentCard && (
-                <div className="mb-6 flex min-h-[260px] items-center justify-center rounded-2xl border-2 border-zinc-800/60 bg-zinc-900/30 p-8">
-                    <p className="text-center text-lg font-medium text-zinc-200">
-                        {currentCard.front}
-                    </p>
-                </div>
-            )}
-
-            {/* ── Navigation ── */}
-            <div className="mb-8 flex items-center justify-center gap-6">
+            {/* ── Carousel Controls ── */}
+            <div className="mb-12 flex items-center justify-center gap-8">
                 <button
                     onClick={goPrev}
                     disabled={currentIndex === 0}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800/60 text-zinc-400 transition-all hover:bg-zinc-800/50 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                    className="flex h-10 w-10 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-800 disabled:opacity-30 dark:hover:text-zinc-200"
                 >
-                    <FiChevronLeft className="h-5 w-5" />
+                    <FiChevronLeft className="h-6 w-6" />
                 </button>
-                <span className="text-[14px] font-medium text-zinc-400">
-                    <span className="text-zinc-100">{currentIndex + 1}</span> / {cards.length}
+                <span className="font-mono text-sm font-medium text-zinc-500">
+                    {currentIndex + 1} / {cards.length}
                 </span>
                 <button
                     onClick={goNext}
                     disabled={currentIndex === cards.length - 1}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800/60 text-zinc-400 transition-all hover:bg-zinc-800/50 hover:text-zinc-200 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-400"
+                    className="flex h-10 w-10 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-800 disabled:opacity-30 dark:hover:text-zinc-200"
                 >
-                    <FiChevronRight className="h-5 w-5" />
+                    <FiChevronRight className="h-6 w-6" />
                 </button>
             </div>
 
-            {/* ── Action Buttons ── */}
-            <div className="flex items-center justify-between">
-                <button
-                    onClick={onCreateMore}
-                    className="flex items-center gap-2 rounded-xl border border-zinc-800/60 px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:bg-zinc-800/50 hover:text-zinc-100"
+            {/* ── Main Actions Row ── */}
+            <div className="flex items-center justify-between border-t border-zinc-200 pt-8 dark:border-zinc-800">
+                 <button
+                    onClick={handleEditCurrent}
+                    disabled={!currentCard}
+                    className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-white px-5 py-2.5 text-sm font-semibold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:text-zinc-900 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                    <FiPlus className="h-4 w-4" />
-                    Create New Flashcards
+                    <FiEdit2 className="h-4 w-4" />
+                    Edit Flashcards
                 </button>
 
-                <button
-                    onClick={onStartStudying}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/35 hover:brightness-110"
-                >
-                    <BsPlay className="h-4 w-4" />
-                    Start Studying
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onCreateMore}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-zinc-500 transition-colors hover:text-zinc-800 dark:hover:text-zinc-300"
+                    >
+                        <FiPlus className="h-4 w-4" />
+                        Add Cards
+                    </button>
+                    <button
+                        onClick={onStartStudying}
+                        className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-500/25 transition-all hover:bg-indigo-500 hover:shadow-indigo-500/40"
+                    >
+                        <BsPlay className="h-5 w-5" />
+                        Start Studying
+                    </button>
+                </div>
             </div>
 
-            {/* ── Grouped Card List ── */}
-            <div className="mt-10 space-y-8">
+            {/* ── Grouped Card List (Secondary View) ── */}
+            <div className="mt-16 space-y-12">
+
                 {groupedCards.map((group) => (
                     <div key={group.status}>
                         {/* Group Header — centered with lines */}

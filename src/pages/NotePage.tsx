@@ -292,11 +292,7 @@ const NotePage: React.FC = () => {
                                 <LuClock4 className="h-4 w-4" />
                             </button>
 
-                            {/* Share */}
-                            <button className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 text-[13px] font-semibold text-white shadow-md shadow-indigo-500/20 transition-all hover:shadow-indigo-500/35 hover:brightness-110">
-                                <RiShareLine className="h-4 w-4" />
-                                Share
-                            </button>
+                           
 
                             {/* More */}
                             <button className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-300">

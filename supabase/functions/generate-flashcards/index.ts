@@ -28,9 +28,9 @@ serve(async (req: Request) => {
         const note = truncateNote(noteContent);
 
         const prompt = `Generate ${safeCount} flashcards from this note. Each has "front" (question/term) and "back" (short answer).
-Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
+        Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
-${note}`;
+        ${note}`;
 
         const raw = await promptGemini(prompt, {
             temperature: 0.5,
