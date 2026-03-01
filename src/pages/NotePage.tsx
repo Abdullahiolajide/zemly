@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -10,18 +10,24 @@ import Image from '@tiptap/extension-image';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TextStyleKit } from '@tiptap/extension-text-style';
 import 'prosemirror-view/style/prosemirror.css';
+import html2pdf from 'html2pdf.js';
 
 import { getNote, updateNote } from '../lib/notesService';
 import type { Note } from '../types';
 import FlashcardsPanel from '../components/FlashcardsPanel';
 import QuizPanel from '../components/QuizPanel';
+import ImageUploadModal from '../components/ImageUploadModal';
+import BubbleToolbar from '../components/BubbleToolbar';
+import ImageToolbar from '../components/ImageToolbar';
+import TableGridPicker from '../components/TableGridPicker';
+import TableToolbar from '../components/TableToolbar';
 
 import { MdAutoAwesome } from 'react-icons/md';
-import { IoDocumentTextOutline, IoEyeOutline } from 'react-icons/io5';
+import { IoDocumentTextOutline } from 'react-icons/io5';
 import { BsChatDots, BsMic, BsThreeDotsVertical } from 'react-icons/bs';
 import { TbCards } from 'react-icons/tb';
 import { PiExam, PiHighlighter } from 'react-icons/pi';
-import { RiMoonLine, RiShareLine } from 'react-icons/ri';
+import { RiMoonLine } from 'react-icons/ri';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
 import { useAuthStore } from '../store/useAuthStore';
 import { LuClock4 } from 'react-icons/lu';
@@ -36,9 +42,10 @@ import {
     FiList,
     FiMinus,
     FiPlus,
+    FiDownload,
 } from 'react-icons/fi';
 import { RxStrikethrough } from 'react-icons/rx';
-import { AiOutlineTable, AiOutlineOrderedList } from 'react-icons/ai';
+import { AiOutlineOrderedList } from 'react-icons/ai';
 import ThemeModal from '../components/ThemeModal';
 
 /* ── Note-page sidebar nav items ── */
@@ -71,11 +78,14 @@ const NotePage: React.FC = () => {
     const pathSlug = location.pathname.split(`/notes/${id}/`)[1] || '';
     const activeSection: SidebarSection = slugToSection[pathSlug] || 'Document';
 
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
     const [note, setNote] = useState<Note | null>(null);
     const [loading, setLoading] = useState(true);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [themeModalOpen, setThemeModalOpen] = useState(false);
+    const [imageModalOpen, setImageModalOpen] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const editorContentRef = useRef<HTMLDivElement>(null);
 
     /* Force toolbar re-render on every editor state change (mark toggles, selection, etc.) */
     const [, setEditorKey] = useState(0);
@@ -92,7 +102,20 @@ const NotePage: React.FC = () => {
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
             Underline,
             Highlight.configure({ multicolor: true }),
-            Image,
+            Image.extend({
+                addAttributes() {
+                    return {
+                        ...this.parent?.(),
+                        width: {
+                            default: '100%',
+                            renderHTML: (attributes) => ({
+                                style: `width: ${attributes.width}; max-width: 100%;`,
+                            }),
+                            parseHTML: (element) => element.style.width || '100%',
+                        },
+                    };
+                },
+            }),
             Table.configure({ resizable: true }),
             TableRow,
             TableCell,
@@ -160,6 +183,29 @@ const NotePage: React.FC = () => {
         [id]
     );
 
+    /* ── Export note as PDF ── */
+    const handleExportPdf = useCallback(async () => {
+        const el = editorContentRef.current?.querySelector('.ProseMirror') as HTMLElement | null;
+        if (!el || !note) return;
+        setExporting(true);
+        try {
+            await html2pdf()
+                .set({
+                    margin: [12, 12, 12, 12],
+                    filename: `${note.title || 'Untitled'}.pdf`,
+                    image: { type: 'jpeg', quality: 0.95 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                })
+                .from(el)
+                .save();
+        } catch (err) {
+            console.error('PDF export failed:', err);
+        } finally {
+            setExporting(false);
+        }
+    }, [note]);
+
     if (loading) {
         return (
             <div className="flex h-screen items-center justify-center bg-zinc-950">
@@ -185,10 +231,19 @@ const NotePage: React.FC = () => {
     return (
         <>
             <div className="flex h-screen bg-zinc-950 text-zinc-100">
+                {/* ─── MOBILE BACKDROP ─── */}
+                {sidebarOpen && (
+                    <div
+                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
+
                 {/* ─── SIDEBAR ─── */}
                 <aside
-                    className={`${sidebarOpen ? 'w-56' : 'w-0'
-                        } flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300`}
+                    className={`${
+                        sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
+                    } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
                 >
                     {/* Sidebar Header */}
                     <div className="flex items-center justify-between px-5 py-4">
@@ -267,15 +322,14 @@ const NotePage: React.FC = () => {
                     {/* ── Top Bar ── */}
                     <div className="flex items-center justify-between border-b border-zinc-800/50 px-6 py-3">
                         <div className="flex items-center gap-3">
-                            {!sidebarOpen && (
-                                <button
-                                    onClick={() => setSidebarOpen(true)}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100"
-                                    aria-label="Expand sidebar"
-                                >
-                                    <HiOutlineChevronDoubleRight className="h-4 w-4" />
-                                </button>
-                            )}
+                            {/* Always show hamburger on mobile, toggle on desktop when collapsed */}
+                            <button
+                                onClick={() => setSidebarOpen(true)}
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100 ${sidebarOpen ? 'md:hidden' : ''}`}
+                                aria-label="Expand sidebar"
+                            >
+                                <HiOutlineChevronDoubleRight className="h-4 w-4" />
+                            </button>
                             <h1 className="text-base font-semibold text-zinc-100 truncate max-w-md">
                                 {note.title}
                             </h1>
@@ -292,7 +346,19 @@ const NotePage: React.FC = () => {
                                 <LuClock4 className="h-4 w-4" />
                             </button>
 
-                           
+                            {/* Export PDF */}
+                            <button
+                                onClick={handleExportPdf}
+                                disabled={exporting}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-300 disabled:opacity-40"
+                                title="Export as PDF"
+                            >
+                                {exporting ? (
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+                                ) : (
+                                    <FiDownload className="h-4 w-4" />
+                                )}
+                            </button>
 
                             {/* More */}
                             <button className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-300">
@@ -304,7 +370,7 @@ const NotePage: React.FC = () => {
                     {/* ── Editor Area ── */}
                     {/* ── Section Content ── */}
                     {activeSection === 'Document' && (
-                        <div className="mx-auto w-full max-w-4xl flex-1 px-8 py-6 lg:px-16">
+                        <div className="mx-auto w-full max-w-4x flex-1 px-8 py-6 lg:px-16">
                             {/* ── Toolbar ── */}
                             {editor && (() => {
                                 const rawFontSize = editor.getAttributes('textStyle')?.fontSize as string | undefined;
@@ -317,9 +383,7 @@ const NotePage: React.FC = () => {
 
                                 return (
                                     <div className="mb-6 flex flex-wrap items-center gap-1 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
-                                        <button className="rounded-lg px-3 py-1.5 text-[13px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800">
-                                            Sans Serif <span className="ml-1 text-zinc-500">▾</span>
-                                        </button>
+                                        
 
                                         <div className="mx-1 h-5 w-px bg-zinc-800" />
 
@@ -401,29 +465,14 @@ const NotePage: React.FC = () => {
                                         <div className="mx-1 h-5 w-px bg-zinc-800" />
 
                                         <button
-                                            onClick={() => {
-                                                const url = window.prompt('Image URL');
-                                                if (url) editor.chain().focus().setImage({ src: url }).run();
-                                            }}
+                                            onClick={() => setImageModalOpen(true)}
                                             className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
                                             title="Insert image"
                                         >
                                             <FiImage className="h-4 w-4" />
                                         </button>
 
-                                        <button
-                                            onClick={() =>
-                                                editor
-                                                    .chain()
-                                                    .focus()
-                                                    .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-                                                    .run()
-                                            }
-                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                                            title="Insert table"
-                                        >
-                                            <AiOutlineTable className="h-4 w-4" />
-                                        </button>
+                                        <TableGridPicker editor={editor} />
 
                                         <div className="mx-1 h-5 w-px bg-zinc-800" />
 
@@ -483,19 +532,21 @@ const NotePage: React.FC = () => {
                                         >
                                             <AiOutlineOrderedList className="h-4 w-4" />
                                         </button>
-
-                                        <button
-                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                                            title="Preview"
-                                        >
-                                            <IoEyeOutline className="h-4 w-4" />
-                                        </button>
                                     </div>
                                 );
                             })()}
 
                             {/* ── Editor Content ── */}
-                            <EditorContent editor={editor} />
+                            <div ref={editorContentRef}>
+                                <EditorContent editor={editor} />
+                            </div>
+
+                            {/* ── Floating Bubble Menu on text selection ── */}
+                            {editor && <BubbleToolbar editor={editor} />}
+                            {/* ── Floating Image Toolbar ── */}
+                            {editor && <ImageToolbar editor={editor} />}
+                            {/* ── Floating Table Toolbar ── */}
+                            {editor && <TableToolbar editor={editor} />}
                         </div>
                     )}
 
@@ -533,6 +584,16 @@ const NotePage: React.FC = () => {
             <ThemeModal
                 open={themeModalOpen}
                 onClose={() => setThemeModalOpen(false)}
+            />
+
+            <ImageUploadModal
+                open={imageModalOpen}
+                onClose={() => setImageModalOpen(false)}
+                onImageInserted={(url) => {
+                    if (editor) editor.chain().focus().setImage({ src: url }).run();
+                    setImageModalOpen(false);
+                }}
+                userId={user?.id || ''}
             />
         </>
     );

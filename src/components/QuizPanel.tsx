@@ -515,14 +515,14 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                 )}
 
                                 <div className="flex items-center justify-end gap-3">
-                                    {!explanation && (
+                                    {!explanation && selectedOption !== currentQ?.correct_index && (
                                         <button
                                             onClick={handleExplain}
                                             disabled={loadingExplanation}
-                                            className="flex items-center gap-2 rounded-xl border border-zinc-700 px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:bg-zinc-800/50 hover:text-zinc-100 disabled:opacity-50"
+                                            className="flex items-center gap-2 rounded-xl border border-zinc-700 px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:bg-gray-200 hover:text-zinc-100 disabled:opacity-50"
                                         >
                                             <MdAutoAwesome className="h-4 w-4 text-indigo-400" />
-                                            {loadingExplanation ? 'Generating…' : 'Correct Answer Explained'}
+                                            {loadingExplanation ? 'Loading…' : 'Correct Answer Explained'}
                                         </button>
                                     )}
                                     <button

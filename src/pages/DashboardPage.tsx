@@ -81,7 +81,7 @@ const modalKeyMap: Record<string, ModalType> = {
 };
 
 const DashboardPage: React.FC = () => {
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
     const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my');
     const [openModal, setOpenModal] = useState<ModalType>(null);
     const [notes, setNotes] = useState<Note[]>([]);
@@ -124,10 +124,19 @@ const DashboardPage: React.FC = () => {
 
     return (
         <div className="flex h-screen bg-zinc-950 text-zinc-100">
+            {/* ─── MOBILE BACKDROP ─── */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
             {/* ─── SIDEBAR ─── */}
             <aside
-                className={`${sidebarOpen ? 'w-60' : 'w-0'
-                    } flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300`}
+                className={`${
+                    sidebarOpen ? 'w-60 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
+                } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
             >
                 {/* Sidebar Header */}
                 <div className="flex items-center justify-between px-5 py-4">
@@ -211,15 +220,13 @@ const DashboardPage: React.FC = () => {
                     {/* Top row: Collapse toggle (when sidebar hidden) + Title + Search */}
                     <div className="mb-8 flex items-start justify-between">
                         <div className="flex items-center gap-4">
-                            {!sidebarOpen && (
-                                <button
-                                    onClick={() => setSidebarOpen(true)}
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100"
-                                    aria-label="Expand sidebar"
-                                >
-                                    <HiOutlineChevronDoubleRight className="h-4 w-4" />
-                                </button>
-                            )}
+                            <button
+                                onClick={() => setSidebarOpen(true)}
+                                className={`flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100 ${sidebarOpen ? 'md:hidden' : ''}`}
+                                aria-label="Expand sidebar"
+                            >
+                                <HiOutlineChevronDoubleRight className="h-4 w-4" />
+                            </button>
                             <div>
                                 <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
                                     Dashboard
