@@ -11,9 +11,10 @@ import { MdAutoAwesome } from 'react-icons/md';
 
 interface BubbleToolbarProps {
     editor: Editor;
+    onAskAI?: (selectedText: string) => void;
 }
 
-const BubbleToolbar: React.FC<BubbleToolbarProps> = ({ editor }) => {
+const BubbleToolbar: React.FC<BubbleToolbarProps> = ({ editor, onAskAI }) => {
     const [visible, setVisible] = useState(false);
     const [coords, setCoords] = useState({ x: 0, y: 0 });
     const toolbarRef = useRef<HTMLDivElement>(null);
@@ -136,11 +137,18 @@ const BubbleToolbar: React.FC<BubbleToolbarProps> = ({ editor }) => {
             {/* Divider */}
             <div className="mx-0.5 h-4 w-px bg-zinc-700" />
 
-            {/* Ask AI — placeholder */}
+            {/* Ask AI */}
             <button
-                onClick={() => { /* TODO: implement Ask AI */ }}
+                onClick={() => {
+                    const { from, to } = editor.state.selection;
+                    const selectedText = editor.state.doc.textBetween(from, to, ' ');
+                    if (selectedText && onAskAI) {
+                        onAskAI(selectedText);
+                    }
+                    setVisible(false);
+                }}
                 className="flex items-center gap-1.5 rounded-md bg-indigo-500/15 px-2.5 py-1 text-[12px] font-semibold text-indigo-400 transition-colors hover:bg-indigo-500/25"
-                title="Ask AI"
+                title="Ask AI about this text"
             >
                 <MdAutoAwesome className="h-3.5 w-3.5" />
                 Ask AI

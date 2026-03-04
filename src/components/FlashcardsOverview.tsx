@@ -113,8 +113,8 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
 
             {/* ── Card Preview ── */}
             {currentCard && (
-                <div className="mb-6 flex min-h-[280px] max-w-xl  mx-auto items-center justify-center rounded-2xl border-2 border-zinc-800/60 bg-gray-200 p-8">
-                    <p className="text-center text-lg font-medium text-zinc-200">
+                <div className="mb-6 flex min-h-[280px] max-w-xl mx-auto items-center justify-center rounded-2xl border-2 border-zinc-800/60 bg-zinc-900/60 p-8">
+                    <p className="text-center text-lg font-medium text-zinc-100">
                         {currentCard.front}
                     </p>
                 </div>

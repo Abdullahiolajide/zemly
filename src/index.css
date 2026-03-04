@@ -72,7 +72,7 @@ html.light {
 
 /* Page & Section Backgrounds -> Pure White */
 html.light .bg-zinc-950,
-html.light .bg-zinc-950\/80, 
+html.light .bg-zinc-950\/80,
 html.light .bg-zinc-950\/60,
 html.light .bg-zinc-900,
 html.light .bg-zinc-900\/80,
@@ -81,7 +81,8 @@ html.light .bg-zinc-900\/60,
 html.light .bg-zinc-900\/50,
 html.light .bg-zinc-900\/40 {
   background-color: #ffffff !important;
-  color: #09090b !important; /* Ensure text is deepest black/zinc-950 */
+  color: #09090b !important;
+  /* Ensure text is deepest black/zinc-950 */
 }
 
 /* Card & Element Backgrounds (including lighter 900 variants often used for cards) -> White + Border + Shadow */
@@ -89,24 +90,28 @@ html.light .bg-zinc-800,
 html.light .bg-zinc-800\/80,
 html.light .bg-zinc-800\/70,
 html.light .bg-zinc-800\/60,
-html.light .bg-zinc-800\/50, 
+html.light .bg-zinc-800\/50,
 html.light .bg-zinc-800\/40,
 html.light .bg-zinc-800\/30,
-html.light .bg-zinc-900\/30, /* Study Card front background */
+html.light .bg-zinc-900\/30,
+/* Study Card front background */
 html.light .bg-zinc-900\/20,
 html.light .bg-zinc-900\/10 {
   background-color: #ffffff !important;
-  border: 1px solid #e4e4e7 !important; /* light zing-200 border */
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important; /* Tailwind shadow-md for cards */
+  border: 1px solid #e4e4e7 !important;
+  /* light zing-200 border */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+  /* Tailwind shadow-md for cards */
   color: #18181b !important;
 }
 
 /* Hover States for Cards/Buttons - Subtle gray wash */
 html.light .hover\:bg-zinc-800:hover,
-html.light .hover\:bg-zinc-800\/80:hover, 
+html.light .hover\:bg-zinc-800\/80:hover,
 html.light button.bg-zinc-900\/50:hover,
 html.light a.bg-zinc-900\/50:hover {
-  background-color: #f4f4f5 !important; /* Zinc-100 delicate hover */
+  background-color: #f4f4f5 !important;
+  /* Zinc-100 delicate hover */
   border-color: #d4d4d8 !important;
 }
 
@@ -117,38 +122,45 @@ html.light .backdrop-blur-xl {
 }
 
 html.light .bg-zinc-800\/20 {
-  background-color: #f4f4f5 !important; /* Extremely light gray for pill badges */
+  background-color: #f4f4f5 !important;
+  /* Extremely light gray for pill badges */
   border: 1px solid #e4e4e7 !important;
 }
 
 /* ─── Text colours ─── */
 html.light .text-zinc-100 {
-  color: #09090b !important; /* Zinc-950 (Black) for primary text */
+  color: #09090b !important;
+  /* Zinc-950 (Black) for primary text */
 }
 
 /* zinc-900 */
 html.light .text-zinc-200 {
-  color: #18181b !important; /* Zinc-900 */
+  color: #18181b !important;
+  /* Zinc-900 */
 }
 
 /* zinc-800 */
 html.light .text-zinc-300 {
-  color: #27272a !important; /* Zinc-800 */
+  color: #27272a !important;
+  /* Zinc-800 */
 }
 
 /* zinc-700 */
 html.light .text-zinc-400 {
-  color: #52525b !important; /* Zinc-600 */
+  color: #52525b !important;
+  /* Zinc-600 */
 }
 
 /* zinc-600 */
 html.light .text-zinc-500 {
-  color: #71717a !important; /* Zinc-500 */
+  color: #71717a !important;
+  /* Zinc-500 */
 }
 
 /* zinc-500 */
 html.light .text-zinc-600 {
-  color: #a1a1aa !important; /* Zinc-400 */
+  color: #a1a1aa !important;
+  /* Zinc-400 */
 }
 
 /* zinc-400 */
@@ -158,7 +170,8 @@ html.light .text-zinc-600 {
 html.light .border-zinc-800\/60,
 html.light .border-zinc-800\/50,
 html.light .border-zinc-800 {
-  border-color: #e4e4e7 !important; /* Zinc-200 */
+  border-color: #e4e4e7 !important;
+  /* Zinc-200 */
 }
 
 
@@ -671,4 +684,29 @@ html.light .study-card-back {
 
 html.light .study-progress-bar {
   box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+/* ═══════════════════════════════════════════════
+   Chat Side Panel
+   ═══════════════════════════════════════════════ */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.chat-side-panel {
+  animation: slideInRight 0.25s ease-out;
+  flex-direction: column;
+}
+
+/* Light mode border for the chat panel */
+html.light .chat-side-panel {
+  border-color: #e4e4e7 !important;
 }

@@ -16,9 +16,9 @@ serve(async (req: Request) => {
     try {
         const { noteContent, messages } = (await req.json()) as ChatRequest;
 
-        if (!noteContent) {
+        if (!noteContent && (!messages || messages.length === 0)) {
             return new Response(
-                JSON.stringify({ error: 'noteContent is required' }),
+                JSON.stringify({ error: 'noteContent is required for the first message' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
         }
@@ -30,16 +30,18 @@ serve(async (req: Request) => {
             parts: [{ text: m.content }],
         }));
 
-        const note = truncateNote(noteContent);
+        // On the first message, include the note and give a detailed answer.
+        // On follow-ups, use a lighter prompt and shorter output.
+        const isFirstMessage = !!noteContent;
 
-        const systemInstruction = `You are Zemly AI, a concise study assistant. Use the note below as context. Keep answers brief.
-
-${note}`;
+        const systemInstruction = isFirstMessage
+            ? `You are Zemly AI, a helpful and thorough study assistant. The student's note is provided below as context.\n\nWhen answering for the first time, give a detailed and well-structured explanation with examples where relevant. Use bullet points or numbered lists to organize your response clearly.\n\n${truncateNote(noteContent)}`
+            : `You are Zemly AI, a concise study assistant. Continue helping based on the conversation so far. Keep follow-up answers brief and to the point.`;
 
         const { text } = await callGemini(geminiMessages, {
             systemInstruction,
             temperature: 0.7,
-            maxOutputTokens: 512,
+            maxOutputTokens: isFirstMessage ? 1024 : 512,
         });
 
         return new Response(

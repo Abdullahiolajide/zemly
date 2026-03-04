@@ -16,6 +16,7 @@ import { getNote, updateNote } from '../lib/notesService';
 import type { Note } from '../types';
 import FlashcardsPanel from '../components/FlashcardsPanel';
 import QuizPanel from '../components/QuizPanel';
+import ChatPanel from '../components/ChatPanel';
 import ImageUploadModal from '../components/ImageUploadModal';
 import BubbleToolbar from '../components/BubbleToolbar';
 import ImageToolbar from '../components/ImageToolbar';
@@ -25,6 +26,7 @@ import TableToolbar from '../components/TableToolbar';
 import { MdAutoAwesome } from 'react-icons/md';
 import { IoDocumentTextOutline } from 'react-icons/io5';
 import { BsChatDots, BsMic, BsThreeDotsVertical } from 'react-icons/bs';
+import { FiArrowRight } from 'react-icons/fi';
 import { TbCards } from 'react-icons/tb';
 import { PiExam, PiHighlighter } from 'react-icons/pi';
 import { RiMoonLine } from 'react-icons/ri';
@@ -85,6 +87,9 @@ const NotePage: React.FC = () => {
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [imageModalOpen, setImageModalOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [askAiText, setAskAiText] = useState<string | null>(null);
+    const [chatPanelOpen, setChatPanelOpen] = useState(true);
+    const [chatHasMessages, setChatHasMessages] = useState(false);
     const editorContentRef = useRef<HTMLDivElement>(null);
 
     /* Force toolbar re-render on every editor state change (mark toggles, selection, etc.) */
@@ -241,9 +246,8 @@ const NotePage: React.FC = () => {
 
                 {/* ─── SIDEBAR ─── */}
                 <aside
-                    className={`${
-                        sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
-                    } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
+                    className={`${sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
+                        } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden border-r border-zinc-800/50 bg-zinc-900/60 transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
                 >
                     {/* Sidebar Header */}
                     <div className="flex items-center justify-between px-5 py-4">
@@ -370,183 +374,266 @@ const NotePage: React.FC = () => {
                     {/* ── Editor Area ── */}
                     {/* ── Section Content ── */}
                     {activeSection === 'Document' && (
-                        <div className="mx-auto w-full max-w-4x flex-1 px-8 py-6 lg:px-16">
-                            {/* ── Toolbar ── */}
-                            {editor && (() => {
-                                const rawFontSize = editor.getAttributes('textStyle')?.fontSize as string | undefined;
-                                const currentFontSize = rawFontSize ? parseInt(rawFontSize, 10) : 16;
+                        <div className="flex flex-1 overflow-hidden">
+                            {/* ── Editor Column ── */}
+                            <div className="flex-1 overflow-y-auto px-8 py-6 lg:px-16">
+                                {/* ── Toolbar ── */}
+                                {editor && (() => {
+                                    const rawFontSize = editor.getAttributes('textStyle')?.fontSize as string | undefined;
+                                    const currentFontSize = rawFontSize ? parseInt(rawFontSize, 10) : 16;
 
-                                const changeFontSize = (delta: number) => {
-                                    const next = Math.max(10, Math.min(72, currentFontSize + delta));
-                                    editor.chain().focus().setFontSize(`${next}px`).run();
-                                };
+                                    const changeFontSize = (delta: number) => {
+                                        const next = Math.max(10, Math.min(72, currentFontSize + delta));
+                                        editor.chain().focus().setFontSize(`${next}px`).run();
+                                    };
 
-                                return (
-                                    <div className="mb-6 flex flex-wrap items-center gap-1 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
-                                        
+                                    return (
+                                        <div className="mb-6 flex flex-wrap items-center gap-1 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
 
-                                        <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <button
-                                            onClick={() => changeFontSize(-1)}
-                                            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                                            title="Decrease font size"
-                                        >
-                                            <FiMinus className="h-3.5 w-3.5" />
-                                        </button>
-                                        <span className="mx-1 min-w-[28px] text-center text-[13px] font-medium text-zinc-300">
-                                            {currentFontSize}
-                                        </span>
-                                        <button
-                                            onClick={() => changeFontSize(1)}
-                                            className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                                            title="Increase font size"
-                                        >
-                                            <FiPlus className="h-3.5 w-3.5" />
-                                        </button>
+                                            <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <div className="mx-1 h-5 w-px bg-zinc-800" />
+                                            <button
+                                                onClick={() => changeFontSize(-1)}
+                                                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                                                title="Decrease font size"
+                                            >
+                                                <FiMinus className="h-3.5 w-3.5" />
+                                            </button>
+                                            <span className="mx-1 min-w-[28px] text-center text-[13px] font-medium text-zinc-300">
+                                                {currentFontSize}
+                                            </span>
+                                            <button
+                                                onClick={() => changeFontSize(1)}
+                                                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                                                title="Increase font size"
+                                            >
+                                                <FiPlus className="h-3.5 w-3.5" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleBold().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('bold')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Bold"
-                                        >
-                                            <FiBold className="h-4 w-4" />
-                                        </button>
+                                            <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleItalic().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('italic')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Italic"
-                                        >
-                                            <FiItalic className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleBold().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('bold')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Bold"
+                                            >
+                                                <FiBold className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleUnderline().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('underline')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Underline"
-                                        >
-                                            <FiUnderline className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleItalic().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('italic')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Italic"
+                                            >
+                                                <FiItalic className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleStrike().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('strike')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Strikethrough"
-                                        >
-                                            <RxStrikethrough className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleUnderline().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('underline')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Underline"
+                                            >
+                                                <FiUnderline className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleHighlight().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('highlight')
-                                                ? 'bg-amber-500/20 text-amber-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Highlight"
-                                        >
-                                            <PiHighlighter className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleStrike().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('strike')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Strikethrough"
+                                            >
+                                                <RxStrikethrough className="h-4 w-4" />
+                                            </button>
 
-                                        <div className="mx-1 h-5 w-px bg-zinc-800" />
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleHighlight().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('highlight')
+                                                    ? 'bg-amber-500/20 text-amber-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Highlight"
+                                            >
+                                                <PiHighlighter className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => setImageModalOpen(true)}
-                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
-                                            title="Insert image"
-                                        >
-                                            <FiImage className="h-4 w-4" />
-                                        </button>
+                                            <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <TableGridPicker editor={editor} />
+                                            <button
+                                                onClick={() => setImageModalOpen(true)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+                                                title="Insert image"
+                                            >
+                                                <FiImage className="h-4 w-4" />
+                                            </button>
 
-                                        <div className="mx-1 h-5 w-px bg-zinc-800" />
+                                            <TableGridPicker editor={editor} />
 
-                                        <button
-                                            onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'left' })
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Align left"
-                                        >
-                                            <FiAlignLeft className="h-4 w-4" />
-                                        </button>
+                                            <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <button
-                                            onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'center' })
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Align center"
-                                        >
-                                            <FiAlignCenter className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().setTextAlign('left').run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'left' })
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Align left"
+                                            >
+                                                <FiAlignLeft className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'right' })
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Align right"
-                                        >
-                                            <FiAlignRight className="h-4 w-4" />
-                                        </button>
+                                            <button
+                                                onClick={() => editor.chain().focus().setTextAlign('center').run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'center' })
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Align center"
+                                            >
+                                                <FiAlignCenter className="h-4 w-4" />
+                                            </button>
 
-                                        <div className="mx-1 h-5 w-px bg-zinc-800" />
+                                            <button
+                                                onClick={() => editor.chain().focus().setTextAlign('right').run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive({ textAlign: 'right' })
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Align right"
+                                            >
+                                                <FiAlignRight className="h-4 w-4" />
+                                            </button>
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleBulletList().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('bulletList')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Bullet list"
-                                        >
-                                            <FiList className="h-4 w-4" />
-                                        </button>
+                                            <div className="mx-1 h-5 w-px bg-zinc-800" />
 
-                                        <button
-                                            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('orderedList')
-                                                ? 'bg-indigo-500/20 text-indigo-400'
-                                                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
-                                                }`}
-                                            title="Ordered list"
-                                        >
-                                            <AiOutlineOrderedList className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                );
-                            })()}
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleBulletList().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('bulletList')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Bullet list"
+                                            >
+                                                <FiList className="h-4 w-4" />
+                                            </button>
 
-                            {/* ── Editor Content ── */}
-                            <div ref={editorContentRef}>
-                                <EditorContent editor={editor} />
+                                            <button
+                                                onClick={() => editor.chain().focus().toggleOrderedList().run()}
+                                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${editor.isActive('orderedList')
+                                                    ? 'bg-indigo-500/20 text-indigo-400'
+                                                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+                                                    }`}
+                                                title="Ordered list"
+                                            >
+                                                <AiOutlineOrderedList className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
+
+                                {/* ── Editor Content ── */}
+                                <div ref={editorContentRef}>
+                                    <EditorContent editor={editor} />
+                                </div>
+
+                                {/* ── Floating Bubble Menu on text selection ── */}
+                                {editor && <BubbleToolbar editor={editor} onAskAI={(text) => {
+                                    setAskAiText(text);
+                                    setChatPanelOpen(true);
+                                }} />}
+                                {/* ── Floating Image Toolbar ── */}
+                                {editor && <ImageToolbar editor={editor} />}
+                                {/* ── Floating Table Toolbar ── */}
+                                {editor && <TableToolbar editor={editor} />}
                             </div>
 
-                            {/* ── Floating Bubble Menu on text selection ── */}
-                            {editor && <BubbleToolbar editor={editor} />}
-                            {/* ── Floating Image Toolbar ── */}
-                            {editor && <ImageToolbar editor={editor} />}
-                            {/* ── Floating Table Toolbar ── */}
-                            {editor && <TableToolbar editor={editor} />}
+                            {/* ── Right Side Panel (always visible by default) ── */}
+                            {chatPanelOpen ? (
+                                <div className="chat-side-panel hidden w-[380px] shrink-0 border-l border-zinc-800/50 md:flex md:flex-col">
+                                    {/* Panel Header with Hide button */}
+                                    <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-3">
+                                        <span className="text-[13px] font-semibold text-zinc-300">Zemly AI</span>
+                                        <button
+                                            onClick={() => setChatPanelOpen(false)}
+                                            className="flex items-center gap-1 text-[12px] font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+                                        >
+                                            Hide <FiArrowRight className="h-3 w-3" />
+                                        </button>
+                                    </div>
+
+                                    {/* Quick-link cards — hidden once conversation starts */}
+                                    {!chatHasMessages && (
+                                        <div className="grid grid-cols-2 gap-2.5 px-4 py-3">
+                                            <button
+                                                onClick={() => navigate(`/notes/${id}/quiz`)}
+                                                className="group flex items-center gap-2.5 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2.5 text-left transition-all hover:border-indigo-500/30 hover:bg-indigo-500/5"
+                                            >
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-500/20">
+                                                    <PiExam className="h-4 w-4 text-orange-400" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[12px] font-semibold text-zinc-200">Quizzes</p>
+                                                    <p className="text-[10px] text-zinc-500">Test your knowledge</p>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={() => navigate(`/notes/${id}/flashcards`)}
+                                                className="group flex items-center gap-2.5 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2.5 text-left transition-all hover:border-purple-500/30 hover:bg-purple-500/5"
+                                            >
+                                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/20 to-indigo-500/20">
+                                                    <TbCards className="h-4 w-4 text-purple-400" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[12px] font-semibold text-zinc-200">Flashcards</p>
+                                                    <p className="text-[10px] text-zinc-500">Study with active recall</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Chat area — takes remaining space */}
+                                    <div className="flex min-h-0 flex-1 flex-col">
+                                        <ChatPanel
+                                            getNoteText={() => editor?.getText() || ''}
+                                            highlightedText={askAiText}
+                                            onClearHighlight={() => setAskAiText(null)}
+                                            onHasMessages={setChatHasMessages}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Collapsed — small vertical tab to re-open */
+                                <div className="hidden shrink-0 border-l border-zinc-800/50 md:flex md:flex-col md:items-center md:py-4">
+                                    <button
+                                        onClick={() => setChatPanelOpen(true)}
+                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-300"
+                                        title="Open AI panel"
+                                    >
+                                        <MdAutoAwesome className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeSection === 'Chat Bot' && (
+                        <div className="flex-1 overflow-hidden">
+                            <ChatPanel
+                                getNoteText={() => editor?.getText() || ''}
+                                highlightedText={askAiText}
+                                onClearHighlight={() => setAskAiText(null)}
+                            />
                         </div>
                     )}
 
@@ -569,7 +656,7 @@ const NotePage: React.FC = () => {
                     )}
 
                     {/* Placeholder for other sections */}
-                    {activeSection !== 'Document' && activeSection !== 'Flashcards' && activeSection !== 'Quiz' && (
+                    {activeSection !== 'Document' && activeSection !== 'Flashcards' && activeSection !== 'Quiz' && activeSection !== 'Chat Bot' && (
                         <div className="flex flex-1 flex-col items-center justify-center gap-4">
                             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900/60">
                                 <MdAutoAwesome className="h-8 w-8 text-indigo-400" />
