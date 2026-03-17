@@ -12,6 +12,14 @@ export interface Note {
     content: Record<string, unknown> | null;
     tags: string[] | null;
     created_at: string;
+    updated_at?: string;
+    source_type?: 'document' | 'audio' | 'link' | 'blank';
+    /** Public URL of the uploaded file (PDF viewer) */
+    source_url?: string | null;
+    /** Plain text extracted from the uploaded document */
+    extracted_text?: string | null;
+    /** Original file name (e.g. lecture_notes.pdf) */
+    file_name?: string | null;
 }
 
 export interface AuthState {

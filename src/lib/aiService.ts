@@ -3,6 +3,9 @@
 
 import { supabase } from './supabaseClient';
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
 /* ── Types ── */
 
 export interface ChatMessage {
@@ -27,6 +30,13 @@ export interface PodcastLine {
     text: string;
 }
 
+export interface DocumentExtractResult {
+    title: string;
+    noteContent: string;
+    extractedText: string;
+    publicUrl: string;
+}
+
 /* ── API calls ── */
 
 /**
@@ -46,6 +56,59 @@ async function extractErrorMessage(
         }
     } catch { /* ignore parse failures */ }
     return error.message || fallback;
+}
+
+/**
+ * Upload a document file to Supabase Storage, then call the extract-document
+ * Edge Function to get AI-generated notes and extracted text.
+ */
+export async function uploadAndExtractDocument(file: File): Promise<DocumentExtractResult> {
+    // 1. Upload file to Supabase Storage
+    const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { data: storageData, error: storageError } = await supabase.storage
+        .from('documents')
+        .upload(safeFileName, file, { cacheControl: '3600', upsert: false });
+
+    if (storageError) {
+        throw new Error(`File upload failed: ${storageError.message}`);
+    }
+
+    // 2. Get the public URL
+    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(storageData.path);
+    const publicUrl = urlData.publicUrl;
+
+    // 3. Send file to the extract-document Edge Function
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/extract-document`, {
+        method: 'POST',
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: formData,
+    });
+
+    if (!res.ok) {
+        let errMsg = 'Document extraction failed';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = body.error;
+        } catch { /* ignore */ }
+        throw new Error(errMsg);
+    }
+
+    const result = await res.json();
+    return {
+        title: result.title,
+        noteContent: result.noteContent,
+        extractedText: result.extractedText,
+        publicUrl,
+    };
 }
 
 /**

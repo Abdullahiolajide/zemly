@@ -628,20 +628,71 @@ const NotePage: React.FC = () => {
                     )}
 
                     {activeSection === 'Chat Bot' && (
-                        <div className="flex-1 overflow-hidden">
-                            <ChatPanel
-                                getNoteText={() => editor?.getText() || ''}
-                                highlightedText={askAiText}
-                                onClearHighlight={() => setAskAiText(null)}
-                            />
-                        </div>
+                        note?.source_type === 'document' && note.source_url ? (
+                            /* ── Document note: PDF viewer + chatbot side-by-side ── */
+                            <div className="flex flex-1 overflow-hidden">
+                                {/* PDF Viewer */}
+                                <div className="flex-1 flex flex-col overflow-hidden border-r border-zinc-800/50">
+                                    <div className="flex items-center gap-2 border-b border-zinc-800/50 px-4 py-2.5">
+                                        <span className="text-[12px] font-medium text-zinc-500">Original Document</span>
+                                        {note.file_name && (
+                                            <span className="text-[12px] text-zinc-600">— {note.file_name}</span>
+                                        )}
+                                        <a
+                                            href={note.source_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="ml-auto text-[12px] font-medium text-indigo-400 transition-colors hover:text-indigo-300"
+                                        >
+                                            Open in new tab ↗
+                                        </a>
+                                    </div>
+                                    <div className="flex-1 overflow-hidden bg-zinc-950">
+                                        <iframe
+                                            src={note.source_url}
+                                            title="Document viewer"
+                                            className="h-full w-full border-0"
+                                            sandbox="allow-scripts allow-same-origin"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Chatbot panel */}
+                                <div className="flex w-[380px] shrink-0 flex-col">
+                                    <div className="flex items-center justify-between border-b border-zinc-800/50 px-4 py-3">
+                                        <span className="text-[13px] font-semibold text-zinc-300">Zemly AI</span>
+                                        <span className="text-[11px] text-zinc-600">Based on your document</span>
+                                    </div>
+                                    <div className="flex min-h-0 flex-1 flex-col">
+                                        <ChatPanel
+                                            getNoteText={() => note.extracted_text || ''}
+                                            highlightedText={askAiText}
+                                            onClearHighlight={() => setAskAiText(null)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            /* ── Blank/other note: full-width chatbot ── */
+                            <div className="flex-1 overflow-hidden">
+                                <ChatPanel
+                                    getNoteText={() => editor?.getText() || ''}
+                                    highlightedText={askAiText}
+                                    onClearHighlight={() => setAskAiText(null)}
+                                />
+                            </div>
+                        )
                     )}
 
                     {activeSection === 'Flashcards' && id && (
                         <div className="flex-1 overflow-y-auto">
                             <FlashcardsPanel
                                 noteId={Number(id)}
-                                getNoteText={() => editor?.getText() || ''}
+                                getNoteText={() =>
+                                    note?.source_type === 'document' && note.extracted_text
+                                        ? note.extracted_text
+                                        : editor?.getText() || ''
+                                }
                             />
                         </div>
                     )}
@@ -650,7 +701,11 @@ const NotePage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto">
                             <QuizPanel
                                 noteId={Number(id)}
-                                getNoteText={() => editor?.getText() || ''}
+                                getNoteText={() =>
+                                    note?.source_type === 'document' && note.extracted_text
+                                        ? note.extracted_text
+                                        : editor?.getText() || ''
+                                }
                             />
                         </div>
                     )}

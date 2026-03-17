@@ -12,9 +12,10 @@ import { BiHome, BiBookBookmark } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
 import { RiMoonLine } from 'react-icons/ri';
+import { FiTrash2 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { createNote, getUserNotes } from '../lib/notesService';
+import { createNote, createDocumentNote, getUserNotes, deleteNote } from '../lib/notesService';
 import type { Note } from '../types';
 import ThemeModal from '../components/ThemeModal';
 
@@ -71,6 +72,22 @@ function timeAgo(dateStr: string): string {
     return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
 }
 
+/* ── Helper: get note type icon and label ── */
+function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string }>, label: string } {
+    switch (sourceType) {
+        case 'document':
+            return { icon: MdUploadFile, label: 'Document' };
+        case 'audio':
+            return { icon: IoMicOutline, label: 'Audio' };
+        case 'link':
+            return { icon: IoLinkOutline, label: 'Link' };
+        case 'blank':
+            return { icon: IoDocumentTextOutline, label: 'Document' };
+        default:
+            return { icon: IoDocumentTextOutline, label: 'Document' };
+    }
+}
+
 type ModalType = 'blank' | 'audio' | 'document' | 'website' | null;
 
 const modalKeyMap: Record<string, ModalType> = {
@@ -82,11 +99,12 @@ const modalKeyMap: Record<string, ModalType> = {
 
 const DashboardPage: React.FC = () => {
     const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
-    const [activeTab, setActiveTab] = useState<'my' | 'shared'>('my');
     const [openModal, setOpenModal] = useState<ModalType>(null);
     const [notes, setNotes] = useState<Note[]>([]);
     const [notesLoading, setNotesLoading] = useState(true);
     const [themeModalOpen, setThemeModalOpen] = useState(false);
+    const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
 
@@ -107,6 +125,20 @@ const DashboardPage: React.FC = () => {
         fetchNotes();
     }, [fetchNotes]);
 
+    /* ── Close menu on click outside ── */
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('[aria-label="Note options"]') && !target.closest('.relative')) {
+                setMenuOpenId(null);
+            }
+        };
+        if (menuOpenId !== null) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [menuOpenId]);
+
     /* ── Create blank note → navigate ── */
     const handleCreateBlankNote = async (title: string) => {
         try {
@@ -117,9 +149,99 @@ const DashboardPage: React.FC = () => {
         }
     };
 
+    /* ── Create document note → navigate ── */
+    const handleCreateDocumentNote = async (result: {
+        file: File;
+        title: string;
+        noteContent: string;
+        extractedText: string;
+        publicUrl: string;
+    }) => {
+        try {
+            // Convert AI plain-text notes into TipTap JSON nodes
+            const lines = result.noteContent.split('\n');
+            const nodes: Record<string, unknown>[] = [];
+
+            for (const raw of lines) {
+                const line = raw.trim();
+                if (!line) continue;
+
+                // ALL CAPS headings ending with colon, e.g. "INTRODUCTION:" or "KEY TAKEAWAYS:"
+                const isHeading =
+                    /^[A-Z][A-Z\s\d\-/()]{2,}:?$/.test(line) ||
+                    line.startsWith('===') ||
+                    line.startsWith('---') ||
+                    line.startsWith('# ') ||
+                    line.startsWith('## ');
+
+                // Bullet points
+                const isBullet = line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ');
+
+                if (isHeading) {
+                    const text = line.replace(/^[#=\-]+\s*/, '').replace(/:$/, '').trim();
+                    if (text) {
+                        nodes.push({
+                            type: 'heading',
+                            attrs: { level: 2 },
+                            content: [{ type: 'text', text }],
+                        });
+                    }
+                } else if (isBullet) {
+                    const text = line.replace(/^[-•*]\s+/, '');
+                    nodes.push({
+                        type: 'bulletList',
+                        content: [
+                            {
+                                type: 'listItem',
+                                content: [
+                                    {
+                                        type: 'paragraph',
+                                        content: [{ type: 'text', text }],
+                                    },
+                                ],
+                            },
+                        ],
+                    });
+                } else {
+                    nodes.push({
+                        type: 'paragraph',
+                        content: [{ type: 'text', text: line }],
+                    });
+                }
+            }
+
+            const content = {
+                type: 'doc',
+                content: nodes.length > 0 ? nodes : [{ type: 'paragraph', content: [{ type: 'text', text: result.noteContent }] }],
+            };
+
+            const note = await createDocumentNote(
+                result.title,
+                result.publicUrl,
+                result.extractedText,
+                result.file.name,
+                content,
+            );
+            navigate(`/notes/${note.id}`);
+        } catch (err) {
+            console.error('Failed to create document note:', err);
+        }
+    };
+
     const handleLogout = async () => {
         await logout();
         navigate('/');
+    };
+
+    const handleDeleteNote = async (noteId: number) => {
+        try {
+            await deleteNote(noteId);
+            setNotes((prev) => prev.filter((n) => n.id !== noteId));
+            setDeleteConfirmId(null);
+            setMenuOpenId(null);
+        } catch (err) {
+            console.error('Failed to delete note:', err);
+        }
     };
 
     return (
@@ -282,22 +404,9 @@ const DashboardPage: React.FC = () => {
                     <div className="mb-6 flex items-center justify-between">
                         <div className="flex items-center gap-1 rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-1">
                             <button
-                                onClick={() => setActiveTab('my')}
-                                className={`rounded-md px-4 py-1.5 text-[13px] font-medium transition-colors duration-150 ${activeTab === 'my'
-                                    ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                                    : 'text-zinc-500 hover:text-zinc-300'
-                                    }`}
+                                className="rounded-md px-4 py-1.5 text-[13px] font-medium bg-zinc-800 text-zinc-100 shadow-sm"
                             >
                                 My Notes
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('shared')}
-                                className={`rounded-md px-4 py-1.5 text-[13px] font-medium transition-colors duration-150 ${activeTab === 'shared'
-                                    ? 'bg-zinc-800 text-zinc-100 shadow-sm'
-                                    : 'text-zinc-500 hover:text-zinc-300'
-                                    }`}
-                            >
-                                Shared with Me
                             </button>
                         </div>
 
@@ -319,51 +428,99 @@ const DashboardPage: React.FC = () => {
                             <div className="flex items-center justify-center py-20">
                                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
                             </div>
-                        ) : activeTab === 'my' && notes.length > 0 ? (
+                        ) : notes.length > 0 ? (
                             <div className="flex flex-col gap-1">
-                                {notes.map((note) => (
-                                    <div
-                                        key={note.id}
-                                        onClick={() => navigate(`/notes/${note.id}`)}
-                                        className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-colors duration-150 hover:bg-zinc-900/60"
-                                    >
-                                        {/* Folder Icon */}
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
-                                            <BsFolder2 className="h-5 w-5 text-amber-500" />
-                                        </div>
+                                {notes.map((note) => {
+                                    const { icon: TypeIcon, label: typeLabel } = getNoteTypeInfo(note.source_type);
+                                    const lastUpdated = note.updated_at || note.created_at;
+                                    return (
+                                        <div key={note.id}>
+                                            <div
+                                                onClick={() => navigate(`/notes/${note.id}`)}
+                                                className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-colors duration-150 hover:bg-zinc-900/60"
+                                            >
+                                                {/* Folder Icon */}
+                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                                                    <BsFolder2 className="h-5 w-5 text-amber-500" />
+                                                </div>
 
-                                        {/* Note Info */}
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-semibold text-zinc-200">
-                                                {note.title}
-                                            </p>
-                                            <p className="mt-0.5 text-[12px] text-zinc-500">
-                                                Last opened {timeAgo(note.created_at)}
-                                            </p>
-                                        </div>
+                                                {/* Note Info */}
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-semibold text-zinc-200">
+                                                        {note.title}
+                                                    </p>
+                                                    <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
+                                                        <div className="flex items-center gap-1">
+                                                            <TypeIcon className="h-3.5 w-3.5" />
+                                                            <span>{typeLabel}</span>
+                                                        </div>
+                                                        <span>•</span>
+                                                        <span>Updated {timeAgo(lastUpdated)}</span>
+                                                    </div>
+                                                </div>
 
-                                        {/* Options */}
-                                        <button
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:bg-zinc-800 hover:text-zinc-300 group-hover:opacity-100"
-                                            aria-label="Note options"
-                                        >
-                                            <BsThreeDotsVertical className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : activeTab === 'shared' ? (
-                            <div className="flex flex-col items-center justify-center py-20">
-                                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl border border-zinc-800/60 bg-zinc-900/40">
-                                    <BsFolder2 className="h-7 w-7 text-zinc-600" />
-                                </div>
-                                <p className="text-sm font-medium text-zinc-400">
-                                    No shared notes yet
-                                </p>
-                                <p className="mt-1 text-[12px] text-zinc-600">
-                                    Notes shared with you will appear here
-                                </p>
+                                                {/* Options Menu */}
+                                                <div className="relative">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setMenuOpenId(menuOpenId === note.id ? null : note.id);
+                                                        }}
+                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:bg-zinc-800 hover:text-zinc-300 group-hover:opacity-100"
+                                                        aria-label="Note options"
+                                                    >
+                                                        <BsThreeDotsVertical className="h-4 w-4" />
+                                                    </button>
+
+                                                    {/* Dropdown Menu */}
+                                                    {menuOpenId === note.id && (
+                                                        <div className="absolute right-0 top-full mt-1 z-50 w-40 rounded-lg border border-zinc-700 bg-zinc-900 shadow-lg">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setDeleteConfirmId(note.id);
+                                                                    setMenuOpenId(null);
+                                                                }}
+                                                                className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-400 transition-colors hover:bg-red-500/10"
+                                                            >
+                                                                <FiTrash2 className="h-4 w-4" />
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Delete Confirmation Modal */}
+                                            {deleteConfirmId === note.id && (
+                                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                                                    <div className="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-xl">
+                                                        <h3 className="text-lg font-bold text-zinc-100">
+                                                            Delete note?
+                                                        </h3>
+                                                        <p className="mt-2 text-sm text-zinc-400">
+                                                            This will permanently delete "{note.title}" and all its related data (flashcards, quizzes, etc.). This action cannot be undone.
+                                                        </p>
+                                                        <div className="mt-6 flex gap-3">
+                                                            <button
+                                                                onClick={() => setDeleteConfirmId(null)}
+                                                                className="flex-1 rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteNote(note.id)}
+                                                                className="flex-1 rounded-lg bg-red-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-600"
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         ) : (
                             <div className="flex flex-col items-center justify-center py-20">
@@ -396,7 +553,7 @@ const DashboardPage: React.FC = () => {
             <DocumentUploadModal
                 open={openModal === 'document'}
                 onClose={() => setOpenModal(null)}
-                onGenerate={(file) => console.log('Document file:', file)}
+                onGenerate={handleCreateDocumentNote}
             />
             <WebsiteLinkModal
                 open={openModal === 'website'}

@@ -242,7 +242,13 @@ export const AudioModal: React.FC<AudioModalProps> = ({
 interface DocumentUploadModalProps {
     open: boolean;
     onClose: () => void;
-    onGenerate?: (file?: File) => void;
+    onGenerate?: (result: {
+        file: File;
+        title: string;
+        noteContent: string;
+        extractedText: string;
+        publicUrl: string;
+    }) => void;
 }
 
 export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
@@ -252,30 +258,60 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 }) => {
     const [docFile, setDocFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        if (open) setDocFile(null);
+        if (open) {
+            setDocFile(null);
+            setError(null);
+            setIsLoading(false);
+        }
     }, [open]);
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         const file = e.dataTransfer.files[0];
-        if (file) setDocFile(file);
+        if (file) {
+            setDocFile(file);
+            setError(null);
+        }
+    };
+
+    const handleGenerate = async () => {
+        if (!docFile) return;
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            // Dynamically import to avoid circular deps at module level
+            const { uploadAndExtractDocument } = await import('../lib/aiService');
+            const result = await uploadAndExtractDocument(docFile);
+            onGenerate?.({ file: docFile, ...result });
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
-        <ModalWrapper open={open} onClose={onClose}>
+        <ModalWrapper open={open} onClose={isLoading ? () => {} : onClose}>
             <div className="px-8 pt-10 pb-8">
                 {/* Icon */}
                 <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-pink-500 shadow-lg shadow-rose-500/25">
                     <MdUploadFile className="h-8 w-8 text-white" />
                 </div>
 
-                <h2 className="mb-6 text-center text-lg font-bold text-zinc-100">
-                    Create note from source
+                <h2 className="mb-2 text-center text-lg font-bold text-zinc-100">
+                    Upload a document
                 </h2>
+                <p className="mb-6 text-center text-sm text-zinc-500">
+                    Upload a PDF and Zemly AI will generate study notes for you
+                </p>
 
                 {/* Document Upload Drop Zone */}
                 <div
@@ -285,46 +321,70 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-14 transition-all duration-200 ${isDragging
-                            ? 'border-rose-500/50 bg-rose-500/5'
+                    onClick={() => !isLoading && fileInputRef.current?.click()}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-all duration-200 ${isDragging
+                        ? 'border-rose-500/50 bg-rose-500/5'
+                        : docFile
+                            ? 'border-rose-500/40 bg-rose-500/5'
                             : 'border-zinc-700/50 bg-zinc-800/20 hover:border-zinc-600 hover:bg-zinc-800/40'
-                        }`}
+                        } ${isLoading ? 'pointer-events-none opacity-60' : ''}`}
                 >
-                    <FiUploadCloud className={`mb-2 h-6 w-6 ${isDragging ? 'text-rose-400' : 'text-zinc-500'}`} />
-                    <p className="text-sm text-zinc-400">
+                    <FiUploadCloud className={`mb-2 h-6 w-6 ${isDragging ? 'text-rose-400' : docFile ? 'text-rose-400' : 'text-zinc-500'}`} />
+                    <p className="text-sm text-zinc-400 text-center">
                         {docFile ? (
                             <span className="text-rose-400 font-medium">{docFile.name}</span>
                         ) : (
-                            <>Drag documents here, or click to upload</>
+                            <>Drag a PDF here, or <span className="text-zinc-300 underline underline-offset-2">click to browse</span></>
                         )}
                     </p>
+                    {docFile && (
+                        <p className="mt-1 text-xs text-zinc-600">
+                            {(docFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                    )}
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf,.doc,.docx,.ppt,.pptx,.txt,.rtf,.odt,.xls,.xlsx"
+                        accept=".pdf,.txt,.md"
                         className="hidden"
                         onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) setDocFile(file);
+                            if (file) {
+                                setDocFile(file);
+                                setError(null);
+                            }
                         }}
                     />
                 </div>
 
+                {/* Error */}
+                {error && (
+                    <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2.5 text-[13px] text-red-400">
+                        {error}
+                    </div>
+                )}
+
                 {/* Generate Notes Button */}
                 <button
-                    onClick={() => {
-                        onGenerate?.(docFile ?? undefined);
-                        onClose();
-                    }}
-                    className="mt-5 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:shadow-indigo-500/40 hover:brightness-110"
+                    onClick={handleGenerate}
+                    disabled={!docFile || isLoading}
+                    className="mt-5 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:shadow-indigo-500/40 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:shadow-indigo-500/25 disabled:hover:brightness-100"
                 >
-                    Generate Notes
+                    {isLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                            Generating notes…
+                        </span>
+                    ) : (
+                        'Generate Notes'
+                    )}
                 </button>
             </div>
         </ModalWrapper>
     );
 };
+
+
 
 /* ─────────────────────────────────────────────
    4. Website Link Modal
