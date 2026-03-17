@@ -12,6 +12,11 @@ export async function saveFlashcardSet(
     noteId: number,
     cards: { front: string; back: string }[],
 ): Promise<{ set: FlashcardSet; cards: FlashcardCard[] }> {
+    const existing = await getLatestFlashcardSet(noteId);
+    if (existing) {
+        throw new Error('Flashcards were already generated for this note.');
+    }
+
     // 1. Create the set
     const { data: set, error: setError } = await supabase
         .from('flashcard_sets')

@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { TbCards } from 'react-icons/tb';
 import { FiChevronLeft, FiChevronRight, FiTrash2, FiEdit2, FiCheck, FiX } from 'react-icons/fi';
 import { BsPlay } from 'react-icons/bs';
-import { FiPlus } from 'react-icons/fi';
 import type { FlashcardCard } from '../types';
 
 interface FlashcardsOverviewProps {
     cards: FlashcardCard[];
     onStartStudying: () => void;
-    onCreateMore: () => void;
     onDeleteCard: (cardId: number) => void;
     onEditCard: (cardId: number, front: string, back: string) => void;
 }
@@ -24,7 +22,6 @@ const statusConfig = {
 const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
     cards,
     onStartStudying,
-    onCreateMore,
     onDeleteCard,
     onEditCard,
 }) => {
@@ -142,15 +139,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({
             </div>
 
             {/* ── Action Buttons ── */}
-            <div className="flex items-center justify-between">
-                <button
-                    onClick={onCreateMore}
-                    className="flex items-center gap-2 rounded-xl border border-zinc-800/60 px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:bg-zinc-800/50 hover:text-zinc-100"
-                >
-                    <FiPlus className="h-4 w-4" />
-                    Create New Flashcards
-                </button>
-
+            <div className="flex items-center justify-end">
                 <button
                     onClick={onStartStudying}
                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/35 hover:brightness-110"

@@ -7,14 +7,28 @@ import { promptGemini, truncateNote } from '../_shared/gemini.ts';
 
 interface FlashcardsRequest {
     noteContent: string;
-    count?: number;
+}
+
+function getFlashcardCount(noteContent: string): number {
+    const length = noteContent.trim().length;
+    if (length <= 800) return 15;
+    if (length >= 6000) return 30;
+    const ratio = (length - 800) / (6000 - 800);
+    return Math.round(15 + ratio * 15);
+}
+
+function parseFlashcards(raw: string): unknown[] {
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed.flashcards)) return [];
+    return parsed.flashcards;
 }
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
 
     try {
-        const { noteContent, count = 10 } = (await req.json()) as FlashcardsRequest;
+        const { noteContent } = (await req.json()) as FlashcardsRequest;
 
         if (!noteContent) {
             return new Response(
@@ -23,25 +37,49 @@ serve(async (req: Request) => {
             );
         }
 
-        // Cap count to avoid huge outputs on free tier
-        const safeCount = Math.min(count, 20);
+        const safeCount = getFlashcardCount(noteContent);
         const note = truncateNote(noteContent);
 
-        const prompt = `Generate ${safeCount} flashcards from this note. Each has "front" (question/term) and "back" (short answer).
+        const prompt = `Generate exactly ${safeCount} flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
         ${note}`;
 
         const raw = await promptGemini(prompt, {
             temperature: 0.5,
-            maxOutputTokens: safeCount <= 10 ? 1024 : 2048,
+            maxOutputTokens: 6144,
         });
 
-        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(cleaned);
+        let flashcards = parseFlashcards(raw);
+
+        // Retry once if model under-returns. Do not deduplicate in backend.
+        if (flashcards.length < 15) {
+            const retryPrompt = `Generate exactly ${safeCount} flashcards from this note.
+RULES:
+- Exactly ${safeCount} flashcards.
+- Each flashcard has "front" and "back".
+- Return ONLY valid JSON as {"flashcards":[...]} with no markdown.
+
+NOTE:
+${note}`;
+
+            const retryRaw = await promptGemini(retryPrompt, {
+                temperature: 0.4,
+                maxOutputTokens: 6144,
+            });
+            flashcards = parseFlashcards(retryRaw);
+        }
+
+        if (flashcards.length < 15) {
+            throw new Error('Flashcard generation returned too few cards. Please try again.');
+        }
+
+        if (flashcards.length > 30) {
+            flashcards = flashcards.slice(0, 30);
+        }
 
         return new Response(
-            JSON.stringify(parsed),
+            JSON.stringify({ flashcards }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     } catch (err) {

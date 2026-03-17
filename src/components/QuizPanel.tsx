@@ -16,7 +16,7 @@ import {
 } from '../lib/quizService';
 
 /* ── Sub-view types ── */
-type QuizView = 'loading' | 'quiz' | 'results';
+type QuizView = 'loading' | 'generate' | 'quiz' | 'results';
 
 interface QuizPanelProps {
     noteId: number;
@@ -50,7 +50,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const newCount = questions.filter((q) => q.status === 'new').length;
     const masteredCount = questions.filter((q) => q.status === 'mastered').length;
 
-    /* ── Load or auto-generate on first visit ── */
+    /* ── Load existing quiz set for this note ── */
     useEffect(() => {
         let cancelled = false;
         const load = async () => {
@@ -62,47 +62,13 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     setQuestions(existingQs);
                     setView('quiz');
                 } else if (!cancelled) {
-                    // Auto-generate on first visit
-                    setIsGenerating(true);
-                    await autoGenerate();
+                    setView('generate');
                 }
             } catch (err) {
                 console.error('Failed to load quiz:', err);
                 if (!cancelled) {
                     setError(err instanceof Error ? err.message : 'Failed to load quiz');
-                    setView('quiz');
-                }
-            }
-        };
-
-        const autoGenerate = async () => {
-            const text = getNoteText();
-            if (!text.trim()) {
-                setError('Your note is empty. Write some content first, then come back!');
-                setView('quiz');
-                return;
-            }
-
-            try {
-                const generated: QuizQuestion[] = await generateQuiz(text);
-                const { set, questions: saved } = await saveQuizSet(
-                    noteId,
-                    generated.map((q) => ({
-                        question: q.question,
-                        options: q.options,
-                        correctIndex: q.correctIndex,
-                    })),
-                );
-                if (!cancelled) {
-                    setSetId(set.id);
-                    setQuestions(saved);
-                    setView('quiz');
-                }
-            } catch (err) {
-                console.error('Quiz generation failed:', err);
-                if (!cancelled) {
-                    setError(err instanceof Error ? err.message : 'Failed to generate quiz');
-                    setView('quiz');
+                    setView('generate');
                 }
             }
         };
@@ -110,6 +76,46 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         load();
         return () => { cancelled = true; };
     }, [noteId]);
+
+    const handleGenerate = useCallback(async () => {
+        if (setId) {
+            setError('Quiz has already been generated for this note.');
+            return;
+        }
+
+        const text = getNoteText();
+        if (!text.trim()) {
+            setError('Your note is empty. Write some content first, then generate the quiz.');
+            return;
+        }
+
+        setIsGenerating(true);
+        setError(null);
+
+        try {
+            const generated: QuizQuestion[] = await generateQuiz(text);
+            const { set, questions: saved } = await saveQuizSet(
+                noteId,
+                generated.map((q) => ({
+                    question: q.question,
+                    options: q.options,
+                    correctIndex: q.correctIndex,
+                })),
+            );
+            setSetId(set.id);
+            setQuestions(saved);
+            setCurrentIndex(0);
+            setAnswersMap({});
+            setExplanationsMap({});
+            setLoadingExplanation(false);
+            setView('quiz');
+        } catch (err) {
+            console.error('Quiz generation failed:', err);
+            setError(err instanceof Error ? err.message : 'Failed to generate quiz');
+        } finally {
+            setIsGenerating(false);
+        }
+    }, [setId, getNoteText, noteId]);
 
     /* ── Handle answer selection ── */
     const handleSelect = useCallback(
@@ -211,14 +217,52 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         return (
             <div className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center gap-4 px-8 py-20">
                 <div className="h-10 w-10 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
-                {isGenerating ? (
-                    <>
-                        <p className="text-[14px] font-medium text-zinc-400">Generating your quiz…</p>
-                        <p className="text-[12px] text-zinc-600">The AI is crafting questions based on your notes</p>
-                    </>
-                ) : (
-                    <p className="text-[14px] font-medium text-zinc-400">Loading quiz…</p>
+                <p className="text-[14px] font-medium text-zinc-400">Loading quiz…</p>
+            </div>
+        );
+    }
+
+    if (view === 'generate') {
+        return (
+            <div className="mx-auto w-full max-w-2xl px-8 py-12 lg:px-16">
+                <div className="mb-10 text-center">
+                    <h2 className="mb-3 text-3xl font-bold text-zinc-100">
+                        <span className="mr-1">✨</span>
+                        Generate Quiz
+                        <span className="ml-1">✨</span>
+                    </h2>
+                    <p className="text-[15px] text-zinc-400">
+                        One-time generation based on note length (15-30 questions)
+                    </p>
+                </div>
+
+                {error && (
+                    <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[14px] text-red-400">
+                        {error}
+                    </div>
                 )}
+
+                <button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="group relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 text-[15px] font-bold text-white shadow-xl shadow-indigo-500/20 transition-all duration-300 hover:shadow-indigo-500/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
+                >
+                    {isGenerating ? (
+                        <>
+                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                            <span>Generating Quiz...</span>
+                        </>
+                    ) : (
+                        <>
+                            <MdAutoAwesome className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
+                            <span>Generate Quiz</span>
+                        </>
+                    )}
+
+                    {!isGenerating && (
+                        <div className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-40" />
+                    )}
+                </button>
             </div>
         );
     }

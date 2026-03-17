@@ -9,6 +9,21 @@ interface QuizRequest {
     noteContent: string;
 }
 
+function getQuizCount(noteContent: string): number {
+    const length = noteContent.trim().length;
+    if (length <= 800) return 15;
+    if (length >= 6000) return 30;
+    const ratio = (length - 800) / (6000 - 800);
+    return Math.round(15 + ratio * 15);
+}
+
+function parseQuestions(raw: string): unknown[] {
+    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed.questions)) return [];
+    return parsed.questions;
+}
+
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
 
@@ -22,12 +37,14 @@ serve(async (req: Request) => {
             );
         }
 
+        const safeCount = getQuizCount(noteContent);
         const note = truncateNote(noteContent);
 
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
-- Decide the number of questions based on how much content there is min-5, max-20.
+    - Generate exactly ${safeCount} questions.
+    - Keep difficulty and coverage proportional to the note depth.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
 - Return ONLY valid JSON, no markdown fences.
@@ -39,19 +56,41 @@ ${note}`;
 
         const raw = await promptGemini(prompt, {
             temperature: 0.5,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 8192,
         });
 
-        const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(cleaned);
+        let questions = parseQuestions(raw);
 
-        // Safety cap at 20
-        if (parsed.questions && parsed.questions.length > 20) {
-            parsed.questions = parsed.questions.slice(0, 20);
+        // Retry once if model under-returns. Do not filter or deduplicate; keep raw output order.
+        if (questions.length < 15) {
+            const retryPrompt = `Generate exactly ${safeCount} multiple-choice questions from the note.
+RULES:
+- Exactly ${safeCount} questions.
+- Each question has exactly 4 options.
+- correctIndex is 0-based.
+- Return ONLY valid JSON as {"questions":[...]} with no markdown.
+
+NOTE:
+${note}`;
+
+            const retryRaw = await promptGemini(retryPrompt, {
+                temperature: 0.4,
+                maxOutputTokens: 8192,
+            });
+            questions = parseQuestions(retryRaw);
+        }
+
+        if (questions.length < 15) {
+            throw new Error('Quiz generation returned too few questions. Please try again.');
+        }
+
+        // Safety cap at 30
+        if (questions.length > 30) {
+            questions = questions.slice(0, 30);
         }
 
         return new Response(
-            JSON.stringify(parsed),
+            JSON.stringify({ questions }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     } catch (err) {

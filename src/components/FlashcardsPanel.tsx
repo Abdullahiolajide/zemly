@@ -7,7 +7,6 @@ import {
     saveFlashcardSet,
     getLatestFlashcardSet,
     getFlashcards,
-    addCardsToSet,
     updateFlashcardStatus,
     resetFlashcardProgress,
     deleteFlashcard,
@@ -18,14 +17,6 @@ import FlashcardsStudy from './FlashcardsStudy';
 
 /* ── Sub-view types ── */
 type FlashcardsView = 'generate' | 'overview' | 'study';
-
-/* ── Count options for generation ── */
-const countOptions = [
-    { value: 5, label: 'Quick review' },
-    { value: 10, label: 'Standard set' },
-    { value: 15, label: 'Comprehensive' },
-    { value: 20, label: 'Deep dive' },
-];
 
 interface FlashcardsPanelProps {
     noteId: number;
@@ -39,10 +30,6 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
-    /* ── Generation form state ── */
-    const [selectedCount, setSelectedCount] = useState(10);
-    const [instructions, setInstructions] = useState('');
 
     /* ── Load existing flashcards for this note ── */
     useEffect(() => {
@@ -67,14 +54,6 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         return () => { cancelled = true; };
     }, [noteId]);
 
-/* ── Similarity check to deduplicate flashcards on the frontend ── */
-function isTooSimilar(a: string, b: string): boolean {
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const na = normalize(a);
-    const nb = normalize(b);
-    return na === nb || na.includes(nb) || nb.includes(na);
-}
-
 /* ── Generate flashcards ── */
     const handleGenerate = useCallback(async () => {
         const text = getNoteText();
@@ -87,45 +66,23 @@ function isTooSimilar(a: string, b: string): boolean {
         setError(null);
 
         try {
-            const noteText = instructions
-                ? `${text}\n\nSpecial instructions: ${instructions}`
-                : text;
-
-            // Generate via AI
-            const generated: Flashcard[] = await generateFlashcards(noteText, selectedCount);
-
-            // Deduplicate against existing cards on the frontend
-            const existingFronts = cards.map((c) => c.front);
-            const uniqueCards = generated.filter(
-                (card) => !existingFronts.some((existing) => isTooSimilar(existing, card.front)),
-            );
-
-            if (uniqueCards.length === 0 && cards.length > 0) {
-                setError('All generated cards were too similar to existing ones. Try again or add different instructions.');
+            if (setId) {
+                setError('Flashcards have already been generated for this note.');
                 return;
             }
 
-            const cardsToSave = uniqueCards.length > 0 ? uniqueCards : generated;
+            // Generate via AI with backend-managed count (15-30)
+            const generated: Flashcard[] = await generateFlashcards(text);
 
-            if (setId) {
-                // Append to existing set
-                const newCards = await addCardsToSet(
-                    setId,
-                    cardsToSave.map((c) => ({ front: c.front, back: c.back })),
-                );
-                setCards((prev) => [...prev, ...newCards]);
-            } else {
-                // Create a brand new set
-                const { set, cards: savedCards } = await saveFlashcardSet(
-                    noteId,
-                    cardsToSave.map((c) => ({ front: c.front, back: c.back })),
-                );
-                setSetId(set.id);
-                setCards(savedCards);
-            }
+            // Create a brand new set
+            const { set, cards: savedCards } = await saveFlashcardSet(
+                noteId,
+                generated.map((c) => ({ front: c.front, back: c.back })),
+            );
+            setSetId(set.id);
+            setCards(savedCards);
 
             setView('overview');
-            setInstructions('');
         } catch (err) {
             console.error('Flashcard generation failed:', err);
             setError(
@@ -134,7 +91,7 @@ function isTooSimilar(a: string, b: string): boolean {
         } finally {
             setIsGenerating(false);
         }
-    }, [getNoteText, instructions, selectedCount, noteId, setId, cards]);
+    }, [getNoteText, noteId, setId]);
 
     /* ── Handle Know / Don't Know ── */
     const handleCardUpdate = useCallback(
@@ -242,7 +199,6 @@ function isTooSimilar(a: string, b: string): boolean {
             <FlashcardsOverview
                 cards={cards}
                 onStartStudying={() => setView('study')}
-                onCreateMore={() => setView('generate')}
                 onDeleteCard={handleDeleteCard}
                 onEditCard={handleEditCard}
             />
@@ -256,62 +212,12 @@ function isTooSimilar(a: string, b: string): boolean {
             <div className="mb-10 text-center">
                 <h2 className="mb-3 text-3xl font-bold text-zinc-100">
                     <span className="flashcards-sparkle mr-1">✨</span>
-                    Welcome to Flashcards
+                    Generate Flashcards
                     <span className="flashcards-sparkle ml-1">✨</span>
                 </h2>
                 <p className="text-[15px] text-zinc-400">
-                    Choose how many flashcards to generate from your notes
+                    One-time generation based on note length (15-30 flashcards)
                 </p>
-            </div>
-
-            {/* ── Count Selector ── */}
-            <div className="mb-10 grid grid-cols-4 gap-3">
-                {countOptions.map((opt) => {
-                    const isSelected = selectedCount === opt.value;
-                    return (
-                        <button
-                            key={opt.value}
-                            onClick={() => setSelectedCount(opt.value)}
-                            className={`flashcard-count-btn group relative flex flex-col items-center gap-1.5 rounded-xl border-2 px-4 py-5 text-center transition-all duration-200 ${isSelected
-                                    ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
-                                    : 'border-zinc-800/60 bg-zinc-900/40 hover:border-zinc-700 hover:bg-zinc-800/50'
-                                }`}
-                        >
-                            {isSelected && (
-                                <span className="absolute -top-1.5 right-2.5 text-[10px] text-indigo-400 animate-pulse">
-                                    ✦
-                                </span>
-                            )}
-                            <span
-                                className={`text-2xl font-bold transition-colors ${isSelected ? 'text-zinc-100' : 'text-zinc-300 group-hover:text-zinc-100'
-                                    }`}
-                            >
-                                {opt.value}
-                            </span>
-                            <span
-                                className={`text-[12px] font-medium transition-colors ${isSelected ? 'text-indigo-400' : 'text-zinc-500 group-hover:text-zinc-400'
-                                    }`}
-                            >
-                                {opt.label}
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* ── Special Instructions ── */}
-            <div className="mb-8">
-                <label className="mb-2.5 block text-[14px] font-semibold text-zinc-300">
-                    Special Instructions{' '}
-                    <span className="font-normal text-zinc-500">(Optional)</span>
-                </label>
-                <textarea
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="Describe what you want your flashcards to focus on, or leave blank to cover the full notes..."
-                    rows={4}
-                    className="w-full resize-none rounded-xl border-2 border-zinc-800/60 bg-zinc-900/40 px-4 py-3 text-[14px] text-zinc-200 placeholder-zinc-600 outline-none transition-all duration-200 focus:border-indigo-500/50 focus:bg-zinc-900/60 focus:ring-2 focus:ring-indigo-500/10"
-                />
             </div>
 
             {/* ── Error ── */}
@@ -335,7 +241,7 @@ function isTooSimilar(a: string, b: string): boolean {
                 ) : (
                     <>
                         <MdAutoAwesome className="h-5 w-5 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110" />
-                        <span>Generate {selectedCount} Flashcards</span>
+                        <span>Generate Flashcards</span>
                     </>
                 )}
 
@@ -344,15 +250,6 @@ function isTooSimilar(a: string, b: string): boolean {
                 )}
             </button>
 
-            {/* ── Back to existing cards (if any) ── */}
-            {cards.length > 0 && (
-                <button
-                    onClick={() => setView('overview')}
-                    className="mt-4 w-full text-center text-[13px] font-medium text-zinc-500 transition-colors hover:text-zinc-300"
-                >
-                    ← Back to existing flashcards ({cards.length} cards)
-                </button>
-            )}
         </div>
     );
 };

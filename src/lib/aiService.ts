@@ -66,13 +66,13 @@ export async function chatWithNote(
 
 /**
  * Generate study flashcards from note content.
+ * The model decides the final count based on note length (15-30).
  */
 export async function generateFlashcards(
     noteContent: string,
-    count = 10,
 ): Promise<Flashcard[]> {
     const { data, error } = await supabase.functions.invoke('generate-flashcards', {
-        body: { noteContent, count },
+        body: { noteContent },
     });
 
     if (error) throw new Error(await extractErrorMessage(error, 'Flashcard generation failed'));
@@ -81,7 +81,7 @@ export async function generateFlashcards(
 
 /**
  * Generate a multiple-choice quiz from note content.
- * The model decides how many questions to create (capped at 20).
+ * The model decides how many questions to create (15-30).
  */
 export async function generateQuiz(
     noteContent: string,

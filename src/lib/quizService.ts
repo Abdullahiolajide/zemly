@@ -11,6 +11,11 @@ export async function saveQuizSet(
     noteId: number,
     questions: { question: string; options: string[]; correctIndex: number }[],
 ): Promise<{ set: QuizSet; questions: QuizQuestionRow[] }> {
+    const existing = await getLatestQuizSet(noteId);
+    if (existing) {
+        throw new Error('Quiz was already generated for this note.');
+    }
+
     // 1. Create the set
     const { data: set, error: setError } = await supabase
         .from('quiz_sets')
