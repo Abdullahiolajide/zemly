@@ -15,7 +15,6 @@ import {
     resetQuizProgress,
 } from '../lib/quizService';
 
-/* ── Sub-view types ── */
 type QuizView = 'loading' | 'generate' | 'quiz' | 'results';
 
 interface QuizPanelProps {
@@ -30,27 +29,21 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-
-    /* Per-question interaction state (keyed by question id) */
-    const [answersMap, setAnswersMap] = useState<Record<number, number>>({}); // questionId -> selectedOptionIndex
+    const [answersMap, setAnswersMap] = useState<Record<number, number>>({});
     const [explanationsMap, setExplanationsMap] = useState<Record<number, string>>({});
     const [loadingExplanation, setLoadingExplanation] = useState(false);
     const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
 
     const currentQ = questions[currentIndex] ?? null;
-
-    /* Derived state for current question */
     const selectedOption = currentQ ? (answersMap[currentQ.id] ?? null) : null;
     const answered = selectedOption !== null;
     const explanation = currentQ ? (explanationsMap[currentQ.id] ?? null) : null;
 
-    /* ── Status counts ── */
     const unfamiliarCount = questions.filter((q) => q.status === 'unfamiliar').length;
     const learningCount = questions.filter((q) => q.status === 'learning').length;
     const newCount = questions.filter((q) => q.status === 'new').length;
     const masteredCount = questions.filter((q) => q.status === 'mastered').length;
 
-    /* ── Load existing quiz set for this note ── */
     useEffect(() => {
         let cancelled = false;
         const load = async () => {
@@ -66,42 +59,22 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 }
             } catch (err) {
                 console.error('Failed to load quiz:', err);
-                if (!cancelled) {
-                    setError(err instanceof Error ? err.message : 'Failed to load quiz');
-                    setView('generate');
-                }
+                if (!cancelled) { setError(err instanceof Error ? err.message : 'Failed to load quiz'); setView('generate'); }
             }
         };
-
         load();
         return () => { cancelled = true; };
     }, [noteId]);
 
     const handleGenerate = useCallback(async () => {
-        if (setId) {
-            setError('Quiz has already been generated for this note.');
-            return;
-        }
-
+        if (setId) { setError('Quiz has already been generated for this note.'); return; }
         const text = getNoteText();
-        if (!text.trim()) {
-            setError('Your note is empty. Write some content first, then generate the quiz.');
-            return;
-        }
-
+        if (!text.trim()) { setError('Your note is empty. Write some content first, then generate the quiz.'); return; }
         setIsGenerating(true);
         setError(null);
-
         try {
             const generated: QuizQuestion[] = await generateQuiz(text);
-            const { set, questions: saved } = await saveQuizSet(
-                noteId,
-                generated.map((q) => ({
-                    question: q.question,
-                    options: q.options,
-                    correctIndex: q.correctIndex,
-                })),
-            );
+            const { set, questions: saved } = await saveQuizSet(noteId, generated.map((q) => ({ question: q.question, options: q.options, correctIndex: q.correctIndex })));
             setSetId(set.id);
             setQuestions(saved);
             setCurrentIndex(0);
@@ -117,75 +90,35 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         }
     }, [setId, getNoteText, noteId]);
 
-    /* ── Handle answer selection ── */
-    const handleSelect = useCallback(
-        async (optionIndex: number) => {
-            if (answered || !currentQ) return;
+    const handleSelect = useCallback(async (optionIndex: number) => {
+        if (answered || !currentQ) return;
+        setAnswersMap((prev) => ({ ...prev, [currentQ.id]: optionIndex }));
+        const isCorrect = optionIndex === currentQ.correct_index;
+        let newStatus: QuizStatus;
+        let newKnowCount: number;
+        if (isCorrect) { newKnowCount = currentQ.know_count + 1; newStatus = newKnowCount >= 2 ? 'mastered' : 'learning'; }
+        else { newKnowCount = 0; newStatus = 'unfamiliar'; }
+        setQuestions((prev) => prev.map((q) => q.id === currentQ.id ? { ...q, status: newStatus, know_count: newKnowCount } : q));
+        try { await updateQuizQuestionStatus(currentQ.id, newStatus, newKnowCount); }
+        catch (err) { console.error('Failed to update question status:', err); }
+    }, [answered, currentQ]);
 
-            setAnswersMap((prev) => ({ ...prev, [currentQ.id]: optionIndex }));
-
-            const isCorrect = optionIndex === currentQ.correct_index;
-
-            let newStatus: QuizStatus;
-            let newKnowCount: number;
-
-            if (isCorrect) {
-                newKnowCount = currentQ.know_count + 1;
-                newStatus = newKnowCount >= 2 ? 'mastered' : 'learning';
-            } else {
-                newKnowCount = 0;
-                newStatus = 'unfamiliar';
-            }
-
-            // Optimistic update
-            setQuestions((prev) =>
-                prev.map((q) =>
-                    q.id === currentQ.id
-                        ? { ...q, status: newStatus, know_count: newKnowCount }
-                        : q,
-                ),
-            );
-
-            try {
-                await updateQuizQuestionStatus(currentQ.id, newStatus, newKnowCount);
-            } catch (err) {
-                console.error('Failed to update question status:', err);
-            }
-        },
-        [answered, currentQ],
-    );
-
-    /* ── Navigate ── */
     const goNext = () => {
         setLoadingExplanation(false);
-        if (currentIndex < questions.length - 1) {
-            setSlideDir('right');
-            setCurrentIndex((i) => i + 1);
-        } else {
-            setView('results');
-        }
+        if (currentIndex < questions.length - 1) { setSlideDir('right'); setCurrentIndex((i) => i + 1); }
+        else { setView('results'); }
     };
-
     const goPrev = () => {
         setLoadingExplanation(false);
-        if (currentIndex > 0) {
-            setSlideDir('left');
-            setCurrentIndex((i) => i - 1);
-        }
+        if (currentIndex > 0) { setSlideDir('left'); setCurrentIndex((i) => i - 1); }
     };
 
-    /* ── On-demand explanation ── */
     const handleExplain = useCallback(async () => {
         if (!currentQ || loadingExplanation) return;
         setLoadingExplanation(true);
         try {
             const text = getNoteText();
-            const result = await generateQuizExplanation(
-                currentQ.question,
-                currentQ.options,
-                currentQ.correct_index,
-                text,
-            );
+            const result = await generateQuizExplanation(currentQ.question, currentQ.options, currentQ.correct_index, text);
             setExplanationsMap((prev) => ({ ...prev, [currentQ.id]: result }));
         } catch (err) {
             console.error('Failed to generate explanation:', err);
@@ -195,7 +128,6 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         }
     }, [currentQ, loadingExplanation, getNoteText]);
 
-    /* ── Reset progress ── */
     const handleReset = useCallback(async () => {
         if (!setId) return;
         try {
@@ -207,37 +139,35 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             setExplanationsMap({});
             setLoadingExplanation(false);
             setView('quiz');
-        } catch (err) {
-            console.error('Failed to reset quiz:', err);
-        }
+        } catch (err) { console.error('Failed to reset quiz:', err); }
     }, [setId]);
 
     /* ── Loading ── */
     if (view === 'loading') {
         return (
             <div className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center gap-4 px-8 py-20">
-                <div className="h-10 w-10 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
+                <div className="h-10 w-10 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }} />
                 <p className="text-[14px] font-medium text-zinc-400">Loading quiz…</p>
             </div>
         );
     }
 
+    /* ── Generate ── */
     if (view === 'generate') {
         return (
             <div className="mx-auto w-full max-w-2xl px-8 py-12 lg:px-16">
                 <div className="mb-10 text-center">
-                    <h2 className="mb-3 text-3xl font-bold text-zinc-100">
-                        <span className="mr-1">✨</span>
-                        Generate Quiz
-                        <span className="ml-1">✨</span>
+                    <h2
+                        className="mb-3 text-3xl font-bold text-zinc-100"
+                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
+                    >
+                        ✨ Generate Quiz
                     </h2>
-                    <p className="text-[15px] text-zinc-400">
-                        One-time generation based on note length (15-30 questions)
-                    </p>
+                    <p className="text-[15px] text-zinc-500">One-time generation based on note length (15–30 questions)</p>
                 </div>
 
                 {error && (
-                    <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[14px] text-red-400">
+                    <div className="mb-6 rounded-xl px-4 py-3 text-[14px] text-red-400" style={{ border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.08)' }}>
                         {error}
                     </div>
                 )}
@@ -245,11 +175,11 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 <button
                     onClick={handleGenerate}
                     disabled={isGenerating}
-                    className="group relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 text-[15px] font-bold text-white shadow-xl shadow-indigo-500/20 transition-all duration-300 hover:shadow-indigo-500/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
+                    className="btn-emerald group relative flex w-full items-center justify-center gap-2.5 py-4 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     {isGenerating ? (
                         <>
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                            <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
                             <span>Generating Quiz...</span>
                         </>
                     ) : (
@@ -258,142 +188,79 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                             <span>Generate Quiz</span>
                         </>
                     )}
-
-                    {!isGenerating && (
-                        <div className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-40" />
-                    )}
                 </button>
             </div>
         );
     }
 
-    /* ── Results view ── */
+    /* ── Results ── */
     if (view === 'results') {
         const total = questions.length;
         const masteredPct = total > 0 ? Math.round((masteredCount / total) * 100) : 0;
         const learningPct = total > 0 ? Math.round((learningCount / total) * 100) : 0;
         const unfamiliarPct = total > 0 ? Math.round((unfamiliarCount / total) * 100) : 0;
         const newPct = total > 0 ? Math.round((newCount / total) * 100) : 0;
-
-        // Determine level
-        let level = 'Beginner';
-        let levelEmoji = '🌱';
+        let level = 'Beginner'; let levelEmoji = '🌱';
         if (masteredPct >= 80) { level = 'Expert'; levelEmoji = '🏆'; }
         else if (masteredPct >= 50) { level = 'Advanced'; levelEmoji = '🚀'; }
         else if (masteredPct + learningPct >= 50) { level = 'Intermediate'; levelEmoji = '📚'; }
-
-        // Motivational message
         let message = '';
-        if (masteredPct === 100) {
-            message = "Perfect score! You've mastered everything!";
-        } else if (masteredPct >= 50) {
-            message = `Great progress! ${total - masteredCount} questions left to master.`;
-        } else if (learningCount > 0) {
-            message = `You're getting there! Keep studying to turn those ${learningCount} learning items into mastered ones.`;
-        } else {
-            message = `Time to review! Focus on the ${unfamiliarCount + newCount} questions you haven't mastered yet.`;
-        }
+        if (masteredPct === 100) { message = "Perfect score! You've mastered everything!"; }
+        else if (masteredPct >= 50) { message = `Great progress! ${total - masteredCount} questions left to master.`; }
+        else if (learningCount > 0) { message = `You're getting there! Keep studying those ${learningCount} in-progress items.`; }
+        else { message = `Time to review! Focus on the ${unfamiliarCount + newCount} questions you haven't mastered yet.`; }
 
         return (
             <div className="mx-auto w-full max-w-4xl px-8 py-10 lg:px-16">
-                <div className="rounded-2xl border border-zinc-800/40 bg-zinc-900/60 p-8 shadow-xl shadow-black/20">
-                    {/* Level header */}
+                <div
+                    className="rounded-2xl p-8"
+                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)' }}
+                >
                     <div className="mb-6">
-                        <h2 className="mb-1 text-2xl font-bold text-zinc-100">
-                            <span className="mr-2">{levelEmoji}</span>
-                            {level}
+                        <h2
+                            className="mb-1 text-2xl font-bold text-zinc-100"
+                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                        >
+                            <span className="mr-2">{levelEmoji}</span>{level}
                         </h2>
-                        <p className="text-[14px] leading-relaxed text-zinc-400">
-                            💡 {message}
-                        </p>
+                        <p className="text-[14px] leading-relaxed text-zinc-400">💡 {message}</p>
                     </div>
 
-                    <div className="h-px bg-zinc-800/60" />
+                    <div className="h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
 
                     {/* Progress bar */}
                     <div className="mt-6 mb-6">
                         <p className="mb-3 text-[13px] font-semibold text-zinc-400">Your progress:</p>
-                        <div className="flex h-8 w-full overflow-hidden rounded-full">
-                            {masteredPct > 0 && (
-                                <div
-                                    className="flex items-center justify-center bg-green-500 text-[11px] font-bold text-white transition-all duration-500"
-                                    style={{ width: `${masteredPct}%` }}
-                                >
-                                    {masteredPct}%
-                                </div>
-                            )}
-                            {learningPct > 0 && (
-                                <div
-                                    className="flex items-center justify-center bg-amber-500 text-[11px] font-bold text-white transition-all duration-500"
-                                    style={{ width: `${learningPct}%` }}
-                                >
-                                    {learningPct}%
-                                </div>
-                            )}
-                            {unfamiliarPct > 0 && (
-                                <div
-                                    className="flex items-center justify-center bg-red-500 text-[11px] font-bold text-white transition-all duration-500"
-                                    style={{ width: `${unfamiliarPct}%` }}
-                                >
-                                    {unfamiliarPct}%
-                                </div>
-                            )}
-                            {newPct > 0 && (
-                                <div
-                                    className="flex items-center justify-center bg-blue-500 text-[11px] font-bold text-white transition-all duration-500"
-                                    style={{ width: `${newPct}%` }}
-                                >
-                                    {newPct}%
-                                </div>
-                            )}
+                        <div className="flex h-8 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            {masteredPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${masteredPct}%`, background: '#22c55e' }}>{masteredPct}%</div>}
+                            {learningPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${learningPct}%`, background: '#f59e0b' }}>{learningPct}%</div>}
+                            {unfamiliarPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${unfamiliarPct}%`, background: '#ef4444' }}>{unfamiliarPct}%</div>}
+                            {newPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${newPct}%`, background: '#4F9CF9' }}>{newPct}%</div>}
                         </div>
                     </div>
 
                     {/* Breakdown */}
                     <div className="mb-8 space-y-2">
-                        {masteredCount > 0 && (
-                            <div className="flex items-center gap-3">
-                                <span className="w-8 text-right text-[14px] font-bold text-zinc-300">{masteredCount}</span>
-                                <span className="rounded-full bg-green-500/15 px-3 py-0.5 text-[12px] font-semibold text-green-400">Mastered</span>
-                            </div>
-                        )}
-                        {learningCount > 0 && (
-                            <div className="flex items-center gap-3">
-                                <span className="w-8 text-right text-[14px] font-bold text-zinc-300">{learningCount}</span>
-                                <span className="rounded-full bg-amber-500/15 px-3 py-0.5 text-[12px] font-semibold text-amber-400">Learning</span>
-                            </div>
-                        )}
-                        {unfamiliarCount > 0 && (
-                            <div className="flex items-center gap-3">
-                                <span className="w-8 text-right text-[14px] font-bold text-zinc-300">{unfamiliarCount}</span>
-                                <span className="rounded-full bg-red-500/15 px-3 py-0.5 text-[12px] font-semibold text-red-400">Unfamiliar</span>
-                            </div>
-                        )}
-                        {newCount > 0 && (
-                            <div className="flex items-center gap-3">
-                                <span className="w-8 text-right text-[14px] font-bold text-zinc-300">{newCount}</span>
-                                <span className="rounded-full bg-blue-500/15 px-3 py-0.5 text-[12px] font-semibold text-blue-400">New</span>
-                            </div>
-                        )}
+                        {masteredCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{masteredCount}</span><span className="rounded-full bg-green-500/15 px-3 py-0.5 text-[12px] font-semibold text-green-400">Mastered</span></div>}
+                        {learningCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{learningCount}</span><span className="rounded-full bg-amber-500/15 px-3 py-0.5 text-[12px] font-semibold text-amber-400">Learning</span></div>}
+                        {unfamiliarCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{unfamiliarCount}</span><span className="rounded-full bg-red-500/15 px-3 py-0.5 text-[12px] font-semibold text-red-400">Unfamiliar</span></div>}
+                        {newCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{newCount}</span><span className="rounded-full bg-blue-500/15 px-3 py-0.5 text-[12px] font-semibold text-blue-400">New</span></div>}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-3">
                         <button
                             onClick={handleReset}
-                            className="rounded-xl border border-zinc-700 px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:bg-zinc-800 hover:text-zinc-200"
+                            className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
+                            style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
                         >
                             Reset Progress
                         </button>
                         <button
-                            onClick={() => {
-                                setCurrentIndex(0);
-                                setAnswersMap({});
-                                setExplanationsMap({});
-                                setLoadingExplanation(false);
-                                setView('quiz');
-                            }}
-                            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/35 hover:brightness-110"
+                            onClick={() => { setCurrentIndex(0); setAnswersMap({}); setExplanationsMap({}); setLoadingExplanation(false); setView('quiz'); }}
+                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[13px] font-bold"
                         >
                             Continue learning →
                         </button>
@@ -413,7 +280,8 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 <p className="text-center text-[14px] text-red-400">{error}</p>
                 <button
                     onClick={() => window.location.reload()}
-                    className="rounded-xl border border-zinc-700 px-5 py-2 text-[13px] font-semibold text-zinc-400 transition-all hover:bg-zinc-800 hover:text-zinc-200"
+                    className="rounded-xl px-5 py-2 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
+                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
                 >
                     Try Again
                 </button>
@@ -422,173 +290,157 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     }
 
     /* ── Quiz view ── */
-
     const slideX = slideDir === 'right' ? 40 : -40;
 
     return (
         <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-8 py-6 lg:px-16">
-            {/* ── Header ── */}
+            {/* Header */}
             <div className="mb-4 flex flex-shrink-0 items-center gap-3">
-                <PiExam className="h-6 w-6 text-indigo-400" />
-                <h2 className="text-xl font-bold text-zinc-100">Quiz</h2>
+                <PiExam className="h-6 w-6" style={{ color: '#00C896' }} />
+                <h2 className="text-xl font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Quiz</h2>
             </div>
 
-            {/* ── Status badges ── */}
+            {/* Status badges */}
             <div className="mb-6 flex flex-shrink-0 flex-wrap items-center justify-center gap-3">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400">
-                    <span className="h-2 w-2 rounded-full bg-red-400" />
-                    {unfamiliarCount} Unfamiliar
+                    <span className="h-2 w-2 rounded-full bg-red-400" />{unfamiliarCount} Unfamiliar
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400">
-                    <span className="h-2 w-2 rounded-full bg-amber-400" />
-                    {learningCount} Learning
+                    <span className="h-2 w-2 rounded-full bg-amber-400" />{learningCount} Learning
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400">
-                    <span className="h-2 w-2 rounded-full bg-blue-400" />
-                    {newCount} New
+                    <span className="h-2 w-2 rounded-full bg-blue-400" />{newCount} New
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400">
-                    <span className="h-2 w-2 rounded-full bg-green-400" />
-                    {masteredCount} Mastered
+                    <span className="h-2 w-2 rounded-full bg-green-400" />{masteredCount} Mastered
                 </span>
             </div>
 
-            {/* ── Scrollable question area ── */}
+            {/* Question area */}
             <div className="min-h-0 flex-1 overflow-hidden">
                 <AnimatePresence mode="wait" initial={false}>
-                {currentQ && (
-                    <motion.div
-                        key={currentQ.id}
-                        initial={{ opacity: 0, x: slideX }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -slideX }}
-                        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                        className="flex h-full flex-col overflow-y-auto"
-                    >
-                        {/* Question text — fixed height so layout is stable */}
-                        <div className="mb-6 mt-4 flex min-h-[80px] items-center justify-center">
-                            <p className="text-center text-[16px] font-bold leading-relaxed text-zinc-100">
-                                {currentQ.question}
-                            </p>
-                        </div>
+                    {currentQ && (
+                        <motion.div
+                            key={currentQ.id}
+                            initial={{ opacity: 0, x: slideX }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -slideX }}
+                            transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                            className="flex h-full flex-col overflow-y-auto"
+                        >
+                            <div className="mb-6 mt-4 flex min-h-[80px] items-center justify-center">
+                                <p className="text-center text-[16px] font-bold leading-relaxed text-zinc-100">
+                                    {currentQ.question}
+                                </p>
+                            </div>
 
-                        {/* Options grid — staggered entrance from bottom */}
-                        <div className="mb-6 grid grid-cols-2 gap-3">
-                            {currentQ.options.map((option, i) => {
-                                const isSelected = selectedOption === i;
-                                const isCorrect = i === currentQ.correct_index;
-
-                                let optionClasses = 'border-zinc-800/60 bg-zinc-900/30 hover:border-zinc-700 hover:bg-zinc-900/50 cursor-pointer';
-
-                                if (answered) {
-                                    if (isCorrect) {
-                                        optionClasses = 'border-green-500/50 bg-green-500/10';
-                                    } else if (isSelected && !isCorrect) {
-                                        optionClasses = 'border-red-500/50 bg-red-500/10';
-                                    } else {
-                                        optionClasses = 'border-zinc-800/40 bg-zinc-900/20 opacity-50';
+                            {/* Options */}
+                            <div className="mb-6 grid grid-cols-2 gap-3">
+                                {currentQ.options.map((option, i) => {
+                                    const isSelected = selectedOption === i;
+                                    const isCorrect = i === currentQ.correct_index;
+                                    let borderColor = 'rgba(255,255,255,0.08)';
+                                    let bg = 'rgba(255,255,255,0.025)';
+                                    let opacity = '1';
+                                    if (answered) {
+                                        if (isCorrect) { borderColor = 'rgba(34,197,94,0.5)'; bg = 'rgba(34,197,94,0.08)'; }
+                                        else if (isSelected) { borderColor = 'rgba(239,68,68,0.5)'; bg = 'rgba(239,68,68,0.08)'; }
+                                        else { opacity = '0.4'; }
                                     }
-                                }
-
-                                return (
-                                    <motion.button
-                                        key={`${currentQ.id}-${i}`}
-                                        initial={{ opacity: 0, y: 24 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{
-                                            duration: 0.35,
-                                            delay: 0.1 + i * 0.07,
-                                            ease: [0.25, 0.1, 0.25, 1],
-                                        }}
-                                        onClick={() => handleSelect(i)}
-                                        disabled={answered}
-                                        className={`flex min-h-[72px] items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors ${optionClasses}`}
-                                    >
-                                        {/* Number or icon */}
-                                        <span className="flex-shrink-0">
-                                            {answered && isCorrect ? (
-                                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500/20">
-                                                    <IoCheckmark className="h-4 w-4 text-green-400" />
-                                                </span>
-                                            ) : answered && isSelected && !isCorrect ? (
-                                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/20">
-                                                    <IoClose className="h-4 w-4 text-red-400" />
-                                                </span>
-                                            ) : (
-                                                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${
-                                                    answered
-                                                        ? 'bg-zinc-800/50 text-zinc-500'
-                                                        : 'bg-indigo-500/15 text-indigo-400'
-                                                }`}>
-                                                    {i + 1}
-                                                </span>
-                                            )}
-                                        </span>
-
-                                        <span className={`pt-0.5 text-[15px] leading-relaxed ${
-                                            answered && isCorrect
-                                                ? 'font-medium text-green-300'
-                                                : answered && isSelected && !isCorrect
-                                                    ? 'text-red-300'
-                                                    : answered
-                                                        ? 'text-zinc-500'
-                                                        : 'text-zinc-300'
-                                        }`}>
-                                            {option}
-                                        </span>
-                                    </motion.button>
-                                );
-                            })}
-                        </div>
-
-                        {/* ── Post-answer actions ── */}
-                        {answered && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 12 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-                                className="mb-4"
-                            >
-                                {/* Explanation area */}
-                                {explanation && (
-                                    <div className="mb-4 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                                        <p className="text-[13px] leading-relaxed text-zinc-300">
-                                            {explanation}
-                                        </p>
-                                    </div>
-                                )}
-
-                                <div className="flex items-center justify-end gap-3">
-                                    {!explanation && selectedOption !== currentQ?.correct_index && (
-                                        <button
-                                            onClick={handleExplain}
-                                            disabled={loadingExplanation}
-                                            className="flex items-center gap-2 rounded-xl border border-zinc-700 px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:bg-gray-200 hover:text-zinc-100 disabled:opacity-50"
+                                    return (
+                                        <motion.button
+                                            key={`${currentQ.id}-${i}`}
+                                            initial={{ opacity: 0, y: 24 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            transition={{ duration: 0.35, delay: 0.1 + i * 0.07, ease: [0.25, 0.1, 0.25, 1] }}
+                                            onClick={() => handleSelect(i)}
+                                            disabled={answered}
+                                            className="flex min-h-[72px] items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors"
+                                            style={{ borderColor, background: bg, opacity }}
                                         >
-                                            <MdAutoAwesome className="h-4 w-4 text-indigo-400" />
-                                            {loadingExplanation ? 'Loading…' : 'Correct Answer Explained'}
-                                        </button>
+                                            <span className="flex-shrink-0">
+                                                {answered && isCorrect ? (
+                                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500/20">
+                                                        <IoCheckmark className="h-4 w-4 text-green-400" />
+                                                    </span>
+                                                ) : answered && isSelected && !isCorrect ? (
+                                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/20">
+                                                        <IoClose className="h-4 w-4 text-red-400" />
+                                                    </span>
+                                                ) : (
+                                                    <span
+                                                        className="flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold"
+                                                        style={answered
+                                                            ? { background: 'rgba(255,255,255,0.06)', color: '#71717a' }
+                                                            : { background: 'rgba(0,200,150,0.12)', color: '#00C896' }
+                                                        }
+                                                    >
+                                                        {i + 1}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span className={`pt-0.5 text-[15px] leading-relaxed ${answered && isCorrect ? 'font-medium text-green-300' : answered && isSelected && !isCorrect ? 'text-red-300' : answered ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                                                {option}
+                                            </span>
+                                        </motion.button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Post-answer */}
+                            {answered && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                                    className="mb-4"
+                                >
+                                    {explanation && (
+                                        <div
+                                            className="mb-4 rounded-xl p-4"
+                                            style={{ border: '1px solid rgba(0,200,150,0.2)', background: 'rgba(0,200,150,0.06)' }}
+                                        >
+                                            <p className="text-[13px] leading-relaxed text-zinc-300">{explanation}</p>
+                                        </div>
                                     )}
-                                    <button
-                                        onClick={goNext}
-                                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-[13px] font-bold text-white shadow-lg shadow-indigo-500/20 transition-all hover:shadow-indigo-500/35 hover:brightness-110"
-                                    >
-                                        {currentIndex < questions.length - 1 ? 'Next' : 'See Results'}
-                                    </button>
-                                </div>
-                            </motion.div>
-                        )}
-                    </motion.div>
-                )}
+                                    <div className="flex items-center justify-end gap-3">
+                                        {!explanation && selectedOption !== currentQ?.correct_index && (
+                                            <button
+                                                onClick={handleExplain}
+                                                disabled={loadingExplanation}
+                                                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-50"
+                                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                                            >
+                                                <MdAutoAwesome className="h-4 w-4" style={{ color: '#00C896' }} />
+                                                {loadingExplanation ? 'Loading…' : 'Explain Answer'}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={goNext}
+                                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[13px] font-bold"
+                                        >
+                                            {currentIndex < questions.length - 1 ? 'Next' : 'See Results'}
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
 
-            {/* ── Bottom navigation (pinned) ── */}
-            <div className="flex flex-shrink-0 items-center justify-between border-t border-zinc-800/40 pt-4">
+            {/* Bottom nav */}
+            <div
+                className="flex flex-shrink-0 items-center justify-between pt-4"
+                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+            >
                 <button
                     onClick={goPrev}
                     disabled={currentIndex === 0}
-                    className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:bg-zinc-800/50 hover:text-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-300"
+                    className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30"
+                    style={{ background: 'transparent' }}
+                    onMouseEnter={e => { !(currentIndex === 0) && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'); }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronLeft className="h-7 w-7" strokeWidth={3} />
                 </button>
@@ -598,7 +450,10 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 <button
                     onClick={() => { if (currentIndex < questions.length - 1) { setSlideDir('right'); setCurrentIndex((i) => i + 1); } }}
                     disabled={currentIndex === questions.length - 1}
-                    className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:bg-zinc-800/50 hover:text-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-zinc-300"
+                    className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30"
+                    style={{ background: 'transparent' }}
+                    onMouseEnter={e => { !(currentIndex === questions.length - 1) && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'); }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronRight className="h-7 w-7" strokeWidth={3} />
                 </button>

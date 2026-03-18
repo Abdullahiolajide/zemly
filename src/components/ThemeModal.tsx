@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { IoClose } from 'react-icons/io5';
 import { RiSunLine, RiMoonLine, RiComputerLine } from 'react-icons/ri';
 import { useThemeStore, type ThemeChoice } from '../store/useThemeStore';
@@ -39,7 +39,12 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
             {/* Card */}
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="relative z-10 w-full max-w-xl mx-4 rounded-2xl border border-zinc-800/70 dark:border-zinc-800/70 light-border bg-white dark:bg-zinc-900 shadow-2xl shadow-black/50 animate-[modalSlideUp_250ms_ease-out]"
+                className="relative z-10 w-full max-w-xl mx-4 rounded-2xl shadow-2xl shadow-black/50 animate-[modalSlideUp_250ms_ease-out]"
+                style={{
+                    background: 'rgba(18, 21, 27, 0.95)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(20px)',
+                }}
             >
                 {/* Close button */}
                 <button
@@ -51,7 +56,10 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
                 </button>
 
                 <div className="px-8 pt-8 pb-8">
-                    <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                    <h2
+                        className="text-xl font-bold text-zinc-100"
+                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.01em' }}
+                    >
                         Choose your theme
                     </h2>
                     <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
@@ -66,10 +74,12 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
                                 <button
                                     key={opt.value}
                                     onClick={() => setTheme(opt.value)}
-                                    className={`group flex flex-col items-center gap-2.5 rounded-xl p-2 transition-all duration-200 ${isActive
-                                        ? 'ring-2 ring-indigo-500'
-                                        : 'ring-1 ring-transparent hover:ring-zinc-300 dark:hover:ring-zinc-700'
-                                        }`}
+                                    className={`group flex flex-col items-center gap-2.5 rounded-xl p-2 transition-all duration-200 ${
+                                        isActive
+                                        ? 'ring-2 ring-offset-0'
+                                        : 'ring-1 ring-transparent hover:ring-zinc-700'
+                                    }`}
+                                    style={isActive ? { '--tw-ring-color': '#00C896' } as React.CSSProperties : {}}
                                 >
                                     {/* Preview Card */}
                                     <div
@@ -118,17 +128,12 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
 
                                     {/* Label */}
                                     <div className="flex items-center gap-1.5">
-                                        <opt.icon
-                                            className={`h-4 w-4 ${isActive
-                                                ? 'text-indigo-500'
-                                                : 'text-zinc-400 dark:text-zinc-500'
-                                                }`}
-                                        />
+                                        <span style={{ color: isActive ? '#00C896' : '#71717a' }}>
+                                            <opt.icon className="h-4 w-4" />
+                                        </span>
                                         <span
-                                            className={`text-sm font-medium ${isActive
-                                                ? 'text-indigo-500'
-                                                : 'text-zinc-600 dark:text-zinc-400'
-                                                }`}
+                                            className={`text-sm font-medium`}
+                                            style={{ color: isActive ? '#00C896' : '#71717a' }}
                                         >
                                             {opt.label}
                                         </span>

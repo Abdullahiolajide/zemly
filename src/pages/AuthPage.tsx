@@ -101,8 +101,14 @@ const AuthPage: React.FC = () => {
         <div className="relative flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-16">
             {/* Background glow */}
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="absolute left-1/2 top-1/3 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/8 blur-[140px]" />
-                <div className="absolute bottom-1/4 right-1/3 h-[400px] w-[400px] rounded-full bg-purple-600/6 blur-[120px]" />
+                <div
+                    className="absolute left-1/2 top-1/3 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[160px] opacity-15"
+                    style={{ background: 'radial-gradient(circle, #00C896 0%, transparent 65%)' }}
+                />
+                <div
+                    className="absolute bottom-1/4 right-1/3 h-[360px] w-[360px] rounded-full blur-[130px] opacity-10"
+                    style={{ background: 'radial-gradient(circle, #4F9CF9 0%, transparent 65%)' }}
+                />
             </div>
 
             {/* Auth Card */}
@@ -111,14 +117,18 @@ const AuthPage: React.FC = () => {
                 <div className="mb-10 flex flex-col items-center text-center">
                     <Link
                         to="/"
-                        className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25 transition-transform duration-200 hover:scale-105"
+                        className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 hover:scale-105"
+                        style={{ background: '#00C896', boxShadow: '0 0 24px rgba(0,200,150,0.3)' }}
                     >
-                        <MdAutoAwesome className="h-7 w-7 text-white" />
+                        <MdAutoAwesome className="h-7 w-7" style={{ color: '#0D0F12' }} />
                     </Link>
-                    <h1 className="text-2xl font-bold tracking-tight text-zinc-100 sm:text-3xl">
+                    <h1
+                        className="text-3xl font-extrabold tracking-tight text-zinc-100 sm:text-4xl"
+                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
+                    >
                         {isSignUp ? 'Create your account' : 'Welcome back'}
                     </h1>
-                    <p className="mt-3 text-sm text-zinc-400 sm:text-base">
+                    <p className="mt-3 text-sm text-zinc-500 sm:text-base">
                         {isSignUp
                             ? 'Start organizing your thoughts with AI'
                             : 'Log in to continue where you left off'}
@@ -126,7 +136,15 @@ const AuthPage: React.FC = () => {
                 </div>
 
                 {/* Glassmorphism Card */}
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-7 py-10 shadow-2xl backdrop-blur-md sm:px-10">
+                <div
+                    className="rounded-2xl px-7 py-10 shadow-2xl sm:px-10"
+                    style={{
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.07)',
+                        backdropFilter: 'blur(16px)',
+                        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+                    }}
+                >
                     {/* Google Sign In */}
                     <button
                         type="button"
@@ -191,7 +209,10 @@ const AuthPage: React.FC = () => {
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="you@example.com"
                                 required
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition-all duration-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                className="w-full rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200"
+                                style={{ fontFamily: "'DM Sans', sans-serif" }}
+                                onFocus={e => { e.target.style.borderColor = '#00C896'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.12)'; }}
+                                onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
                             />
                         </div>
 
@@ -211,7 +232,10 @@ const AuthPage: React.FC = () => {
                                 placeholder="••••••••"
                                 required
                                 minLength={6}
-                                className="w-full rounded-xl border border-zinc-800 bg-zinc-900/80 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition-all duration-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                                className="w-full rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200"
+                                style={{ fontFamily: "'DM Sans', sans-serif" }}
+                                onFocus={e => { e.target.style.borderColor = '#00C896'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.12)'; }}
+                                onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
                             />
                         </div>
 
@@ -233,7 +257,8 @@ const AuthPage: React.FC = () => {
                         <button
                             type="submit"
                             disabled={isSubmitting || isGoogleLoading}
-                            className="mt-1 flex h-12 items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 transition-all duration-200 hover:shadow-indigo-500/40 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-emerald mt-1 h-12 w-full text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{ fontFamily: "'DM Sans', sans-serif" }}
                         >
                             {isSubmitting ? (
                                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -257,7 +282,10 @@ const AuthPage: React.FC = () => {
                                 setError('');
                                 setSuccessMessage('');
                             }}
-                            className="font-semibold text-indigo-400 transition-colors duration-200 hover:text-indigo-300"
+                            className="font-semibold transition-colors duration-200"
+                            style={{ color: '#00C896' }}
+                            onMouseEnter={e => ((e.target as HTMLElement).style.color = '#00DBA8')}
+                            onMouseLeave={e => ((e.target as HTMLElement).style.color = '#00C896')}
                         >
                             {isSignUp ? 'Sign in' : 'Sign up'}
                         </button>

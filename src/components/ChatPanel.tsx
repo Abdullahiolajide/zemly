@@ -6,10 +6,8 @@ import { FiSend, FiX } from 'react-icons/fi';
 
 interface ChatPanelProps {
     getNoteText: () => string;
-    /** Pre-filled highlighted text from "Ask AI" bubble toolbar action */
     highlightedText: string | null;
     onClearHighlight: () => void;
-    /** Called when messages change — true if there are messages */
     onHasMessages?: (has: boolean) => void;
 }
 
@@ -21,29 +19,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
-    /* Auto-scroll to bottom when new messages arrive */
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isLoading]);
-
-    /* Notify parent when messages exist */
-    useEffect(() => {
-        onHasMessages?.(messages.length > 0);
-    }, [messages.length, onHasMessages]);
-
-    /* Focus input when highlighted text is set */
-    useEffect(() => {
-        if (highlightedText) {
-            inputRef.current?.focus();
-        }
-    }, [highlightedText]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+    useEffect(() => { onHasMessages?.(messages.length > 0); }, [messages.length, onHasMessages]);
+    useEffect(() => { if (highlightedText) { inputRef.current?.focus(); } }, [highlightedText]);
 
     const handleSend = async () => {
         const trimmed = input.trim();
         if (!trimmed && !highlightedText) return;
 
-        // Only send the full note on the first message to save tokens.
-        // After that, the AI already has context from conversation history.
         const isFirstMessage = messages.length === 0;
         const noteText = isFirstMessage ? getNoteText() : '';
 
@@ -52,7 +35,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
             return;
         }
 
-        // Build the user message — prepend highlighted context if present
         let userMessage = trimmed;
         if (highlightedText) {
             userMessage = `"${highlightedText}"\n\n${trimmed || 'Explain this.'}`;
@@ -77,72 +59,71 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
     };
 
     return (
         <div className="flex h-full flex-col">
-            {/* ── Header ── */}
-
-
             {/* ── Messages ── */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
                 {messages.length === 0 && !isLoading && (
                     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/15">
-                            <MdAutoAwesome className="h-8 w-8 text-indigo-400" />
+                        <div
+                            className="flex h-16 w-16 items-center justify-center rounded-2xl"
+                            style={{ background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}
+                        >
+                            <MdAutoAwesome className="h-8 w-8" style={{ color: '#00C896' }} />
                         </div>
-                        <h3 className="text-lg font-bold text-zinc-100">Hey, I'm Zemly AI</h3>
-                        <p className="max-w-sm text-[13px] leading-relaxed text-zinc-500">
-                            I can work with you on your notes and answer any questions. Try highlighting text and clicking "Ask AI"!
+                        <h3
+                            className="text-lg font-bold text-zinc-100"
+                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                        >
+                            Hey, I'm Zemly AI
+                        </h3>
+                        <p className="max-w-[240px] text-[13px] leading-relaxed text-zinc-500">
+                            I can work with you on your notes. Try highlighting text and clicking "Ask AI"!
                         </p>
                     </div>
                 )}
 
                 <div className="space-y-4">
                     {messages.map((msg, i) => (
-                        <div
-                            key={i}
-                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
+                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <div
-                                className={`max-w-[85%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed ${msg.role === 'user'
-                                    ? 'bg-indigo-500 text-white'
-                                    : 'border border-zinc-800/60 bg-zinc-900/60 text-zinc-200'
-                                    }`}
+                                className="max-w-[85%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed"
+                                style={msg.role === 'user'
+                                    ? { background: '#00C896', color: '#0D0F12' }
+                                    : {
+                                        background: 'rgba(255,255,255,0.04)',
+                                        border: '1px solid rgba(255,255,255,0.07)',
+                                        color: '#d4d4d8',
+                                        backdropFilter: 'blur(8px)',
+                                    }
+                                }
                             >
-                                {msg.role === 'model' ? (
-                                    <div className="space-y-2">
-                                        {msg.content.split('\n').map((line, j) => (
-                                            <p key={j} className={line === '' ? 'h-2' : ''}>
-                                                {line}
-                                            </p>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {msg.content.split('\n').map((line, j) => (
-                                            <p key={j} className={line === '' ? 'h-2' : ''}>
-                                                {line}
-                                            </p>
-                                        ))}
-                                    </div>
-                                )}
+                                <div className="space-y-1">
+                                    {msg.content.split('\n').map((line, j) => (
+                                        <p key={j} className={line === '' ? 'h-2' : ''}>{line}</p>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     ))}
 
-                    {/* Loading indicator */}
+                    {/* Loading dots */}
                     {isLoading && (
                         <div className="flex justify-start">
-                            <div className="flex items-center gap-2 rounded-2xl border border-zinc-800/60 bg-zinc-900/60 px-4 py-3">
+                            <div
+                                className="flex items-center gap-2 rounded-2xl px-4 py-3"
+                                style={{
+                                    background: 'rgba(255,255,255,0.04)',
+                                    border: '1px solid rgba(255,255,255,0.07)',
+                                }}
+                            >
                                 <div className="flex gap-1">
-                                    <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: '0ms' }} />
-                                    <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: '150ms' }} />
-                                    <div className="h-2 w-2 animate-bounce rounded-full bg-indigo-400" style={{ animationDelay: '300ms' }} />
+                                    <div className="h-2 w-2 animate-bounce rounded-full" style={{ background: '#00C896', animationDelay: '0ms' }} />
+                                    <div className="h-2 w-2 animate-bounce rounded-full" style={{ background: '#00C896', animationDelay: '150ms' }} />
+                                    <div className="h-2 w-2 animate-bounce rounded-full" style={{ background: '#00C896', animationDelay: '300ms' }} />
                                 </div>
                                 <span className="text-[12px] text-zinc-500">Thinking…</span>
                             </div>
@@ -155,21 +136,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
 
             {/* ── Error ── */}
             {error && (
-                <div className="mx-6 mb-2 rounded-lg bg-red-500/10 px-3 py-2 text-[12px] font-medium text-red-400">
+                <div className="mx-5 mb-2 rounded-lg px-3 py-2 text-[12px] font-medium text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
                     {error}
                 </div>
             )}
 
             {/* ── Highlighted text context chip ── */}
             {highlightedText && (
-                <div className="mx-6 mb-2 flex items-start gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 py-2.5">
-                    <MdAutoAwesome className="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-400" />
-                    <p className="flex-1 text-[12px] leading-relaxed text-indigo-300 line-clamp-3">
+                <div
+                    className="mx-5 mb-2 flex items-start gap-2 rounded-xl px-3 py-2.5"
+                    style={{ border: '1px solid rgba(0,200,150,0.25)', background: 'rgba(0,200,150,0.08)' }}
+                >
+                    <MdAutoAwesome className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: '#00C896' }} />
+                    <p className="flex-1 text-[12px] leading-relaxed line-clamp-3" style={{ color: 'rgba(0,200,150,0.85)' }}>
                         "{highlightedText}"
                     </p>
                     <button
                         onClick={onClearHighlight}
-                        className="mt-0.5 shrink-0 text-indigo-400/60 transition-colors hover:text-indigo-300"
+                        className="mt-0.5 shrink-0 text-zinc-500 transition-colors hover:text-zinc-300"
                     >
                         <FiX className="h-3.5 w-3.5" />
                     </button>
@@ -177,14 +161,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
             )}
 
             {/* ── Input ── */}
-            <div className="border-t border-zinc-800/50 px-6 py-4">
-                <div className="flex items-end gap-2 rounded-xl border border-zinc-800/60 bg-zinc-900/40 px-3 py-2">
+            <div className="px-5 py-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div
+                    className="flex items-end gap-2 rounded-xl px-3 py-2"
+                    style={{
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'rgba(255,255,255,0.03)',
+                        backdropFilter: 'blur(8px)',
+                    }}
+                >
                     <textarea
                         ref={inputRef}
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={highlightedText ? 'Ask about this text…' : 'Type a question about your notes…'}
+                        placeholder={highlightedText ? 'Ask about this text…' : 'Ask about your notes…'}
                         rows={1}
                         className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent text-[13px] text-zinc-200 placeholder-zinc-600 outline-none"
                         disabled={isLoading}
@@ -192,7 +183,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                     <button
                         onClick={handleSend}
                         disabled={isLoading || (!input.trim() && !highlightedText)}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500 text-white transition-all hover:bg-indigo-600 disabled:opacity-30 disabled:hover:bg-indigo-500"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#0D0F12] transition-all disabled:opacity-30"
+                        style={{ background: '#00C896' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#00A87A'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#00C896'; }}
                     >
                         <FiSend className="h-3.5 w-3.5" />
                     </button>

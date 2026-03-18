@@ -12,13 +12,7 @@ interface FlashcardsStudyProps {
     onExit: () => void;
 }
 
-const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
-    cards,
-    onBack,
-    onCardUpdate,
-    onReset,
-    onExit,
-}) => {
+const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCardUpdate, onReset, onExit }) => {
     const [isFlipped, setIsFlipped] = useState(false);
     const [showMastery, setShowMastery] = useState(false);
 
@@ -27,69 +21,40 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
     const learningCount = cards.filter((c) => c.status === 'learning').length;
     const masteredCount = cards.filter((c) => c.status === 'mastered').length;
 
-    // Build the study queue: unfamiliar first, then new, then learning
     const studyQueue = [
         ...cards.filter((c) => c.status === 'unfamiliar'),
         ...cards.filter((c) => c.status === 'new'),
         ...cards.filter((c) => c.status === 'learning'),
     ];
-
     const currentCard = studyQueue[0] ?? null;
-
-    // Progress bar width
     const progressPercent = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0;
 
-    const handleAnswer = useCallback(
-        (knows: boolean) => {
-            if (!currentCard) return;
-
-            let newStatus: FlashcardStatus;
-            let newKnowCount: number;
-
-            if (knows) {
-                newKnowCount = currentCard.know_count + 1;
-                if (newKnowCount >= 2) {
-                    newStatus = 'mastered';
-                } else {
-                    newStatus = 'learning';
-                }
-            } else {
-                newKnowCount = 0;
-                newStatus = 'unfamiliar';
-            }
-
-            onCardUpdate(currentCard.id, newStatus, newKnowCount);
-
-            // Reset flip for next card
-            setIsFlipped(false);
-
-            // Check if all cards will be mastered after this update
-            const remainingAfterUpdate = studyQueue.length - 1;
-            if (newStatus === 'mastered' && remainingAfterUpdate === 0) {
-                // Small delay so card animates out before modal
-                setTimeout(() => setShowMastery(true), 400);
-            }
-        },
-        [currentCard, onCardUpdate, studyQueue.length],
-    );
-
-    const handleReset = () => {
-        setShowMastery(false);
+    const handleAnswer = useCallback((knows: boolean) => {
+        if (!currentCard) return;
+        let newStatus: FlashcardStatus;
+        let newKnowCount: number;
+        if (knows) {
+            newKnowCount = currentCard.know_count + 1;
+            newStatus = newKnowCount >= 2 ? 'mastered' : 'learning';
+        } else {
+            newKnowCount = 0;
+            newStatus = 'unfamiliar';
+        }
+        onCardUpdate(currentCard.id, newStatus, newKnowCount);
         setIsFlipped(false);
-        onReset();
-    };
+        const remainingAfterUpdate = studyQueue.length - 1;
+        if (newStatus === 'mastered' && remainingAfterUpdate === 0) {
+            setTimeout(() => setShowMastery(true), 400);
+        }
+    }, [currentCard, onCardUpdate, studyQueue.length]);
 
-    const handleExit = () => {
-        setShowMastery(false);
-        onExit();
-    };
-
-    // All mastered and no study queue
+    const handleReset = () => { setShowMastery(false); setIsFlipped(false); onReset(); };
+    const handleExit = () => { setShowMastery(false); onExit(); };
     const allMastered = studyQueue.length === 0 && masteredCount === cards.length && cards.length > 0;
 
     return (
         <div className="mx-auto flex w-full max-w-2xl flex-col px-8 py-6 lg:px-16">
-            {/* ── Top Bar ── */}
+            {/* Top Bar */}
             <div className="mb-6 flex items-center justify-between">
                 <button
                     onClick={onBack}
@@ -98,37 +63,32 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                     <FiChevronLeft className="h-4 w-4" />
                     Back
                 </button>
-
                 {/* Status badges */}
                 <div className="flex flex-wrap items-center gap-3">
                     <span className="flex items-center gap-1.5 text-[12px] font-semibold text-red-400">
-                        <span className="h-2 w-2 rounded-full bg-red-400" />
-                        {unfamiliarCount} Unfamiliar
+                        <span className="h-2 w-2 rounded-full bg-red-400" />{unfamiliarCount} Unfamiliar
                     </span>
                     <span className="flex items-center gap-1.5 text-[12px] font-semibold text-blue-400">
-                        <span className="h-2 w-2 rounded-full bg-blue-400" />
-                        {newCount} New
+                        <span className="h-2 w-2 rounded-full bg-blue-400" />{newCount} New
                     </span>
                     <span className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-400">
-                        <span className="h-2 w-2 rounded-full bg-amber-400" />
-                        {learningCount} Learning
+                        <span className="h-2 w-2 rounded-full bg-amber-400" />{learningCount} Learning
                     </span>
                     <span className="flex items-center gap-1.5 text-[12px] font-semibold text-green-400">
-                        <span className="h-2 w-2 rounded-full bg-green-400" />
-                        {masteredCount} Mastered
+                        <span className="h-2 w-2 rounded-full bg-green-400" />{masteredCount} Mastered
                     </span>
                 </div>
             </div>
 
-            {/* ── Progress Bar ── */}
-            <div className="mb-8 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800/60">
+            {/* Progress Bar */}
+            <div className="mb-8 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
                 <div
-                    className="study-progress-bar h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-500 ease-out"
-                    style={{ width: `${progressPercent}%` }}
+                    className="study-progress-bar h-full rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${progressPercent}%`, background: 'linear-gradient(90deg, #00C896, #00A87A)' }}
                 />
             </div>
 
-            {/* ── Card ── */}
+            {/* Card */}
             {currentCard ? (
                 <>
                     <div
@@ -137,13 +97,19 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                     >
                         <div className={`study-card-inner ${isFlipped ? 'study-card-flipped' : ''}`}>
                             {/* Front */}
-                            <div className="study-card-face study-card-front flex min-h-[280px] items-center justify-center rounded-2xl border-2 border-zinc-800/60 bg-zinc-900/30 p-8">
+                            <div
+                                className="study-card-face study-card-front flex min-h-[280px] items-center justify-center rounded-2xl p-8"
+                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(12px)' }}
+                            >
                                 <p className="text-center text-lg font-medium leading-relaxed text-zinc-200">
                                     {currentCard.front}
                                 </p>
                             </div>
                             {/* Back */}
-                            <div className="study-card-face study-card-back flex min-h-[280px] items-center justify-center rounded-2xl border-2 border-indigo-500/30 bg-indigo-500/5 p-8">
+                            <div
+                                className="study-card-face study-card-back flex min-h-[280px] items-center justify-center rounded-2xl p-8"
+                                style={{ border: '1px solid rgba(0,200,150,0.25)', background: 'rgba(0,200,150,0.06)', backdropFilter: 'blur(12px)' }}
+                            >
                                 <p className="text-center text-lg font-medium leading-relaxed text-zinc-300">
                                     {currentCard.back}
                                 </p>
@@ -151,33 +117,35 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                         </div>
                     </div>
 
-                    {/* Flip hint */}
-                    {/* {!isFlipped && ( */}
-                        <p className="mb-6 text-center text-[12px] text-zinc-600">
-                            Click the card to reveal the answer
-                        </p>
-                    {/* )} */}
+                    <p className="mb-6 text-center text-[12px] text-zinc-600">Click the card to reveal the answer</p>
 
-                    {/* ── Answer Buttons ── */}
+                    {/* Answer Buttons */}
                     <div className="flex items-center justify-center gap-4">
                         <button
                             onClick={() => handleAnswer(false)}
-                            className="flex items-center gap-2 rounded-xl bg-red-500/15 px-6 py-3 text-[14px] font-bold text-red-400 transition-all hover:bg-red-500/25 hover:shadow-lg hover:shadow-red-500/10"
+                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-red-400 transition-all"
+                            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.18)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; }}
                         >
-                            <IoClose className="h-5 w-5" />
-                            Don't Know
+                            <IoClose className="h-5 w-5" /> Don't Know
                         </button>
                         <button
                             onClick={() => handleAnswer(true)}
-                            className="flex items-center gap-2 rounded-xl bg-green-500/15 px-6 py-3 text-[14px] font-bold text-green-400 transition-all hover:bg-green-500/25 hover:shadow-lg hover:shadow-green-500/10"
+                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-green-400 transition-all"
+                            style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.18)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.1)'; }}
                         >
-                            <IoCheckmark className="h-5 w-5" />
-                            Know
+                            <IoCheckmark className="h-5 w-5" /> Know
                         </button>
                     </div>
                 </>
             ) : allMastered ? (
-                <div className="flex min-h-[280px] items-center justify-center rounded-2xl border-2 border-green-500/30 bg-green-500/5 p-8">
+                <div
+                    className="flex min-h-[280px] items-center justify-center rounded-2xl p-8"
+                    style={{ border: '1px solid rgba(34,197,94,0.25)', background: 'rgba(34,197,94,0.06)' }}
+                >
                     <div className="text-center">
                         <p className="mb-2 text-4xl">🎉</p>
                         <p className="text-lg font-bold text-zinc-100">All cards mastered!</p>
@@ -186,19 +154,20 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({
                 </div>
             ) : null}
 
-            {/* ── Reset Progress (always visible when all mastered) ── */}
+            {/* Reset Progress (all mastered) */}
             {allMastered && (
                 <div className="mt-6 flex items-center justify-center">
                     <button
                         onClick={handleReset}
-                        className="flex items-center gap-2 rounded-xl border border-zinc-800/60 px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:bg-zinc-800/50 hover:text-zinc-200"
+                        className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
+                        style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
                     >
                         Reset Progress
                     </button>
                 </div>
             )}
 
-            {/* ── Mastery Modal ── */}
+            {/* Mastery Modal */}
             <MasteryModal
                 open={showMastery}
                 totalCards={cards.length}

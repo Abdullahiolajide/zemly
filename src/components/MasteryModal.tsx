@@ -21,37 +21,24 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
         if (!open || hasFireRef.current) return;
         hasFireRef.current = true;
 
-        // Dynamic import so canvas-confetti doesn't bloat the bundle
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         import('canvas-confetti').then((mod: any) => {
             const confetti = mod.default || mod;
 
-            // Burst from center
             confetti({
                 particleCount: 150,
                 spread: 100,
                 origin: { y: 0.5 },
-                colors: ['#6366f1', '#a855f7', '#3b82f6', '#22c55e', '#f59e0b'],
+                colors: ['#00C896', '#00A87A', '#22c55e', '#f59e0b', '#4F9CF9'],
             });
 
-            // Second wave
             setTimeout(() => {
-                confetti({
-                    particleCount: 80,
-                    spread: 120,
-                    origin: { y: 0.4, x: 0.3 },
-                });
-                confetti({
-                    particleCount: 80,
-                    spread: 120,
-                    origin: { y: 0.4, x: 0.7 },
-                });
+                confetti({ particleCount: 80, spread: 120, origin: { y: 0.4, x: 0.3 }, colors: ['#00C896', '#00A87A', '#22c55e'] });
+                confetti({ particleCount: 80, spread: 120, origin: { y: 0.4, x: 0.7 }, colors: ['#00C896', '#00A87A', '#4F9CF9'] });
             }, 300);
         });
 
-        return () => {
-            hasFireRef.current = false;
-        };
+        return () => { hasFireRef.current = false; };
     }, [open]);
 
     if (!open) return null;
@@ -61,27 +48,40 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" style={{ animation: 'fadeIn 0.3s ease' }} />
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" style={{ animation: 'fadeIn 0.3s ease' }} />
 
             {/* Modal */}
             <div
-                className="relative z-10 mx-4 w-full max-w-md rounded-2xl border border-zinc-800/60 bg-zinc-900 p-8 shadow-2xl"
-                style={{ animation: 'modalSlideUp 0.4s ease' }}
+                className="relative z-10 mx-4 w-full max-w-md rounded-2xl p-8 shadow-2xl"
+                style={{
+                    background: 'rgba(16, 18, 24, 0.97)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(20px)',
+                    boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+                    animation: 'modalSlideUp 0.4s ease',
+                }}
             >
-                <h2 className="mb-3 text-center text-3xl font-extrabold text-zinc-100">
-                    Mastery Achieved!
+                <h2
+                    className="mb-3 text-center text-3xl font-extrabold text-zinc-100"
+                    style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
+                >
+                    Mastery Achieved! 🎉
                 </h2>
-                <p className="mb-8 text-center text-[15px] text-zinc-400">
-                    Congratulations! You've mastered all flashcards! 🎉
+                <p className="mb-8 text-center text-[15px] text-zinc-500">
+                    Congratulations! You've mastered all your flashcards!
                 </p>
 
                 {/* Progress Bar */}
-                <div className="mb-8 overflow-hidden rounded-full bg-zinc-800">
+                <div className="mb-8 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
                     <div
-                        className="flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 text-[14px] font-bold text-white transition-all duration-1000 ease-out"
-                        style={{ width: `${progressPercent}%` }}
+                        className="flex h-10 items-center justify-center rounded-full text-[14px] font-bold text-[#0D0F12] transition-all duration-1000 ease-out"
+                        style={{
+                            width: `${progressPercent}%`,
+                            background: 'linear-gradient(90deg, #00C896, #00A87A)',
+                            boxShadow: '0 0 20px rgba(0,200,150,0.4)',
+                        }}
                     >
-                        <span>✨ {progressPercent}% ✨</span>
+                        <span>✨ {progressPercent}%</span>
                     </div>
                 </div>
 
@@ -89,13 +89,16 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
                 <div className="flex items-center justify-center gap-4">
                     <button
                         onClick={onReset}
-                        className="rounded-xl border border-zinc-700 px-6 py-2.5 text-[14px] font-semibold text-zinc-300 transition-all hover:bg-zinc-800 hover:text-zinc-100"
+                        className="rounded-xl px-6 py-2.5 text-[14px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
+                        style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
                     >
                         Reset Progress
                     </button>
                     <button
                         onClick={onExit}
-                        className="rounded-xl border border-zinc-700 px-6 py-2.5 text-[14px] font-semibold text-zinc-300 transition-all hover:bg-zinc-800 hover:text-zinc-100"
+                        className="btn-emerald rounded-xl px-6 py-2.5 text-[14px] font-semibold"
                     >
                         Exit Learn
                     </button>

@@ -15,7 +15,6 @@ import {
 import FlashcardsOverview from './FlashcardsOverview';
 import FlashcardsStudy from './FlashcardsStudy';
 
-/* ── Sub-view types ── */
 type FlashcardsView = 'generate' | 'overview' | 'study';
 
 interface FlashcardsPanelProps {
@@ -31,7 +30,6 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    /* ── Load existing flashcards for this note ── */
     useEffect(() => {
         let cancelled = false;
         const load = async () => {
@@ -54,188 +52,111 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         return () => { cancelled = true; };
     }, [noteId]);
 
-/* ── Generate flashcards ── */
     const handleGenerate = useCallback(async () => {
         const text = getNoteText();
-        if (!text.trim()) {
-            setError('Your note is empty. Write some content first!');
-            return;
-        }
-
+        if (!text.trim()) { setError('Your note is empty. Write some content first!'); return; }
         setIsGenerating(true);
         setError(null);
-
         try {
-            if (setId) {
-                setError('Flashcards have already been generated for this note.');
-                return;
-            }
-
-            // Generate via AI with backend-managed count (15-30)
+            if (setId) { setError('Flashcards have already been generated for this note.'); return; }
             const generated: Flashcard[] = await generateFlashcards(text);
-
-            // Create a brand new set
-            const { set, cards: savedCards } = await saveFlashcardSet(
-                noteId,
-                generated.map((c) => ({ front: c.front, back: c.back })),
-            );
+            const { set, cards: savedCards } = await saveFlashcardSet(noteId, generated.map((c) => ({ front: c.front, back: c.back })));
             setSetId(set.id);
             setCards(savedCards);
-
             setView('overview');
         } catch (err) {
             console.error('Flashcard generation failed:', err);
-            setError(
-                err instanceof Error ? err.message : 'Failed to generate flashcards. Please try again.',
-            );
+            setError(err instanceof Error ? err.message : 'Failed to generate flashcards. Please try again.');
         } finally {
             setIsGenerating(false);
         }
     }, [getNoteText, noteId, setId]);
 
-    /* ── Handle Know / Don't Know ── */
-    const handleCardUpdate = useCallback(
-        async (cardId: number, status: FlashcardStatus, knowCount: number) => {
-            // Optimistic update
-            setCards((prev) =>
-                prev.map((c) =>
-                    c.id === cardId ? { ...c, status, know_count: knowCount } : c,
-                ),
-            );
-
-            try {
-                await updateFlashcardStatus(cardId, status, knowCount);
-            } catch (err) {
-                console.error('Failed to update card:', err);
-                // Revert on error — refetch
-                if (setId) {
-                    const fresh = await getFlashcards(setId);
-                    setCards(fresh);
-                }
-            }
-        },
-        [setId],
-    );
-
-    /* ── Reset progress ── */
-    const handleReset = useCallback(async () => {
-        if (!setId) return;
-        try {
-            await resetFlashcardProgress(setId);
-            const fresh = await getFlashcards(setId);
-            setCards(fresh);
-        } catch (err) {
-            console.error('Failed to reset progress:', err);
+    const handleCardUpdate = useCallback(async (cardId: number, status: FlashcardStatus, knowCount: number) => {
+        setCards((prev) => prev.map((c) => c.id === cardId ? { ...c, status, know_count: knowCount } : c));
+        try { await updateFlashcardStatus(cardId, status, knowCount); }
+        catch (err) {
+            console.error('Failed to update card:', err);
+            if (setId) { const fresh = await getFlashcards(setId); setCards(fresh); }
         }
     }, [setId]);
 
-    /* ── Delete a single card ── */
+    const handleReset = useCallback(async () => {
+        if (!setId) return;
+        try { await resetFlashcardProgress(setId); const fresh = await getFlashcards(setId); setCards(fresh); }
+        catch (err) { console.error('Failed to reset progress:', err); }
+    }, [setId]);
+
     const handleDeleteCard = useCallback(async (cardId: number) => {
-        // Optimistic remove
         setCards((prev) => {
             const updated = prev.filter((c) => c.id !== cardId);
-            // If we deleted the last card, go back to generate view
             if (updated.length === 0) setView('generate');
             return updated;
         });
-
-        try {
-            await deleteFlashcard(cardId);
-        } catch (err) {
+        try { await deleteFlashcard(cardId); }
+        catch (err) {
             console.error('Failed to delete card:', err);
-            // Revert on error
-            if (setId) {
-                const fresh = await getFlashcards(setId);
-                setCards(fresh);
-                if (fresh.length > 0) setView('overview');
-            }
+            if (setId) { const fresh = await getFlashcards(setId); setCards(fresh); if (fresh.length > 0) setView('overview'); }
         }
     }, [setId]);
 
-    /* ── Edit a single card's content ── */
     const handleEditCard = useCallback(async (cardId: number, front: string, back: string) => {
-        // Optimistic update
-        setCards((prev) =>
-            prev.map((c) => (c.id === cardId ? { ...c, front, back } : c)),
-        );
-
-        try {
-            await updateFlashcardContent(cardId, front, back);
-        } catch (err) {
+        setCards((prev) => prev.map((c) => (c.id === cardId ? { ...c, front, back } : c)));
+        try { await updateFlashcardContent(cardId, front, back); }
+        catch (err) {
             console.error('Failed to update card:', err);
-            // Revert on error
-            if (setId) {
-                const fresh = await getFlashcards(setId);
-                setCards(fresh);
-            }
+            if (setId) { const fresh = await getFlashcards(setId); setCards(fresh); }
         }
     }, [setId]);
 
-    /* ── Loading state ── */
     if (isLoading) {
         return (
             <div className="flex h-64 items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500" />
+                <div
+                    className="h-8 w-8 animate-spin rounded-full border-2"
+                    style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }}
+                />
             </div>
         );
     }
 
-    /* ── Study view ── */
     if (view === 'study') {
-        return (
-            <FlashcardsStudy
-                cards={cards}
-                onBack={() => setView('overview')}
-                onCardUpdate={handleCardUpdate}
-                onReset={handleReset}
-                onExit={() => setView('overview')}
-            />
-        );
+        return <FlashcardsStudy cards={cards} onBack={() => setView('overview')} onCardUpdate={handleCardUpdate} onReset={handleReset} onExit={() => setView('overview')} />;
     }
 
-    /* ── Overview view ── */
     if (view === 'overview' && cards.length > 0) {
-        return (
-            <FlashcardsOverview
-                cards={cards}
-                onStartStudying={() => setView('study')}
-                onDeleteCard={handleDeleteCard}
-                onEditCard={handleEditCard}
-            />
-        );
+        return <FlashcardsOverview cards={cards} onStartStudying={() => setView('study')} onDeleteCard={handleDeleteCard} onEditCard={handleEditCard} />;
     }
 
-    /* ── Generate view (default) ── */
+    /* Generate view (default) */
     return (
         <div className="mx-auto w-full max-w-4xl px-8 py-12 lg:px-16">
-            {/* ── Header ── */}
             <div className="mb-10 text-center">
-                <h2 className="mb-3 text-3xl font-bold text-zinc-100">
+                <h2
+                    className="mb-3 text-3xl font-bold text-zinc-100"
+                    style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
+                >
                     <span className="flashcards-sparkle mr-1">✨</span>
                     Generate Flashcards
                     <span className="flashcards-sparkle ml-1">✨</span>
                 </h2>
-                <p className="text-[15px] text-zinc-400">
-                    One-time generation based on note length (15-30 flashcards)
-                </p>
+                <p className="text-[15px] text-zinc-500">One-time generation based on note length (15–30 flashcards)</p>
             </div>
 
-            {/* ── Error ── */}
             {error && (
-                <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-[14px] text-red-400">
+                <div className="mb-6 rounded-xl px-4 py-3 text-[14px] text-red-400" style={{ border: '1px solid rgba(239,68,68,0.25)', background: 'rgba(239,68,68,0.08)' }}>
                     {error}
                 </div>
             )}
 
-            {/* ── Generate Button ── */}
             <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className="flashcards-generate-btn group relative flex w-full items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4 text-[15px] font-bold text-white shadow-xl shadow-indigo-500/20 transition-all duration-300 hover:shadow-indigo-500/35 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100"
+                className="flashcards-generate-btn btn-emerald group relative flex w-full items-center justify-center gap-2.5 py-4 text-[15px] font-bold disabled:cursor-not-allowed disabled:opacity-60"
             >
                 {isGenerating ? (
                     <>
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                        <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
                         <span>Generating Flashcards...</span>
                     </>
                 ) : (
@@ -244,12 +165,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                         <span>Generate Flashcards</span>
                     </>
                 )}
-
-                {!isGenerating && (
-                    <div className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-40" />
-                )}
             </button>
-
         </div>
     );
 };
