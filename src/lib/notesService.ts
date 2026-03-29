@@ -25,7 +25,7 @@ export async function createDocumentNote(
     sourceUrl: string,
     extractedText: string,
     fileName: string,
-    content: Record<string, unknown>,
+    content: Record<string, unknown> | string,
 ): Promise<Note> {
     const { data, error } = await supabase
         .from('notes')

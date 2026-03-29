@@ -12,9 +12,9 @@ interface QuizRequest {
 function getQuizCount(noteContent: string): number {
     const length = noteContent.trim().length;
     if (length <= 800) return 15;
-    if (length >= 6000) return 30;
-    const ratio = (length - 800) / (6000 - 800);
-    return Math.round(15 + ratio * 15);
+    if (length >= 40000) return 50; // 30 pages
+    const ratio = (length - 800) / (40000 - 800);
+    return Math.round(15 + ratio * 35);
 }
 
 function parseQuestions(raw: string): unknown[] {

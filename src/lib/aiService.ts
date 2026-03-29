@@ -13,6 +13,11 @@ export interface ChatMessage {
     content: string;
 }
 
+export interface ChatResponse {
+    reply: string;
+    memory?: string;
+}
+
 export interface Flashcard {
     front: string;
     back: string;
@@ -37,6 +42,22 @@ export interface DocumentExtractResult {
     publicUrl: string;
 }
 
+export interface DocumentUploadResult {
+    path: string;
+    publicUrl: string;
+}
+
+export interface ExtractDocumentFromStorageInput {
+    publicUrl: string;
+    fileName: string;
+    mimeType?: string;
+}
+
+export interface UploadAndExtractOptions {
+    onUploadProgress?: (progress: number) => void;
+    onPhaseChange?: (phase: 'uploading' | 'processing') => void;
+}
+
 /* ── API calls ── */
 
 /**
@@ -59,38 +80,92 @@ async function extractErrorMessage(
 }
 
 /**
- * Upload a document file to Supabase Storage, then call the extract-document
- * Edge Function to get AI-generated notes and extracted text.
+ * Upload a document file to Supabase Storage with measurable progress.
  */
-export async function uploadAndExtractDocument(file: File): Promise<DocumentExtractResult> {
-    // 1. Upload file to Supabase Storage
+export async function uploadDocumentToStorage(
+    file: File,
+    options?: { onUploadProgress?: (progress: number) => void },
+): Promise<DocumentUploadResult> {
     const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const { data: storageData, error: storageError } = await supabase.storage
-        .from('documents')
-        .upload(safeFileName, file, { cacheControl: '3600', upsert: false });
 
-    if (storageError) {
-        throw new Error(`File upload failed: ${storageError.message}`);
-    }
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const uploadUrl = `${SUPABASE_URL}/storage/v1/object/documents/${encodeURIComponent(safeFileName)}`;
+
+        xhr.open('POST', uploadUrl, true);
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+        xhr.setRequestHeader('x-upsert', 'false');
+        xhr.setRequestHeader('cache-control', '3600');
+        xhr.setRequestHeader('content-type', file.type || 'application/octet-stream');
+        if (token) {
+            xhr.setRequestHeader('authorization', `Bearer ${token}`);
+        }
+
+        xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const progress = Math.min(100, Math.round((event.loaded / event.total) * 100));
+            options?.onUploadProgress?.(progress);
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                options?.onUploadProgress?.(100);
+                resolve();
+                return;
+            }
+
+            let errorMessage = 'File upload failed';
+            try {
+                const body = JSON.parse(xhr.responseText);
+                if (body?.error) errorMessage = body.error;
+                if (body?.message) errorMessage = body.message;
+            } catch {
+                if (xhr.responseText) errorMessage = xhr.responseText;
+            }
+            reject(new Error(errorMessage));
+        };
+
+        xhr.onerror = () => reject(new Error('File upload failed: network error'));
+        xhr.send(file);
+    });
 
     // 2. Get the public URL
-    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(storageData.path);
-    const publicUrl = urlData.publicUrl;
+    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(safeFileName);
+    return {
+        path: safeFileName,
+        publicUrl: urlData.publicUrl,
+    };
+}
 
-    // 3. Send file to the extract-document Edge Function
-    const formData = new FormData();
-    formData.append('file', file);
+/**
+ * Delete a previously uploaded document object from Supabase Storage.
+ */
+export async function deleteDocumentFromStorage(path: string): Promise<void> {
+    if (!path) return;
+    const { error } = await supabase.storage.from('documents').remove([path]);
+    if (error) throw new Error(`Failed to delete uploaded file: ${error.message}`);
+}
 
+/**
+ * Generate AI notes from a file that has already been uploaded to Storage.
+ */
+export async function extractDocumentFromStorage(
+    input: ExtractDocumentFromStorageInput,
+): Promise<Omit<DocumentExtractResult, 'publicUrl'>> {
     const { data: session } = await supabase.auth.getSession();
     const token = session?.session?.access_token;
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/extract-document`, {
         method: 'POST',
         headers: {
+            'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             apikey: SUPABASE_ANON_KEY,
         },
-        body: formData,
+        body: JSON.stringify(input),
     });
 
     if (!res.ok) {
@@ -107,7 +182,30 @@ export async function uploadAndExtractDocument(file: File): Promise<DocumentExtr
         title: result.title,
         noteContent: result.noteContent,
         extractedText: result.extractedText,
-        publicUrl,
+    };
+}
+
+/**
+ * Backward-compatible helper: upload first, then extract from uploaded URL.
+ */
+export async function uploadAndExtractDocument(
+    file: File,
+    options?: UploadAndExtractOptions,
+): Promise<DocumentExtractResult> {
+    options?.onPhaseChange?.('uploading');
+    const upload = await uploadDocumentToStorage(file, {
+        onUploadProgress: options?.onUploadProgress,
+    });
+
+    options?.onPhaseChange?.('processing');
+    const extracted = await extractDocumentFromStorage({
+        publicUrl: upload.publicUrl,
+        fileName: file.name,
+        mimeType: file.type || undefined,
+    });
+    return {
+        ...extracted,
+        publicUrl: upload.publicUrl,
     };
 }
 
@@ -118,13 +216,17 @@ export async function uploadAndExtractDocument(file: File): Promise<DocumentExtr
 export async function chatWithNote(
     noteContent: string,
     messages: ChatMessage[],
-): Promise<string> {
+    memory?: string,
+): Promise<ChatResponse> {
     const { data, error } = await supabase.functions.invoke('chat', {
-        body: { noteContent, messages },
+        body: { noteContent, messages, memory },
     });
 
     if (error) throw new Error(await extractErrorMessage(error, 'Chat request failed'));
-    return data.reply;
+    return {
+        reply: data.reply,
+        memory: typeof data.memory === 'string' ? data.memory : undefined,
+    };
 }
 
 /**

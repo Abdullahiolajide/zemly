@@ -35,6 +35,7 @@
     "react-icons": "^5.5.0",
     "react-router-dom": "^7.13.0",
     "supabase": "^2.76.12",
+    "tiptap-markdown": "^0.9.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {

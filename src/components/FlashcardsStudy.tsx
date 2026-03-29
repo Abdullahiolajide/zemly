@@ -81,7 +81,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
             </div>
 
             {/* Progress Bar */}
-            <div className="mb-8 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <div className="mb-8 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-glass)' }}>
                 <div
                     className="study-progress-bar h-full rounded-full transition-all duration-500 ease-out"
                     style={{ width: `${progressPercent}%`, background: 'linear-gradient(90deg, #00C896, #00A87A)' }}
@@ -99,7 +99,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                             {/* Front */}
                             <div
                                 className="study-card-face study-card-front flex min-h-[280px] items-center justify-center rounded-2xl p-8"
-                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(12px)' }}
+                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                             >
                                 <p className="text-center text-lg font-medium leading-relaxed text-zinc-200">
                                     {currentCard.front}
@@ -108,7 +108,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                             {/* Back */}
                             <div
                                 className="study-card-face study-card-back flex min-h-[280px] items-center justify-center rounded-2xl p-8"
-                                style={{ border: '1px solid rgba(0,200,150,0.25)', background: 'rgba(0,200,150,0.06)', backdropFilter: 'blur(12px)' }}
+                                style={{ border: '1px solid var(--brand-emerald)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                             >
                                 <p className="text-center text-lg font-medium leading-relaxed text-zinc-300">
                                     {currentCard.back}
@@ -160,7 +160,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                     <button
                         onClick={handleReset}
                         className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
-                        style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                        style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                     >
                         Reset Progress
                     </button>

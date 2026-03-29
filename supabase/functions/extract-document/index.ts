@@ -64,53 +64,125 @@ serve(async (req: Request) => {
     try {
         const contentType = req.headers.get('content-type') || '';
 
-        if (!contentType.includes('multipart/form-data')) {
+        let fileBytes: Uint8Array;
+        let mimeType = 'application/pdf';
+        let fileName = 'document';
+
+        if (contentType.includes('multipart/form-data')) {
+            const formData = await req.formData();
+            const file = formData.get('file') as File | null;
+            if (!file) {
+                return new Response(
+                    JSON.stringify({ error: 'No file provided' }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                );
+            }
+
+            mimeType = file.type || 'application/pdf';
+            fileName = file.name;
+            fileBytes = new Uint8Array(await file.arrayBuffer());
+        } else if (contentType.includes('application/json')) {
+            const body = await req.json();
+            const publicUrl = typeof body?.publicUrl === 'string' ? body.publicUrl : '';
+            if (!publicUrl) {
+                return new Response(
+                    JSON.stringify({ error: 'publicUrl is required for JSON requests' }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                );
+            }
+
+            const fileRes = await fetch(publicUrl);
+            if (!fileRes.ok) {
+                return new Response(
+                    JSON.stringify({ error: `Failed to fetch uploaded file (${fileRes.status})` }),
+                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                );
+            }
+
+            const fetchedType = fileRes.headers.get('content-type') || '';
+            mimeType = (typeof body?.mimeType === 'string' && body.mimeType) || fetchedType || 'application/pdf';
+            fileName = (typeof body?.fileName === 'string' && body.fileName) || 'document';
+            fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+        } else {
             return new Response(
-                JSON.stringify({ error: 'Request must be multipart/form-data' }),
+                JSON.stringify({ error: 'Request must be multipart/form-data or application/json' }),
                 { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
             );
         }
 
-        const formData = await req.formData();
-        const file = formData.get('file') as File | null;
-        if (!file) {
-            return new Response(
-                JSON.stringify({ error: 'No file provided' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-            );
-        }
-
-        const mimeType = file.type || 'application/pdf';
-        const fileName = file.name;
-        const fileBytes = new Uint8Array(await file.arrayBuffer());
         const fileBase64 = uint8ToBase64(fileBytes);
 
         // ── Single call: extract text + generate notes + title in plain text ──
-        const prompt = `Read the attached document and respond in this EXACT format with these three markers — do not deviate:
+        const prompt = `
+                    You are an expert study notes generator. Distill this document into the densest, most useful study notes possible.
 
-##TITLE##
-Write a short title here (max 8 words)
-##EXTRACTED##
-Write all the raw text from the document here, verbatim, preserving paragraphs
-##NOTES##
-Write comprehensive study notes here using this structure:
-- Section headings in ALL CAPS followed by a colon
-- Bullet points using "- " prefix for each item
-- End with a KEY TAKEAWAYS section
-- Use plain text only, no special characters or markdown
+                    CORE PHILOSOPHY:
+                    Every sentence must earn its place. Include key concepts, definitions, named terms, examples that aid understanding, formulas, dates, and facts. Cut filler, repetition, and verbose explanations.
 
-Document filename: ${fileName}`;
+                    RULES:
+                    - Never copy text verbatim — rewrite clearly and concisely
+                    - Never skip a key concept or important fact
+                    - Preserve examples only if they genuinely aid understanding
+                    - Compress aggressively but never at the cost of accuracy
+                    - Work through the ENTIRE document — do not truncate early
+                    - Length is proportional to content density
 
-        const raw = await callGemini(fileBase64, mimeType, prompt, 6000);
+                    OUTPUT EXACTLY THIS FORMAT (include the tags):
+
+                    ##TITLE##
+                    A concise, descriptive title for this document (not the filename)
+
+                    ##NOTES##
+                    ## 📌 Overview
+                    3-4 sentences. What is this document about and why does it matter?
+
+                    ## 📚 Detailed Notes
+
+                    ### [Major Topic 1]
+
+                    #### [Subtopic if applicable]
+                    - **[Key term]**: Concise but complete explanation
+                    - Supporting detail only if it adds meaning
+                    - Examples that genuinely aid understanding
+                    - Formulas, figures, or dates with context
+
+                    ### [Major Topic 2]
+                    ...
+
+                    (Cover every major topic — do not skip sections)
+
+                    ## 🔑 Key Terms & Definitions
+                    - **[Term]**: Definition as the document intends it
+
+                    ## ⚡ Must-Know Facts
+                    Standalone facts, dates, formulas, statistics worth memorizing — one line each.
+
+                    ## 📝 Final Summary
+                    4-6 sentences covering the most critical takeaways.
+
+                    Document filename: ${fileName}
+                    `;
+
+        let raw = '';
+        try {
+            // Keep output high but within commonly supported limits for flash-lite models.
+            raw = await callGemini(fileBase64, mimeType, prompt, 8192);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : '';
+            const maybeTokenLimit = /maxoutputtokens|max output|token|invalid argument|400/i.test(message);
+            if (!maybeTokenLimit) throw err;
+
+            // Fallback for stricter model limits/projects.
+            raw = await callGemini(fileBase64, mimeType, prompt, 6144);
+        }
 
         // ── Parse the three sections ──
-        const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##EXTRACTED##|##NOTES##|$)/i);
-        const extractedMatch = raw.match(/##EXTRACTED##\s*([\s\S]*?)(?=##NOTES##|$)/i);
+        const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|$)/i);
         const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)$/i);
 
         const title = (titleMatch?.[1] || '').trim() || fileName.replace(/\.[^.]+$/, '');
-        const extractedText = (extractedMatch?.[1] || '').trim();
-        const noteContent = (notesMatch?.[1] || extractedText || raw).trim();
+        const noteContent = (notesMatch?.[1] || raw).trim();
+        const extractedText = noteContent;
 
         if (!noteContent) {
             return new Response(
@@ -120,7 +192,7 @@ Document filename: ${fileName}`;
         }
 
         return new Response(
-            JSON.stringify({ title, noteContent, extractedText: extractedText || noteContent }),
+            JSON.stringify({ title, noteContent, extractedText }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
 

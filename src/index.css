@@ -19,8 +19,18 @@
   }
 
   /* ── Dark mode base ── */
+  html.dark {
+    --bg-main: #0D0F12;
+    --bg-sidebar: rgba(255, 255, 255, 0.02);
+    --border-glass: rgba(255, 255, 255, 0.06);
+    --border-glass-strong: rgba(255, 255, 255, 0.12);
+    --bg-glass-hover: rgba(255, 255, 255, 0.04);
+    --brand-emerald: #00C896;
+    --text-on-brand: #0D0F12;
+  }
+
   html.dark body {
-    background-color: #0D0F12;
+    background-color: var(--bg-main);
     color: #E8E8E6;
     font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   }
@@ -40,8 +50,18 @@
   }
 
   /* ── Light mode base ── */
+  html.light {
+    --bg-main: #F5F4F0;
+    --bg-sidebar: rgba(255, 255, 255, 0.45);
+    --border-glass: rgba(0, 0, 0, 0.06);
+    --border-glass-strong: rgba(0, 0, 0, 0.12);
+    --bg-glass-hover: rgba(0, 0, 0, 0.03);
+    --brand-emerald: #00A87A;
+    --text-on-brand: #FFFFFF;
+  }
+
   html.light body {
-    background-color: #F5F4F0;
+    background-color: var(--bg-main);
     color: #1A1A18;
     font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   }
@@ -157,11 +177,12 @@
 html.light .btn-emerald {
   background-color: #00A87A;
   color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 168, 122, 0.15);
 }
 
 html.light .btn-emerald:hover {
   background-color: #00C896;
-  box-shadow: 0 0 22px 4px rgba(0, 168, 122, 0.28);
+  box-shadow: 0 6px 20px rgba(0, 168, 122, 0.25);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -182,14 +203,17 @@ html.light .btn-emerald:hover {
 }
 
 html.light .glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 html.light .glass-card:hover {
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: inset 0 0 0px 0px transparent, 0 8px 24px rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -288,16 +312,20 @@ html.light .hover\:text-zinc-400:hover     { color: #5A5A56 !important; }
 html.light .hover\:border-zinc-700:hover   { border-color: rgba(0, 0, 0, 0.12) !important; }
 
 /* ── Emerald accent updates for light ── */
-html.light .bg-indigo-500\/12 { background-color: rgba(0, 168, 122, 0.1) !important; }
-html.light .bg-indigo-500\/10 { background-color: rgba(0, 168, 122, 0.08) !important; }
-html.light .bg-indigo-500\/20 { background-color: rgba(0, 168, 122, 0.15) !important; }
+html.light .bg-indigo-500\/15 { background-color: rgba(0, 168, 122, 0.08) !important; }
+html.light .bg-indigo-500\/12 { background-color: rgba(0, 168, 122, 0.07) !important; }
+html.light .bg-indigo-500\/10 { background-color: rgba(0, 168, 122, 0.05) !important; }
+html.light .bg-indigo-500\/20 { background-color: rgba(0, 168, 122, 0.12) !important; }
+html.light .bg-indigo-500\/5  { background-color: rgba(0, 168, 122, 0.03) !important; }
 
-html.light .text-indigo-400   { color: #00A87A !important; }
-html.light .text-indigo-400\/80{ color: #00A87A !important; }
+html.light .text-indigo-400   { color: #008A63 !important; }
+html.light .text-indigo-300   { color: #007A58 !important; }
+html.light .text-indigo-400\/80{ color: rgba(0, 138, 99, 0.8) !important; }
 
 /* ── Shadows on light ── */
-html.light .shadow-lg   { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important; }
-html.light .shadow-2xl  { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important; }
+html.light .shadow-lg   { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02) !important; }
+html.light .shadow-xl   { box-shadow: 0 20px 48px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04) !important; }
+html.light .shadow-2xl  { box-shadow: 0 32px 64px rgba(0, 0, 0, 0.12), 0 8px 24px rgba(0, 0, 0, 0.06) !important; }
 
 /* ── KBD / Tag elements ── */
 html.light kbd {
@@ -308,6 +336,7 @@ html.light kbd {
 
 /* ══════════════════════════════════════════════════════
    EMERALD ACCENT OVERRIDES (replaces indigo/purple)
+   (Applied to both dark and light via base class if not explicitly html.light)
 ══════════════════════════════════════════════════════ */
 
 /* Active nav and highlighted items */
@@ -317,6 +346,10 @@ html.light kbd {
 /* Progress bar, active states */
 .study-progress-bar {
   box-shadow: 0 0 12px rgba(0, 200, 150, 0.4);
+}
+
+html.light .study-progress-bar {
+  box-shadow: 0 0 10px rgba(0, 168, 122, 0.25);
 }
 
 /* ══════════════════════════════════════════════════════

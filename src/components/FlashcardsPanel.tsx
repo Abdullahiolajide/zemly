@@ -19,7 +19,7 @@ type FlashcardsView = 'generate' | 'overview' | 'study';
 
 interface FlashcardsPanelProps {
     noteId: number;
-    getNoteText: () => string;
+    getNoteText: (mode: 'fast' | 'deep') => string;
 }
 
 const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }) => {
@@ -29,6 +29,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
 
     useEffect(() => {
         let cancelled = false;
@@ -53,7 +54,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     }, [noteId]);
 
     const handleGenerate = useCallback(async () => {
-        const text = getNoteText();
+        const text = getNoteText(generationMode);
         if (!text.trim()) { setError('Your note is empty. Write some content first!'); return; }
         setIsGenerating(true);
         setError(null);
@@ -70,7 +71,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         } finally {
             setIsGenerating(false);
         }
-    }, [getNoteText, noteId, setId]);
+    }, [generationMode, getNoteText, noteId, setId]);
 
     const handleCardUpdate = useCallback(async (cardId: number, status: FlashcardStatus, knowCount: number) => {
         setCards((prev) => prev.map((c) => c.id === cardId ? { ...c, status, know_count: knowCount } : c));
@@ -114,7 +115,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
             <div className="flex h-64 items-center justify-center">
                 <div
                     className="h-8 w-8 animate-spin rounded-full border-2"
-                    style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }}
+                    style={{ borderColor: 'var(--border-glass-strong)', borderTopColor: 'var(--brand-emerald)' }}
                 />
             </div>
         );
@@ -149,6 +150,31 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                 </div>
             )}
 
+            <div className="mb-5 flex items-center justify-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => setGenerationMode('deep')}
+                    className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'deep' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    style={{
+                        background: generationMode === 'deep' ? 'rgba(0,200,150,0.18)' : 'rgba(255,255,255,0.03)',
+                        border: generationMode === 'deep' ? '1px solid rgba(0,200,150,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                    }}
+                >
+                    Deep (full extracted text)
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setGenerationMode('fast')}
+                    className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'fast' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    style={{
+                        background: generationMode === 'fast' ? 'rgba(79,156,249,0.16)' : 'rgba(255,255,255,0.03)',
+                        border: generationMode === 'fast' ? '1px solid rgba(79,156,249,0.38)' : '1px solid rgba(255,255,255,0.08)',
+                    }}
+                >
+                    Fast (summary note)
+                </button>
+            </div>
+
             <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
@@ -156,7 +182,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
             >
                 {isGenerating ? (
                     <>
-                        <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
+                        <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,0,0,0.1)', borderTopColor: 'var(--text-on-brand)' }} />
                         <span>Generating Flashcards...</span>
                     </>
                 ) : (

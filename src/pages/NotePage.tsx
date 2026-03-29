@@ -9,6 +9,7 @@ import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TextStyleKit } from '@tiptap/extension-text-style';
+import { Markdown } from 'tiptap-markdown';
 import 'prosemirror-view/style/prosemirror.css';
 import html2pdf from 'html2pdf.js';
 
@@ -57,8 +58,7 @@ const slugToSection: Record<string, SidebarSection> = {
 };
 
 /* ── Shared glass border ── */
-const glassBorder = '1px solid rgba(255,255,255,0.06)';
-const glassBorderHover = '1px solid rgba(255,255,255,0.12)';
+const glassBorder = '1px solid var(--border-glass)';
 
 const NotePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -79,12 +79,15 @@ const NotePage: React.FC = () => {
     const [askAiText, setAskAiText] = useState<string | null>(null);
     const [chatPanelOpen, setChatPanelOpen] = useState(true);
     const [chatHasMessages, setChatHasMessages] = useState(false);
+    const [documentViewerUrl, setDocumentViewerUrl] = useState('');
+    const [documentViewerError, setDocumentViewerError] = useState<string | null>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const [, setEditorKey] = useState(0);
 
     const editor = useEditor({
         extensions: [
             StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+            Markdown,
             Placeholder.configure({ placeholder: 'Start writing your note…' }),
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
             Underline,
@@ -106,7 +109,11 @@ const NotePage: React.FC = () => {
             TextStyleKit.configure({ fontFamily: false, backgroundColor: false, color: false, lineHeight: false }),
         ],
         editorProps: {
-            attributes: { class: 'prose prose-invert prose-zinc max-w-none focus:outline-none min-h-[60vh] px-0 py-4' },
+            attributes: {
+                class: `prose prose-zinc max-w-none focus:outline-none min-h-[60vh] px-0 py-4 ${
+                    document.documentElement.classList.contains('dark') ? 'prose-invert' : ''
+                }`,
+            },
         },
         onUpdate: ({ editor: ed }) => { handleAutoSave(ed.getJSON() as Record<string, unknown>); },
         onTransaction: () => { setEditorKey((k) => k + 1); },
@@ -126,6 +133,46 @@ const NotePage: React.FC = () => {
         fetchNote();
     }, [id, editor]);
 
+    useEffect(() => {
+        let revokedUrl: string | null = null;
+        let isCancelled = false;
+
+        const loadDocumentForViewer = async () => {
+            if (!note?.source_url) {
+                setDocumentViewerUrl('');
+                setDocumentViewerError(null);
+                return;
+            }
+
+            try {
+                setDocumentViewerError(null);
+                const res = await fetch(note.source_url);
+                if (!res.ok) throw new Error(`Failed to fetch document (${res.status})`);
+
+                const blob = await res.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                revokedUrl = objectUrl;
+
+                if (!isCancelled) {
+                    setDocumentViewerUrl(objectUrl);
+                }
+            } catch {
+                if (!isCancelled) {
+                    // Fallback to direct URL if blob-based loading fails.
+                    setDocumentViewerUrl(note.source_url);
+                    setDocumentViewerError('Could not preload the document. Showing direct link mode.');
+                }
+            }
+        };
+
+        void loadDocumentForViewer();
+
+        return () => {
+            isCancelled = true;
+            if (revokedUrl) URL.revokeObjectURL(revokedUrl);
+        };
+    }, [note?.source_url]);
+
     const handleAutoSave = useCallback(
         (() => {
             let timeout: ReturnType<typeof setTimeout>;
@@ -143,6 +190,17 @@ const NotePage: React.FC = () => {
         })(),
         [id],
     );
+
+    const getStudyTextByMode = useCallback((mode: 'fast' | 'deep') => {
+        const editorText = editor?.getText() || '';
+        const extractedText = note?.source_type === 'document' ? (note.extracted_text || '') : '';
+
+        if (mode === 'fast') {
+            return editorText.trim() ? editorText : extractedText;
+        }
+
+        return extractedText.trim() ? extractedText : editorText;
+    }, [editor, note?.extracted_text, note?.source_type]);
 
     const handleExportPdf = useCallback(async () => {
         const el = editorContentRef.current?.querySelector('.ProseMirror') as HTMLElement | null;
@@ -167,7 +225,7 @@ const NotePage: React.FC = () => {
     const toolbarActive: React.CSSProperties = { background: 'rgba(0,200,150,0.12)', color: '#00C896' };
     const toolbarHighlight: React.CSSProperties = { background: 'rgba(245,158,11,0.12)', color: '#f59e0b' };
     const toolbarHover = (e: React.MouseEvent, active: boolean) => {
-        if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)';
+        if (!active) (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)';
     };
     const toolbarLeave = (e: React.MouseEvent, active: boolean) => {
         if (!active) (e.currentTarget as HTMLElement).style.background = '';
@@ -177,7 +235,7 @@ const NotePage: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="flex h-screen items-center justify-center" style={{ background: '#0D0F12' }}>
+            <div className="flex h-screen items-center justify-center" style={{ background: 'var(--bg-main)' }}>
                 <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }} />
             </div>
         );
@@ -185,7 +243,7 @@ const NotePage: React.FC = () => {
 
     if (!note) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center gap-4 text-zinc-100" style={{ background: '#0D0F12' }}>
+            <div className="flex h-screen flex-col items-center justify-center gap-4 text-zinc-100" style={{ background: 'var(--bg-main)' }}>
                 <p className="text-lg font-semibold" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Note not found</p>
                 <button
                     onClick={() => navigate('/dashboard')}
@@ -199,7 +257,7 @@ const NotePage: React.FC = () => {
 
     return (
         <>
-            <div className="flex h-screen text-zinc-100" style={{ background: '#0D0F12' }}>
+            <div className="flex h-screen text-zinc-100" style={{ background: 'var(--bg-main)' }}>
                 {/* Mobile backdrop */}
                 {sidebarOpen && (
                     <div
@@ -211,7 +269,7 @@ const NotePage: React.FC = () => {
                 {/* ─── SIDEBAR ─── */}
                 <aside
                     className={`${sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'} fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
-                    style={{ borderRight: glassBorder, background: 'rgba(255,255,255,0.018)', backdropFilter: 'blur(16px)' }}
+                    style={{ borderRight: glassBorder, background: 'var(--bg-sidebar)', backdropFilter: 'blur(16px)' }}
                 >
                     {/* Sidebar Header */}
                     <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: glassBorder }}>
@@ -236,7 +294,7 @@ const NotePage: React.FC = () => {
                             onClick={() => setSidebarOpen(false)}
                             className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:text-zinc-300"
                             style={{ background: 'transparent' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                             aria-label="Collapse sidebar"
                         >
@@ -259,7 +317,7 @@ const NotePage: React.FC = () => {
                                             color: isActive ? '#00C896' : '#a1a1aa',
                                             border: isActive ? '1px solid rgba(0,200,150,0.18)' : '1px solid transparent',
                                         }}
-                                        onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; } }}
+                                        onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; } }}
                                         onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#a1a1aa'; } }}
                                     >
                                         <link.icon className="h-[18px] w-[18px] shrink-0" />
@@ -281,7 +339,7 @@ const NotePage: React.FC = () => {
                         <button
                             onClick={() => setThemeModalOpen(true)}
                             className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-zinc-400 transition-colors"
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#a1a1aa'; }}
                         >
                             <RiMoonLine className="h-[18px] w-[18px]" />
@@ -313,7 +371,7 @@ const NotePage: React.FC = () => {
                                 onClick={() => setSidebarOpen(true)}
                                 className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-100 ${sidebarOpen ? 'md:hidden' : ''}`}
                                 style={{ background: 'transparent' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 aria-label="Expand sidebar"
                             >
@@ -337,7 +395,7 @@ const NotePage: React.FC = () => {
                                 <button
                                     key={i} onClick={onClick} title={title}
                                     className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
                                     <Icon className="h-4 w-4" />
@@ -348,7 +406,7 @@ const NotePage: React.FC = () => {
                                 disabled={exporting}
                                 className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-40"
                                 style={{ background: 'transparent' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 title="Export as PDF"
                             >
@@ -361,7 +419,7 @@ const NotePage: React.FC = () => {
                             <button
                                 className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
                                 style={{ background: 'transparent' }}
-                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                             >
                                 <BsThreeDotsVertical className="h-4 w-4" />
@@ -371,7 +429,7 @@ const NotePage: React.FC = () => {
 
                     {/* ── Document Section ── */}
                     {activeSection === 'Document' && (
-                        <div className="flex flex-1 overflow-hidden">
+                        <div className="relative flex flex-1 overflow-hidden">
                             {/* Editor Column */}
                             <div className="flex-1 overflow-y-auto px-8 py-6 lg:px-16">
                                 {/* Toolbar */}
@@ -385,10 +443,10 @@ const NotePage: React.FC = () => {
                                     return (
                                         <div
                                             className="mb-6 flex flex-wrap items-center gap-1 rounded-xl px-3 py-2"
-                                            style={{ border: glassBorder, background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(8px)' }}
+                                            style={{ border: glassBorder, background: 'var(--bg-glass-hover)', backdropFilter: 'blur(8px)' }}
                                         >
                                             {/* Font size */}
-                                            <div className="mx-1 h-5 w-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                                            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border-glass)' }} />
                                             <button onClick={() => changeFontSize(-1)} className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:text-zinc-200" onMouseEnter={e => toolbarHover(e, false)} onMouseLeave={e => toolbarLeave(e, false)} title="Decrease font size">
                                                 <FiMinus className="h-3.5 w-3.5" />
                                             </button>
@@ -396,7 +454,7 @@ const NotePage: React.FC = () => {
                                             <button onClick={() => changeFontSize(1)} className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:text-zinc-200" onMouseEnter={e => toolbarHover(e, false)} onMouseLeave={e => toolbarLeave(e, false)} title="Increase font size">
                                                 <FiPlus className="h-3.5 w-3.5" />
                                             </button>
-                                            <div className="mx-1 h-5 w-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                                            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border-glass)' }} />
 
                                             {/* Bold */}
                                             <button onClick={() => editor.chain().focus().toggleBold().run()} className={toolbarBtn(editor.isActive('bold'))} style={editor.isActive('bold') ? toolbarActive : {}} onMouseEnter={e => toolbarHover(e, editor.isActive('bold'))} onMouseLeave={e => toolbarLeave(e, editor.isActive('bold'))} title="Bold"><FiBold className="h-4 w-4" /></button>
@@ -409,20 +467,20 @@ const NotePage: React.FC = () => {
                                             {/* Highlight */}
                                             <button onClick={() => editor.chain().focus().toggleHighlight().run()} className={toolbarBtn(editor.isActive('highlight'))} style={editor.isActive('highlight') ? toolbarHighlight : {}} onMouseEnter={e => toolbarHover(e, editor.isActive('highlight'))} onMouseLeave={e => toolbarLeave(e, editor.isActive('highlight'))} title="Highlight"><PiHighlighter className="h-4 w-4" /></button>
 
-                                            <div className="mx-1 h-5 w-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                                            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border-glass)' }} />
 
                                             {/* Image */}
                                             <button onClick={() => setImageModalOpen(true)} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-200" onMouseEnter={e => toolbarHover(e, false)} onMouseLeave={e => toolbarLeave(e, false)} title="Insert image"><FiImage className="h-4 w-4" /></button>
                                             <TableGridPicker editor={editor} />
 
-                                            <div className="mx-1 h-5 w-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                                            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border-glass)' }} />
 
                                             {/* Align */}
                                             <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={toolbarBtn(editor.isActive({ textAlign: 'left' }))} style={editor.isActive({ textAlign: 'left' }) ? toolbarActive : {}} onMouseEnter={e => toolbarHover(e, editor.isActive({ textAlign: 'left' }))} onMouseLeave={e => toolbarLeave(e, editor.isActive({ textAlign: 'left' }))} title="Align left"><FiAlignLeft className="h-4 w-4" /></button>
                                             <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={toolbarBtn(editor.isActive({ textAlign: 'center' }))} style={editor.isActive({ textAlign: 'center' }) ? toolbarActive : {}} onMouseEnter={e => toolbarHover(e, editor.isActive({ textAlign: 'center' }))} onMouseLeave={e => toolbarLeave(e, editor.isActive({ textAlign: 'center' }))} title="Align center"><FiAlignCenter className="h-4 w-4" /></button>
                                             <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={toolbarBtn(editor.isActive({ textAlign: 'right' }))} style={editor.isActive({ textAlign: 'right' }) ? toolbarActive : {}} onMouseEnter={e => toolbarHover(e, editor.isActive({ textAlign: 'right' }))} onMouseLeave={e => toolbarLeave(e, editor.isActive({ textAlign: 'right' }))} title="Align right"><FiAlignRight className="h-4 w-4" /></button>
 
-                                            <div className="mx-1 h-5 w-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                                            <div className="mx-1 h-5 w-px" style={{ background: 'var(--border-glass)' }} />
 
                                             {/* Lists */}
                                             <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={toolbarBtn(editor.isActive('bulletList'))} style={editor.isActive('bulletList') ? toolbarActive : {}} onMouseEnter={e => toolbarHover(e, editor.isActive('bulletList'))} onMouseLeave={e => toolbarLeave(e, editor.isActive('bulletList'))} title="Bullet list"><FiList className="h-4 w-4" /></button>
@@ -459,9 +517,9 @@ const NotePage: React.FC = () => {
                                             <button
                                                 onClick={() => navigate(`/notes/${id}/quiz`)}
                                                 className="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
-                                                style={{ border: glassBorder, background: 'rgba(255,255,255,0.025)' }}
+                                                style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}
                                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.04)'; }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                             >
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'rgba(245,158,11,0.12)' }}>
                                                     <PiExam className="h-4 w-4 text-amber-400" />
@@ -474,9 +532,9 @@ const NotePage: React.FC = () => {
                                             <button
                                                 onClick={() => navigate(`/notes/${id}/flashcards`)}
                                                 className="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
-                                                style={{ border: glassBorder, background: 'rgba(255,255,255,0.025)' }}
+                                                style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}
                                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.04)'; }}
-                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.025)'; }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                             >
                                                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: 'rgba(0,200,150,0.08)' }}>
                                                     <TbCards className="h-4 w-4" style={{ color: '#00C896' }} />
@@ -498,19 +556,31 @@ const NotePage: React.FC = () => {
                                         />
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="hidden shrink-0 md:flex md:flex-col md:items-center md:py-4" style={{ borderLeft: glassBorder }}>
-                                    <button
-                                        onClick={() => setChatPanelOpen(true)}
-                                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
-                                        style={{ background: 'transparent' }}
-                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                                        title="Open AI panel"
-                                    >
-                                        <MdAutoAwesome className="h-4 w-4" />
-                                    </button>
-                                </div>
+                            ) : null}
+
+                            {!chatPanelOpen && (
+                                <button
+                                    onClick={() => setChatPanelOpen(true)}
+                                    className="absolute right-0 top-1/2 z-30 hidden h-12 w-28 -translate-y-1/2 items-center justify-center gap-2 rounded-l-full rounded-r-none text-[12px] font-semibold text-zinc-200 transition-colors md:flex"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.06)',
+                                        border: '1px solid var(--border-glass)',
+                                        borderRight: 'none',
+                                    }}
+                                    onMouseEnter={e => {
+                                        const el = e.currentTarget as HTMLElement;
+                                        el.style.background = 'rgba(255,255,255,0.1)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        const el = e.currentTarget as HTMLElement;
+                                        el.style.background = 'rgba(255,255,255,0.06)';
+                                    }}
+                                    title="Open AI Chat"
+                                    aria-label="Open AI Chat"
+                                >
+                                    <BsChatDots className="h-3.5 w-3.5" />
+                                    <span>AI Chat</span>
+                                </button>
                             )}
                         </div>
                     )}
@@ -534,15 +604,28 @@ const NotePage: React.FC = () => {
                                             Open in new tab ↗
                                         </a>
                                     </div>
-                                    <div className="flex-1 overflow-hidden" style={{ background: '#0D0F12' }}>
-                                        <iframe src={note.source_url} title="Document viewer" className="h-full w-full border-0" sandbox="allow-scripts allow-same-origin" />
+                                    <div className="flex-1 overflow-hidden" style={{ background: 'var(--bg-main)' }}>
+                                        <iframe src={documentViewerUrl || note.source_url} title="Document viewer" className="h-full w-full border-0" />
                                     </div>
+                                    {documentViewerError && (
+                                        <div className="px-4 py-2 text-[11px] text-zinc-500" style={{ borderTop: glassBorder }}>
+                                            {documentViewerError}
+                                        </div>
+                                    )}
                                 </div>
                                 {/* Chat panel */}
                                 <div className="flex w-[380px] shrink-0 flex-col">
-                                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: glassBorder }}>
-                                        <span className="text-[13px] font-semibold text-zinc-300" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Zemly AI</span>
-                                        <span className="text-[11px] text-zinc-600">Based on your document</span>
+                                    <div
+                                        className="flex items-center justify-between px-4 py-3"
+                                        style={{ borderBottom: glassBorder, background: 'rgba(255,255,255,0.02)' }}
+                                    >
+                                        <span className="text-[13px] font-semibold text-zinc-200" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Zemly AI</span>
+                                        <span
+                                            className="rounded-full px-2.5 py-1 text-[10px] font-medium text-zinc-400"
+                                            style={{ border: '1px solid var(--border-glass)', background: 'rgba(255,255,255,0.03)' }}
+                                        >
+                                            Note-grounded
+                                        </span>
                                     </div>
                                     <div className="flex min-h-0 flex-1 flex-col">
                                         <ChatPanel getNoteText={() => note.extracted_text || ''} highlightedText={askAiText} onClearHighlight={() => setAskAiText(null)} />
@@ -561,7 +644,7 @@ const NotePage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto">
                             <FlashcardsPanel
                                 noteId={Number(id)}
-                                getNoteText={() => note?.source_type === 'document' && note.extracted_text ? note.extracted_text : editor?.getText() || ''}
+                                getNoteText={getStudyTextByMode}
                             />
                         </div>
                     )}
@@ -571,7 +654,7 @@ const NotePage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto">
                             <QuizPanel
                                 noteId={Number(id)}
-                                getNoteText={() => note?.source_type === 'document' && note.extracted_text ? note.extracted_text : editor?.getText() || ''}
+                                getNoteText={getStudyTextByMode}
                             />
                         </div>
                     )}
@@ -581,7 +664,7 @@ const NotePage: React.FC = () => {
                         <div className="flex flex-1 flex-col items-center justify-center gap-4">
                             <div
                                 className="flex h-16 w-16 items-center justify-center rounded-2xl"
-                                style={{ background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}
+                                style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
                             >
                                 <MdAutoAwesome className="h-8 w-8" style={{ color: '#00C896' }} />
                             </div>

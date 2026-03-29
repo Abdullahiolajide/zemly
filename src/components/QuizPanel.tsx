@@ -19,7 +19,7 @@ type QuizView = 'loading' | 'generate' | 'quiz' | 'results';
 
 interface QuizPanelProps {
     noteId: number;
-    getNoteText: () => string;
+    getNoteText: (mode: 'fast' | 'deep') => string;
 }
 
 const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
@@ -33,6 +33,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const [explanationsMap, setExplanationsMap] = useState<Record<number, string>>({});
     const [loadingExplanation, setLoadingExplanation] = useState(false);
     const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
+    const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
 
     const currentQ = questions[currentIndex] ?? null;
     const selectedOption = currentQ ? (answersMap[currentQ.id] ?? null) : null;
@@ -68,7 +69,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
     const handleGenerate = useCallback(async () => {
         if (setId) { setError('Quiz has already been generated for this note.'); return; }
-        const text = getNoteText();
+        const text = getNoteText(generationMode);
         if (!text.trim()) { setError('Your note is empty. Write some content first, then generate the quiz.'); return; }
         setIsGenerating(true);
         setError(null);
@@ -88,7 +89,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         } finally {
             setIsGenerating(false);
         }
-    }, [setId, getNoteText, noteId]);
+    }, [generationMode, setId, getNoteText, noteId]);
 
     const handleSelect = useCallback(async (optionIndex: number) => {
         if (answered || !currentQ) return;
@@ -117,7 +118,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         if (!currentQ || loadingExplanation) return;
         setLoadingExplanation(true);
         try {
-            const text = getNoteText();
+            const text = getNoteText(generationMode);
             const result = await generateQuizExplanation(currentQ.question, currentQ.options, currentQ.correct_index, text);
             setExplanationsMap((prev) => ({ ...prev, [currentQ.id]: result }));
         } catch (err) {
@@ -126,7 +127,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         } finally {
             setLoadingExplanation(false);
         }
-    }, [currentQ, loadingExplanation, getNoteText]);
+    }, [currentQ, generationMode, loadingExplanation, getNoteText]);
 
     const handleReset = useCallback(async () => {
         if (!setId) return;
@@ -146,7 +147,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     if (view === 'loading') {
         return (
             <div className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center gap-4 px-8 py-20">
-                <div className="h-10 w-10 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }} />
+                <div className="h-10 w-10 animate-spin rounded-full border-2" style={{ borderColor: 'var(--border-glass-strong)', borderTopColor: 'var(--brand-emerald)' }} />
                 <p className="text-[14px] font-medium text-zinc-400">Loading quiz…</p>
             </div>
         );
@@ -172,6 +173,31 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     </div>
                 )}
 
+                <div className="mb-5 flex items-center justify-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setGenerationMode('deep')}
+                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'deep' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        style={{
+                            background: generationMode === 'deep' ? 'rgba(0,200,150,0.18)' : 'rgba(255,255,255,0.03)',
+                            border: generationMode === 'deep' ? '1px solid rgba(0,200,150,0.4)' : '1px solid rgba(255,255,255,0.08)',
+                        }}
+                    >
+                        Deep (full extracted text)
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setGenerationMode('fast')}
+                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'fast' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                        style={{
+                            background: generationMode === 'fast' ? 'rgba(79,156,249,0.16)' : 'rgba(255,255,255,0.03)',
+                            border: generationMode === 'fast' ? '1px solid rgba(79,156,249,0.38)' : '1px solid rgba(255,255,255,0.08)',
+                        }}
+                    >
+                        Fast (summary note)
+                    </button>
+                </div>
+
                 <button
                     onClick={handleGenerate}
                     disabled={isGenerating}
@@ -179,7 +205,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 >
                     {isGenerating ? (
                         <>
-                            <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
+                            <div className="h-5 w-5 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,0,0,0.1)', borderTopColor: 'var(--text-on-brand)' }} />
                             <span>Generating Quiz...</span>
                         </>
                     ) : (
@@ -214,7 +240,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             <div className="mx-auto w-full max-w-4xl px-8 py-10 lg:px-16">
                 <div
                     className="rounded-2xl p-8"
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)' }}
+                    style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)', backdropFilter: 'blur(12px)' }}
                 >
                     <div className="mb-6">
                         <h2
@@ -226,12 +252,12 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                         <p className="text-[14px] leading-relaxed text-zinc-400">💡 {message}</p>
                     </div>
 
-                    <div className="h-px" style={{ background: 'rgba(255,255,255,0.07)' }} />
+                    <div className="h-px" style={{ background: 'var(--border-glass)' }} />
 
                     {/* Progress bar */}
                     <div className="mt-6 mb-6">
                         <p className="mb-3 text-[13px] font-semibold text-zinc-400">Your progress:</p>
-                        <div className="flex h-8 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                        <div className="flex h-8 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-glass)' }}>
                             {masteredPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${masteredPct}%`, background: '#22c55e' }}>{masteredPct}%</div>}
                             {learningPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${learningPct}%`, background: '#f59e0b' }}>{learningPct}%</div>}
                             {unfamiliarPct > 0 && <div className="flex items-center justify-center text-[11px] font-bold text-white transition-all duration-500" style={{ width: `${unfamiliarPct}%`, background: '#ef4444' }}>{unfamiliarPct}%</div>}
@@ -252,9 +278,9 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                         <button
                             onClick={handleReset}
                             className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
-                            style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                            style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
                         >
                             Reset Progress
                         </button>
@@ -281,7 +307,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 <button
                     onClick={() => window.location.reload()}
                     className="rounded-xl px-5 py-2 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
-                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                 >
                     Try Again
                 </button>
@@ -296,7 +322,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         <div className="mx-auto flex h-full w-full max-w-4xl flex-col px-8 py-6 lg:px-16">
             {/* Header */}
             <div className="mb-4 flex flex-shrink-0 items-center gap-3">
-                <PiExam className="h-6 w-6" style={{ color: '#00C896' }} />
+                <PiExam className="h-6 w-6" style={{ color: 'var(--brand-emerald)' }} />
                 <h2 className="text-xl font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Quiz</h2>
             </div>
 
@@ -339,8 +365,8 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                 {currentQ.options.map((option, i) => {
                                     const isSelected = selectedOption === i;
                                     const isCorrect = i === currentQ.correct_index;
-                                    let borderColor = 'rgba(255,255,255,0.08)';
-                                    let bg = 'rgba(255,255,255,0.025)';
+                                    let borderColor = 'var(--border-glass)';
+                                    let bg = 'var(--bg-glass-hover)';
                                     let opacity = '1';
                                     if (answered) {
                                         if (isCorrect) { borderColor = 'rgba(34,197,94,0.5)'; bg = 'rgba(34,197,94,0.08)'; }
@@ -371,8 +397,8 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                                     <span
                                                         className="flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold"
                                                         style={answered
-                                                            ? { background: 'rgba(255,255,255,0.06)', color: '#71717a' }
-                                                            : { background: 'rgba(0,200,150,0.12)', color: '#00C896' }
+                                                            ? { background: 'var(--border-glass)', color: '#71717a' }
+                                                            : { background: 'var(--bg-glass-hover)', color: 'var(--brand-emerald)', border: '1px solid var(--brand-emerald)' }
                                                         }
                                                     >
                                                         {i + 1}
@@ -398,7 +424,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                     {explanation && (
                                         <div
                                             className="mb-4 rounded-xl p-4"
-                                            style={{ border: '1px solid rgba(0,200,150,0.2)', background: 'rgba(0,200,150,0.06)' }}
+                                            style={{ border: '1px solid var(--brand-emerald)', background: 'var(--bg-glass-hover)' }}
                                         >
                                             <p className="text-[13px] leading-relaxed text-zinc-300">{explanation}</p>
                                         </div>
@@ -408,10 +434,10 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                             <button
                                                 onClick={handleExplain}
                                                 disabled={loadingExplanation}
-                                                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-50"
-                                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                                                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-all hover:text-zinc-100 disabled:opacity-50"
+                                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                                             >
-                                                <MdAutoAwesome className="h-4 w-4" style={{ color: '#00C896' }} />
+                                                <MdAutoAwesome className="h-4 w-4" style={{ color: 'var(--brand-emerald)' }} />
                                                 {loadingExplanation ? 'Loading…' : 'Explain Answer'}
                                             </button>
                                         )}
@@ -432,14 +458,14 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             {/* Bottom nav */}
             <div
                 className="flex flex-shrink-0 items-center justify-between pt-4"
-                style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+                style={{ borderTop: '1px solid var(--border-glass)' }}
             >
                 <button
                     onClick={goPrev}
                     disabled={currentIndex === 0}
                     className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { !(currentIndex === 0) && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'); }}
+                    onMouseEnter={e => { !(currentIndex === 0) && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronLeft className="h-7 w-7" strokeWidth={3} />
@@ -452,7 +478,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     disabled={currentIndex === questions.length - 1}
                     className="flex h-12 w-12 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { !(currentIndex === questions.length - 1) && ((e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'); }}
+                    onMouseEnter={e => { !(currentIndex === questions.length - 1) && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronRight className="h-7 w-7" strokeWidth={3} />

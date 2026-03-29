@@ -54,10 +54,10 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
             <div
                 className="relative z-10 mx-4 w-full max-w-md rounded-2xl p-8 shadow-2xl"
                 style={{
-                    background: 'rgba(16, 18, 24, 0.97)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--bg-main)',
+                    border: '1px solid var(--border-glass-strong)',
                     backdropFilter: 'blur(20px)',
-                    boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+                    boxShadow: '0 24px 80px rgba(0,0,0,0.15)',
                     animation: 'modalSlideUp 0.4s ease',
                 }}
             >
@@ -72,13 +72,14 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
                 </p>
 
                 {/* Progress Bar */}
-                <div className="mb-8 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="mb-8 overflow-hidden rounded-full" style={{ background: 'var(--border-glass)' }}>
                     <div
-                        className="flex h-10 items-center justify-center rounded-full text-[14px] font-bold text-[#0D0F12] transition-all duration-1000 ease-out"
+                        className="flex h-10 items-center justify-center rounded-full text-[14px] font-bold transition-all duration-1000 ease-out"
                         style={{
                             width: `${progressPercent}%`,
-                            background: 'linear-gradient(90deg, #00C896, #00A87A)',
-                            boxShadow: '0 0 20px rgba(0,200,150,0.4)',
+                            background: 'var(--brand-emerald)',
+                            color: 'var(--text-on-brand)',
+                            boxShadow: '0 0 20px rgba(0,200,150,0.2)',
                         }}
                     >
                         <span>✨ {progressPercent}%</span>
@@ -90,9 +91,9 @@ const MasteryModal: React.FC<MasteryModalProps> = ({
                     <button
                         onClick={onReset}
                         className="rounded-xl px-6 py-2.5 text-[14px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
-                        style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                        style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
                     >
                         Reset Progress
                     </button>

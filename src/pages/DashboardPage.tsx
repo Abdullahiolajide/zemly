@@ -151,77 +151,30 @@ const DashboardPage: React.FC = () => {
 
     /* ── Create document note → navigate ── */
     const handleCreateDocumentNote = async (result: {
-        file: File;
+        files: File[];
         title: string;
         noteContent: string;
         extractedText: string;
-        publicUrl: string;
+        publicUrls: string[];
     }) => {
         try {
-            // Convert AI plain-text notes into TipTap JSON nodes
-            const lines = result.noteContent.split('\n');
-            const nodes: Record<string, unknown>[] = [];
+            const content = result.noteContent
+                .split('\n')
+                .filter((line) => !/^SOURCE\s*:/i.test(line.trim()))
+                .join('\n')
+                .trim();
 
-            for (const raw of lines) {
-                const line = raw.trim();
-                if (!line) continue;
-
-                // ALL CAPS headings ending with colon, e.g. "INTRODUCTION:" or "KEY TAKEAWAYS:"
-                const isHeading =
-                    /^[A-Z][A-Z\s\d\-/()]{2,}:?$/.test(line) ||
-                    line.startsWith('===') ||
-                    line.startsWith('---') ||
-                    line.startsWith('# ') ||
-                    line.startsWith('## ');
-
-                // Bullet points
-                const isBullet = line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ');
-
-                if (isHeading) {
-                    const text = line.replace(/^[#=\-]+\s*/, '').replace(/:$/, '').trim();
-                    if (text) {
-                        nodes.push({
-                            type: 'heading',
-                            attrs: { level: 2 },
-                            content: [{ type: 'text', text }],
-                        });
-                    }
-                } else if (isBullet) {
-                    const text = line.replace(/^[-•*]\s+/, '');
-                    nodes.push({
-                        type: 'bulletList',
-                        content: [
-                            {
-                                type: 'listItem',
-                                content: [
-                                    {
-                                        type: 'paragraph',
-                                        content: [{ type: 'text', text }],
-                                    },
-                                ],
-                            },
-                        ],
-                    });
-                } else {
-                    nodes.push({
-                        type: 'paragraph',
-                        content: [{ type: 'text', text: line }],
-                    });
-                }
-            }
-
-            const content = {
-                type: 'doc',
-                content: nodes.length > 0 ? nodes : [{ type: 'paragraph', content: [{ type: 'text', text: result.noteContent }] }],
-            };
+            const sourceUrl = result.publicUrls[0] || '';
+            const fileName = result.files.map((file) => file.name).join(' | ');
 
             const note = await createDocumentNote(
                 result.title,
-                result.publicUrl,
+                sourceUrl,
                 result.extractedText,
-                result.file.name,
+                fileName,
                 content,
             );
+
             navigate(`/notes/${note.id}`);
         } catch (err) {
             console.error('Failed to create document note:', err);
@@ -245,7 +198,7 @@ const DashboardPage: React.FC = () => {
     };
 
     return (
-        <div className="flex h-screen bg-zinc-950 text-zinc-100" style={{ background: '#0D0F12' }}>
+        <div className="flex h-screen bg-zinc-950 text-zinc-100" style={{ background: 'var(--bg-main)' }}>
             {/* ─── MOBILE BACKDROP ─── */}
             {sidebarOpen && (
                 <div
@@ -260,8 +213,8 @@ const DashboardPage: React.FC = () => {
                     sidebarOpen ? 'w-60 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
                 } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
                 style={{
-                    borderRight: '1px solid rgba(255,255,255,0.06)',
-                    background: 'rgba(255,255,255,0.02)',
+                    borderRight: '1px solid var(--border-glass)',
+                    background: 'var(--bg-sidebar)',
                     backdropFilter: 'blur(12px)',
                 }}
             >
@@ -321,7 +274,7 @@ const DashboardPage: React.FC = () => {
                 </nav>
 
                 {/* Sidebar Footer */}
-                <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="px-3 py-3" style={{ borderTop: '1px solid var(--border-glass)' }}>
                     {/* Theme Toggle */}
                     <button
                         onClick={() => setThemeModalOpen(true)}
@@ -356,7 +309,7 @@ const DashboardPage: React.FC = () => {
             </aside>
 
             {/* ─── MAIN CONTENT ─── */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" style={{ background: '#0D0F12' }}>
+            <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" style={{ background: 'var(--bg-main)' }}>
                 {/* Main scrollable area */}
                 <div className="mx-auto w-full max-w-7xl px-8 py-8 lg:px-12">
                     {/* Top row: Collapse toggle (when sidebar hidden) + Title + Search */}
@@ -386,8 +339,8 @@ const DashboardPage: React.FC = () => {
                         <button
                             className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm text-zinc-500 transition-all hover:text-zinc-400"
                             style={{
-                                borderColor: 'rgba(255,255,255,0.07)',
-                                background: 'rgba(255,255,255,0.03)',
+                                borderColor: 'var(--border-glass)',
+                                background: 'var(--bg-glass-hover)',
                                 backdropFilter: 'blur(8px)',
                             }}
                         >
@@ -408,16 +361,16 @@ const DashboardPage: React.FC = () => {
                                 className="animate-fade-up group flex items-center gap-4 rounded-xl px-4 py-4 text-left transition-all duration-200"
                                 style={{
                                     animationDelay: `${i * 60}ms`,
-                                    background: 'rgba(255,255,255,0.025)',
-                                    border: '1px solid rgba(255,255,255,0.07)',
+                                    background: 'var(--bg-glass-hover)',
+                                    border: '1px solid var(--border-glass)',
                                     backdropFilter: 'blur(8px)',
                                 }}
                                 onMouseEnter={e => {
-                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)';
-                                    (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 0 16px rgba(255,255,255,0.03), 0 4px 16px rgba(0,0,0,0.2)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)';
+                                    (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 32px rgba(0,0,0,0.08)';
                                 }}
                                 onMouseLeave={e => {
-                                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)';
+                                    (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)';
                                     (e.currentTarget as HTMLElement).style.boxShadow = '';
                                 }}
                             >
@@ -450,13 +403,13 @@ const DashboardPage: React.FC = () => {
                         <div
                             className="flex items-center gap-1 rounded-lg border p-1"
                             style={{
-                                borderColor: 'rgba(255,255,255,0.07)',
-                                background: 'rgba(255,255,255,0.025)',
+                                borderColor: 'var(--border-glass)',
+                                background: 'var(--bg-glass-hover)',
                             }}
                         >
                             <button
                                 className="rounded-md px-4 py-1.5 text-[13px] font-medium text-zinc-100 shadow-sm"
-                                style={{ background: 'rgba(255,255,255,0.07)' }}
+                                style={{ background: 'var(--border-glass-strong)' }}
                             >
                                 My Notes
                             </button>
@@ -465,11 +418,11 @@ const DashboardPage: React.FC = () => {
                         <button
                             className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-zinc-500 transition-all duration-150 hover:text-zinc-300"
                             style={{
-                                border: '1px solid rgba(255,255,255,0.07)',
-                                background: 'rgba(255,255,255,0.025)',
+                                border: '1px solid var(--border-glass)',
+                                background: 'var(--bg-glass-hover)',
                             }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.07)'; }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
                         >
                             <BsFolder2 className="h-4 w-4" />
                             New Folder
@@ -499,7 +452,7 @@ const DashboardPage: React.FC = () => {
                                                 onClick={() => navigate(`/notes/${note.id}`)}
                                                 className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150"
                                                 onMouseEnter={e => {
-                                                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.035)';
+                                                    (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)';
                                                     (e.currentTarget as HTMLElement).style.borderRadius = '12px';
                                                 }}
                                                 onMouseLeave={e => {
@@ -535,7 +488,7 @@ const DashboardPage: React.FC = () => {
                                                         }}
                                                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:text-zinc-300 group-hover:opacity-100"
                                                         style={{ background: 'transparent' }}
-                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                                         aria-label="Note options"
                                                     >
@@ -547,10 +500,10 @@ const DashboardPage: React.FC = () => {
                                                         <div
                                                             className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl shadow-xl"
                                                             style={{
-                                                                background: 'rgba(18, 21, 27, 0.97)',
-                                                                border: '1px solid rgba(255,255,255,0.08)',
+                                                                background: 'var(--bg-main)',
+                                                                border: '1px solid var(--border-glass-strong)',
                                                                 backdropFilter: 'blur(16px)',
-                                                                boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                                                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
                                                             }}
                                                         >
                                                             <button
@@ -575,10 +528,10 @@ const DashboardPage: React.FC = () => {
                                                     <div
                                                         className="w-full max-w-sm rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
                                                         style={{
-                                                            background: 'rgba(18, 21, 27, 0.97)',
-                                                            border: '1px solid rgba(255,255,255,0.08)',
+                                                            background: 'var(--bg-main)',
+                                                            border: '1px solid var(--border-glass-strong)',
                                                             backdropFilter: 'blur(20px)',
-                                                            boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+                                                            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
                                                         }}
                                                     >
                                                         <h3
@@ -594,9 +547,9 @@ const DashboardPage: React.FC = () => {
                                                             <button
                                                                 onClick={() => setDeleteConfirmId(null)}
                                                                 className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200"
-                                                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-                                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.14)'; }}
-                                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                                                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
+                                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
                                                             >
                                                                 Cancel
                                                             </button>

@@ -49,13 +49,13 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
 
     /* shared textarea style helper */
     const taStyle: React.CSSProperties = {
-        background: 'rgba(255,255,255,0.04)',
-        border: '1px solid rgba(255,255,255,0.09)',
-        color: '#e4e4e7',
+        background: 'var(--bg-glass-hover)',
+        border: '1px solid var(--border-glass)',
+        color: 'inherit',
         fontFamily: "'DM Sans', sans-serif",
     };
-    const taFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => { e.target.style.borderColor = '#00C896'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.1)'; };
-    const taBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => { e.target.style.borderColor = 'rgba(255,255,255,0.09)'; e.target.style.boxShadow = ''; };
+    const taFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => { e.target.style.borderColor = 'var(--brand-emerald)'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.1)'; };
+    const taBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => { e.target.style.borderColor = 'var(--border-glass)'; e.target.style.boxShadow = ''; };
 
     return (
         <div className="mx-auto w-full max-w-7xl px-8 py-10 lg:px-16">
@@ -63,9 +63,9 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
             <div className="mb-8 flex items-center gap-4">
                 <div
                     className="flex h-14 w-14 items-center justify-center rounded-2xl"
-                    style={{ background: 'rgba(0,200,150,0.08)', border: '1px solid rgba(0,200,150,0.15)' }}
+                    style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
                 >
-                    <TbCards className="h-7 w-7" style={{ color: '#00C896' }} />
+                    <TbCards className="h-7 w-7" style={{ color: 'var(--brand-emerald)' }} />
                 </div>
                 <div>
                     <h2 className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Flashcards</h2>
@@ -85,7 +85,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
             {currentCard && (
                 <div
                     className="mb-6 mx-auto flex min-h-[240px] max-w-xl items-center justify-center rounded-2xl p-8"
-                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(12px)' }}
+                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                 >
                     <p className="text-center text-lg font-medium text-zinc-100">{currentCard.front}</p>
                 </div>
@@ -96,7 +96,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                 <button
                     onClick={goPrev} disabled={currentIndex === 0}
                     className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-all hover:text-zinc-200 disabled:opacity-30"
-                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)' }}
+                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                 >
                     <FiChevronLeft className="h-5 w-5" />
                 </button>
@@ -106,7 +106,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                 <button
                     onClick={goNext} disabled={currentIndex === cards.length - 1}
                     className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-all hover:text-zinc-200 disabled:opacity-30"
-                    style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)' }}
+                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                 >
                     <FiChevronRight className="h-5 w-5" />
                 </button>
@@ -147,7 +147,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                 <div
                                     key={card.id}
                                     className="relative rounded-xl text-sm lg:text-base transition-all"
-                                    style={{ border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.025)', backdropFilter: 'blur(8px)' }}
+                                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(8px)' }}
                                 >
                                     {editingId === card.id ? (
                                         <div className="p-5 space-y-3">
@@ -185,16 +185,16 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                                 <button
                                                     onClick={cancelEditing}
                                                     className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[12px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
-                                                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
+                                                    style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
                                                 >
                                                     <FiX className="h-3.5 w-3.5" /> Cancel
                                                 </button>
                                                 <button
                                                     onClick={saveEditing}
                                                     className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-[12px] font-medium transition-colors"
-                                                    style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896', border: '1px solid rgba(0,200,150,0.2)' }}
-                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.2)'; }}
-                                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.12)'; }}
+                                                    style={{ background: 'var(--bg-glass-hover)', color: 'var(--brand-emerald)', border: '1px solid var(--brand-emerald)' }}
+                                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.1)'; }}
+                                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                                 >
                                                     <FiCheck className="h-3.5 w-3.5" /> Save
                                                 </button>
@@ -216,7 +216,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                                         onClick={() => startEditing(card)}
                                                         className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-600 transition-colors hover:text-zinc-300"
                                                         style={{ background: 'transparent' }}
-                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                                         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                                         title="Edit card"
                                                     >
@@ -229,7 +229,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                                     <div className="flex items-center justify-center text-center">
                                                         <p className="leading-relaxed text-zinc-200">{card.front}</p>
                                                     </div>
-                                                    <div className="flex items-center justify-center text-center" style={{ borderLeft: '1px solid rgba(255,255,255,0.06)' }}>
+                                                    <div className="flex items-center justify-center text-center" style={{ borderLeft: '1px solid var(--border-glass)' }}>
                                                         <p className="leading-relaxed text-zinc-400">{card.back}</p>
                                                     </div>
                                                 </div>
@@ -248,8 +248,8 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
                     <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingId(null)} />
                     <div
-                        className="relative w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-                        style={{ background: 'rgba(16, 18, 24, 0.97)', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}
+                        className="relative w-full max-w-sm rounded-2xl p-6"
+                        style={{ background: 'var(--bg-main)', border: '1px solid var(--border-glass-strong)', backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}
                     >
                         <h3 className="mb-2 text-lg font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Delete this card?</h3>
                         <p className="mb-6 text-[14px] leading-relaxed text-zinc-500">This action cannot be undone.</p>
@@ -257,7 +257,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                             <button
                                 onClick={() => setDeletingId(null)}
                                 className="rounded-xl px-5 py-2 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
-                                style={{ border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
+                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                             >
                                 Cancel
                             </button>

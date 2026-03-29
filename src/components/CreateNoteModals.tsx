@@ -290,12 +290,25 @@ interface DocumentUploadModalProps {
     open: boolean;
     onClose: () => void;
     onGenerate?: (result: {
-        file: File;
+        files: File[];
         title: string;
         noteContent: string;
         extractedText: string;
-        publicUrl: string;
-    }) => void;
+        publicUrls: string[];
+    }) => void | Promise<void>;
+}
+
+type UploadItemStage = 'queued' | 'uploading' | 'uploaded' | 'processing' | 'done' | 'error';
+
+interface UploadItemState {
+    stage: UploadItemStage;
+    progress: number;
+    error?: string;
+}
+
+interface UploadedFileMeta {
+    publicUrl: string;
+    path: string;
 }
 
 export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
@@ -303,37 +316,262 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     onClose,
     onGenerate,
 }) => {
-    const [docFile, setDocFile] = useState<File | null>(null);
+    const [docFiles, setDocFiles] = useState<File[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [uploadStates, setUploadStates] = useState<Record<string, UploadItemState>>({});
+    const [uploadedMeta, setUploadedMeta] = useState<Record<string, UploadedFileMeta>>({});
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const removedFileIdsRef = useRef<Set<string>>(new Set());
+    const generationCompletedRef = useRef(false);
+
+    const getFileId = (file: File) => `${file.name}-${file.size}-${file.lastModified}`;
+
+    const deletePathSafely = async (path: string) => {
+        if (!path) return;
+        try {
+            const { deleteDocumentFromStorage } = await import('../lib/aiService');
+            await deleteDocumentFromStorage(path);
+        } catch (err) {
+            console.warn('Failed to cleanup uploaded file:', err);
+        }
+    };
+
+    const cleanupUploadedFiles = async () => {
+        const paths = Object.values(uploadedMeta).map((meta) => meta.path).filter(Boolean);
+        if (!paths.length) return;
+
+        await Promise.allSettled(paths.map((path) => deletePathSafely(path)));
+    };
+
+    const handleClose = async () => {
+        if (isLoading) return;
+        if (!generationCompletedRef.current) {
+            await cleanupUploadedFiles();
+        }
+        onClose();
+    };
+
+    const queueUploads = async (files: File[]) => {
+        if (!files.length) return;
+
+        const { uploadDocumentToStorage } = await import('../lib/aiService');
+
+        await Promise.all(files.map(async (file) => {
+            const fileId = getFileId(file);
+
+            setUploadStates((prev) => ({
+                ...prev,
+                [fileId]: { stage: 'uploading', progress: 0 },
+            }));
+
+            try {
+                const uploaded = await uploadDocumentToStorage(file, {
+                    onUploadProgress: (progress) => {
+                        if (removedFileIdsRef.current.has(fileId)) return;
+                        setUploadStates((prev) => ({
+                            ...prev,
+                            [fileId]: {
+                                ...(prev[fileId] ?? { stage: 'uploading', progress: 0 }),
+                                stage: 'uploading',
+                                progress,
+                            },
+                        }));
+                    },
+                });
+
+                if (removedFileIdsRef.current.has(fileId)) {
+                    await deletePathSafely(uploaded.path);
+                    return;
+                }
+
+                setUploadedMeta((prev) => ({
+                    ...prev,
+                    [fileId]: uploaded,
+                }));
+
+                setUploadStates((prev) => ({
+                    ...prev,
+                    [fileId]: { stage: 'uploaded', progress: 100 },
+                }));
+            } catch (uploadErr) {
+                const message = uploadErr instanceof Error
+                    ? uploadErr.message
+                    : 'Upload failed. Please try again.';
+
+                setUploadStates((prev) => ({
+                    ...prev,
+                    [fileId]: { stage: 'error', progress: 0, error: message },
+                }));
+            }
+        }));
+    };
+
+    const addFiles = (incoming: File[]) => {
+        if (!incoming.length) return;
+
+        const existingIds = new Set(docFiles.map(getFileId));
+        const uniqueFiles = incoming.filter((file) => !existingIds.has(getFileId(file)));
+        if (!uniqueFiles.length) return;
+
+        for (const file of uniqueFiles) {
+            removedFileIdsRef.current.delete(getFileId(file));
+        }
+
+        setDocFiles((prev) => [...prev, ...uniqueFiles]);
+        setUploadStates((prev) => {
+            const next = { ...prev };
+            for (const file of uniqueFiles) {
+                const id = getFileId(file);
+                if (!next[id]) next[id] = { stage: 'queued', progress: 0 };
+            }
+            return next;
+        });
+
+        void queueUploads(uniqueFiles);
+    };
+
+    const removeFile = (file: File) => {
+        const id = getFileId(file);
+        removedFileIdsRef.current.add(id);
+        const uploaded = uploadedMeta[id];
+
+        setDocFiles((prev) => prev.filter((f) => getFileId(f) !== id));
+        setUploadStates((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setUploadedMeta((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+
+        if (uploaded?.path) {
+            void deletePathSafely(uploaded.path);
+        }
+    };
 
     useEffect(() => {
         if (open) {
-            setDocFile(null);
+            removedFileIdsRef.current = new Set();
+            generationCompletedRef.current = false;
+            setDocFiles([]);
             setError(null);
             setIsLoading(false);
+            setUploadStates({});
+            setUploadedMeta({});
         }
     }, [open]);
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        const file = e.dataTransfer.files[0];
-        if (file) { setDocFile(file); setError(null); }
+        const files = Array.from(e.dataTransfer.files || []);
+        if (files.length) {
+            addFiles(files);
+            setError(null);
+        }
     };
 
     const handleGenerate = async () => {
-        if (!docFile) return;
+        if (!docFiles.length) return;
         setIsLoading(true);
         setError(null);
 
+        const incompleteFiles = docFiles.filter((file) => !uploadedMeta[getFileId(file)]);
+        if (incompleteFiles.length > 0) {
+            setError('Please wait until all files finish uploading, or remove failed files.');
+            setIsLoading(false);
+            return;
+        }
+
+        const perFileResults: {
+            file: File;
+            title: string;
+            noteContent: string;
+            extractedText: string;
+            publicUrl: string;
+        }[] = [];
+
         try {
-            const { uploadAndExtractDocument } = await import('../lib/aiService');
-            const result = await uploadAndExtractDocument(docFile);
-            onGenerate?.({ file: docFile, ...result });
-            onClose();
+            const { extractDocumentFromStorage } = await import('../lib/aiService');
+            for (const file of docFiles) {
+                const fileId = getFileId(file);
+                const uploaded = uploadedMeta[fileId];
+
+                setUploadStates((prev) => ({
+                    ...prev,
+                    [fileId]: {
+                        ...(prev[fileId] ?? { stage: 'uploaded', progress: 100 }),
+                        stage: 'processing',
+                        progress: 100,
+                    },
+                }));
+
+                try {
+                    const result = await extractDocumentFromStorage({
+                        publicUrl: uploaded.publicUrl,
+                        fileName: file.name,
+                        mimeType: file.type || undefined,
+                    });
+
+                    setUploadStates((prev) => ({
+                        ...prev,
+                        [fileId]: { stage: 'done', progress: 100 },
+                    }));
+
+                    perFileResults.push({
+                        file,
+                        ...result,
+                        publicUrl: uploaded.publicUrl,
+                    });
+                } catch (fileErr) {
+                    const message = fileErr instanceof Error
+                        ? fileErr.message
+                        : 'Something went wrong. Please try again.';
+
+                    setUploadStates((prev) => ({
+                        ...prev,
+                        [fileId]: {
+                            ...(prev[fileId] ?? { stage: 'error', progress: 0 }),
+                            stage: 'error',
+                            error: message,
+                        },
+                    }));
+                }
+            }
+
+            if (perFileResults.length !== docFiles.length) {
+                setError('Some files failed during processing. Remove failed files and try again.');
+                return;
+            }
+
+            const combinedTitleBase = perFileResults[0]?.title || docFiles[0]?.name.replace(/\.[^.]+$/, '') || 'Combined Note';
+            const combinedTitle = docFiles.length > 1
+                ? `${combinedTitleBase} + ${docFiles.length - 1} more`
+                : combinedTitleBase;
+
+            const combinedExtractedText = perFileResults
+                .map((item) => `SOURCE: ${item.file.name}\n${item.extractedText}`)
+                .join('\n\n');
+
+            const combinedNoteContent = perFileResults
+                .map((item) => item.noteContent)
+                .join('\n\n');
+
+            await onGenerate?.({
+                files: docFiles,
+                title: combinedTitle,
+                noteContent: combinedNoteContent,
+                extractedText: combinedExtractedText,
+                publicUrls: perFileResults.map((item) => item.publicUrl),
+            });
+
+            generationCompletedRef.current = true;
+            await handleClose();
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
         } finally {
@@ -342,7 +580,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     };
 
     return (
-        <ModalWrapper open={open} onClose={isLoading ? () => {} : onClose}>
+        <ModalWrapper open={open} onClose={isLoading ? () => {} : () => { void handleClose(); }}>
             <div className="px-8 pt-10 pb-8">
                 {/* Icon */}
                 <div
@@ -359,7 +597,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     Upload a document
                 </h2>
                 <p className="mb-6 text-center text-sm text-zinc-500">
-                    Upload a PDF and Zemly AI will generate study notes for you
+                    Upload one or more files and Zemly AI will generate one combined study note
                 </p>
 
                 {/* Document Upload Drop Zone */}
@@ -370,37 +608,117 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     onClick={() => !isLoading && fileInputRef.current?.click()}
                     className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-all duration-200 ${isLoading ? 'pointer-events-none opacity-60' : ''}`}
                     style={{
-                        borderColor: isDragging ? 'rgba(79,156,249,0.5)' : docFile ? 'rgba(79,156,249,0.35)' : 'rgba(255,255,255,0.08)',
-                        background: isDragging ? 'rgba(79,156,249,0.05)' : docFile ? 'rgba(79,156,249,0.04)' : 'rgba(255,255,255,0.02)',
+                        borderColor: isDragging ? 'rgba(79,156,249,0.5)' : docFiles.length ? 'rgba(79,156,249,0.35)' : 'rgba(255,255,255,0.08)',
+                        background: isDragging ? 'rgba(79,156,249,0.05)' : docFiles.length ? 'rgba(79,156,249,0.04)' : 'rgba(255,255,255,0.02)',
                     }}
                 >
                     <FiUploadCloud
                         className="mb-2 h-6 w-6"
-                        style={{ color: isDragging || docFile ? '#4F9CF9' : '#52525b' }}
+                        style={{ color: isDragging || docFiles.length ? '#4F9CF9' : '#52525b' }}
                     />
                     <p className="text-center text-sm text-zinc-500">
-                        {docFile ? (
-                            <span className="font-medium" style={{ color: '#4F9CF9' }}>{docFile.name}</span>
+                        {docFiles.length ? (
+                            <span className="font-medium" style={{ color: '#4F9CF9' }}>{docFiles.length} file{docFiles.length > 1 ? 's' : ''} selected</span>
                         ) : (
-                            <>Drag a PDF here, or <span className="text-zinc-300 underline underline-offset-2">click to browse</span></>
+                            <>Drag files here, or <span className="text-zinc-300 underline underline-offset-2">click to browse</span></>
                         )}
                     </p>
-                    {docFile && (
+                    {docFiles.length > 0 && (
                         <p className="mt-1 text-xs text-zinc-600">
-                            {(docFile.size / 1024 / 1024).toFixed(2)} MB
+                            {(docFiles.reduce((sum, file) => sum + file.size, 0) / 1024 / 1024).toFixed(2)} MB total
                         </p>
                     )}
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept=".pdf,.txt,.md"
+                        multiple
                         className="hidden"
                         onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) { setDocFile(file); setError(null); }
+                            const files = Array.from(e.target.files || []);
+                            if (files.length) {
+                                addFiles(files);
+                                setError(null);
+                            }
+                            e.currentTarget.value = '';
                         }}
                     />
                 </div>
+
+                {/* Selected files and progress */}
+                {docFiles.length > 0 && (
+                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {docFiles.map((file) => {
+                            const fileId = getFileId(file);
+                            const state = uploadStates[fileId] ?? { stage: 'queued', progress: 0 };
+                            const statusText = state.stage === 'uploading'
+                                ? `Uploading... ${state.progress}%`
+                                : state.stage === 'uploaded'
+                                    ? 'Uploaded. Ready to merge.'
+                                : state.stage === 'processing'
+                                    ? 'Processing content...'
+                                    : state.stage === 'done'
+                                        ? 'Done'
+                                        : state.stage === 'error'
+                                            ? (state.error || 'Upload failed')
+                                            : 'Ready to upload';
+
+                            return (
+                                <div
+                                    key={fileId}
+                                    className="rounded-xl px-3 py-3"
+                                    style={{
+                                        background: 'rgba(255,255,255,0.03)',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                    }}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium text-zinc-200">{file.name}</p>
+                                            <p className={`mt-0.5 text-xs ${state.stage === 'error' ? 'text-red-400' : 'text-zinc-500'}`}>
+                                                {statusText}
+                                            </p>
+                                        </div>
+
+                                        {!isLoading && (
+                                            <button
+                                                onClick={() => removeFile(file)}
+                                                className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                                                style={{ background: 'rgba(255,255,255,0.04)' }}
+                                            >
+                                                Remove
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                                        <div
+                                            className="h-full rounded-full transition-all duration-200"
+                                            style={{
+                                                width: `${state.progress}%`,
+                                                background: state.stage === 'error'
+                                                    ? 'rgba(239,68,68,0.9)'
+                                                    : state.stage === 'done'
+                                                        ? 'rgba(34,197,94,0.9)'
+                                                        : '#4F9CF9',
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {!isLoading && (
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-3 w-full rounded-xl border border-dashed py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:text-zinc-200"
+                        style={{ borderColor: 'rgba(79,156,249,0.35)', background: 'rgba(79,156,249,0.03)' }}
+                    >
+                        + Add Another File
+                    </button>
+                )}
 
                 {/* Error */}
                 {error && (
@@ -412,16 +730,19 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 {/* Generate Notes Button */}
                 <button
                     onClick={handleGenerate}
-                    disabled={!docFile || isLoading}
+                    disabled={isLoading || !docFiles.length || !docFiles.every((file) => {
+                        const state = uploadStates[getFileId(file)];
+                        return state?.stage === 'uploaded' || state?.stage === 'done';
+                    })}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {isLoading ? (
                         <span className="flex items-center justify-center gap-2">
                             <span className="h-4 w-4 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
-                            Generating notes…
+                            Generating combined note...
                         </span>
                     ) : (
-                        'Generate Notes'
+                        'Generate Combined Note'
                     )}
                 </button>
             </div>

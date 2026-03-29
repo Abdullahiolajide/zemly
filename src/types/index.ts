@@ -9,7 +9,7 @@ export interface Note {
     id: number;
     user_id: string;
     title: string;
-    content: Record<string, unknown> | null;
+    content: Record<string, unknown> | string | null;
     tags: string[] | null;
     created_at: string;
     updated_at?: string;

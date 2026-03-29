@@ -7,8 +7,8 @@ const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-/** Max characters of note content to send — keeps input tokens under free tier limits */
-const MAX_NOTE_CHARS = 6000;
+/** Max characters of note content to send — supports up to ~30 pages (~25k tokens) */
+const MAX_NOTE_CHARS = 100000;
 
 interface GeminiMessage {
     role: 'user' | 'model';
@@ -27,8 +27,8 @@ interface GeminiResponse {
 }
 
 /**
- * Truncate note content to stay within free tier input token limits.
- * ~4 chars per token, 6000 chars ≈ 1500 tokens input.
+ * Truncate note content to stay within token limits.
+ * ~4 chars per token, 100000 chars ≈ 25000 tokens (supports ~30 pages).
  */
 export function truncateNote(content: string, maxChars = MAX_NOTE_CHARS): string {
     if (content.length <= maxChars) return content;
