@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { IoClose, IoMicOutline, IoLinkOutline, IoDocumentTextOutline } from 'react-icons/io5';
 import { MdUploadFile } from 'react-icons/md';
 import { FiUploadCloud } from 'react-icons/fi';
+import { AUDIO_UPLOAD_ACCEPT, isLikelyAudioFile } from '../lib/aiService';
 
 /* ─────────────────────────────────────────────
    Shared Modal Wrapper
@@ -221,8 +222,8 @@ export const AudioModal: React.FC<AudioModalProps> = ({
     };
 
     const addAudioFile = (file: File) => {
-        if (!file.type.startsWith('audio/')) {
-            setError('Please upload an audio file.');
+        if (!isLikelyAudioFile(file)) {
+            setError('Please upload a supported audio file (MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, WEBM, MP4, and more).');
             return;
         }
 
@@ -487,13 +488,13 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                         {audioItems.length ? (
                             <span className="font-medium" style={{ color: '#F5A623' }}>+ Add more audio files</span>
                         ) : (
-                            <>Drag audio files here, or click to upload (MP3, WAV, M4A...)</>
+                            <>Drag audio files here, or click to upload (MP3, WAV, M4A, AAC, FLAC, OGG, OPUS, WEBM, MP4...)</>
                         )}
                     </p>
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept="audio/*"
+                        accept={AUDIO_UPLOAD_ACCEPT}
                         multiple
                         className="hidden"
                         onChange={(e) => {

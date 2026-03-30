@@ -16,7 +16,7 @@ import { FiTrash2 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { createNote, createDocumentNote, createAudioNote, getUserNotes, deleteNote } from '../lib/notesService';
-import { uploadDocumentToStorage, extractDocumentFromStorage } from '../lib/aiService';
+import { uploadDocumentToStorage, extractDocumentFromStorage, inferAudioMimeType } from '../lib/aiService';
 import type { Note } from '../types';
 import ThemeModal from '../components/ThemeModal';
 
@@ -199,7 +199,7 @@ const DashboardPage: React.FC = () => {
                 const extracted = await extractDocumentFromStorage({
                     publicUrl: upload.publicUrl,
                     fileName: file.name,
-                    mimeType: file.type || 'audio/webm',
+                    mimeType: inferAudioMimeType(file) || 'audio/webm',
                 });
 
                 perFileResults.push({

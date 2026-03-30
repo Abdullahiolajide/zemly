@@ -58,6 +58,70 @@ export interface UploadAndExtractOptions {
     onPhaseChange?: (phase: 'uploading' | 'processing') => void;
 }
 
+const AUDIO_EXTENSION_MIME_MAP: Record<string, string> = {
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.m4a': 'audio/mp4',
+    '.aac': 'audio/aac',
+    '.flac': 'audio/flac',
+    '.ogg': 'audio/ogg',
+    '.oga': 'audio/ogg',
+    '.opus': 'audio/opus',
+    '.webm': 'audio/webm',
+    '.mp4': 'audio/mp4',
+    '.mpeg': 'audio/mpeg',
+    '.mpga': 'audio/mpeg',
+    '.aiff': 'audio/aiff',
+    '.aif': 'audio/aiff',
+    '.caf': 'audio/x-caf',
+    '.amr': 'audio/amr',
+    '.3gp': 'audio/3gpp',
+    '.wma': 'audio/x-ms-wma',
+};
+
+function getLowercaseExtension(fileName: string): string {
+    const dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex < 0) return '';
+    return fileName.slice(dotIndex).toLowerCase();
+}
+
+export function inferAudioMimeType(file: Pick<File, 'name' | 'type'>): string | undefined {
+    const normalizedType = (file.type || '').toLowerCase();
+    if (normalizedType.startsWith('audio/')) return normalizedType;
+
+    const ext = getLowercaseExtension(file.name);
+    if (ext && AUDIO_EXTENSION_MIME_MAP[ext]) return AUDIO_EXTENSION_MIME_MAP[ext];
+
+    if (normalizedType === 'video/mp4') return 'audio/mp4';
+    return undefined;
+}
+
+export function isLikelyAudioFile(file: Pick<File, 'name' | 'type'>): boolean {
+    return Boolean(inferAudioMimeType(file));
+}
+
+export const AUDIO_UPLOAD_ACCEPT = [
+    'audio/*',
+    '.mp3',
+    '.wav',
+    '.m4a',
+    '.aac',
+    '.flac',
+    '.ogg',
+    '.oga',
+    '.opus',
+    '.webm',
+    '.mp4',
+    '.mpeg',
+    '.mpga',
+    '.aiff',
+    '.aif',
+    '.caf',
+    '.amr',
+    '.3gp',
+    '.wma',
+].join(',');
+
 /* ── API calls ── */
 
 /**
@@ -87,6 +151,7 @@ export async function uploadDocumentToStorage(
     options?: { onUploadProgress?: (progress: number) => void },
 ): Promise<DocumentUploadResult> {
     const safeFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const effectiveMimeType = file.type || inferAudioMimeType(file) || 'application/octet-stream';
 
     const { data: session } = await supabase.auth.getSession();
     const token = session?.session?.access_token;
@@ -99,7 +164,7 @@ export async function uploadDocumentToStorage(
         xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
         xhr.setRequestHeader('x-upsert', 'false');
         xhr.setRequestHeader('cache-control', '3600');
-        xhr.setRequestHeader('content-type', file.type || 'application/octet-stream');
+        xhr.setRequestHeader('content-type', effectiveMimeType);
         if (token) {
             xhr.setRequestHeader('authorization', `Bearer ${token}`);
         }
@@ -201,7 +266,7 @@ export async function uploadAndExtractDocument(
     const extracted = await extractDocumentFromStorage({
         publicUrl: upload.publicUrl,
         fileName: file.name,
-        mimeType: file.type || undefined,
+        mimeType: file.type || inferAudioMimeType(file) || undefined,
     });
     return {
         ...extracted,
