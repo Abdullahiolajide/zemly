@@ -138,6 +138,12 @@ const NotePage: React.FC = () => {
         let isCancelled = false;
 
         const loadDocumentForViewer = async () => {
+            if (note?.source_type !== 'document') {
+                setDocumentViewerUrl('');
+                setDocumentViewerError(null);
+                return;
+            }
+
             if (!note?.source_url) {
                 setDocumentViewerUrl('');
                 setDocumentViewerError(null);

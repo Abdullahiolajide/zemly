@@ -1,0 +1,373 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { promptGemini } from '../_shared/gemini.ts';
+
+declare const Deno: { env: { get(key: string): string | undefined } };
+
+const SUPADATA_API_KEY = Deno.env.get('SUPADATA_API_KEY');
+const SUPADATA_BASE_URL = 'https://api.supadata.ai/v1';
+
+interface ExtractLinkRequest {
+    url?: string;
+}
+
+interface YouTubeMeta {
+    title?: string;
+    author?: string;
+    description?: string;
+    transcript?: string;
+}
+
+function normalizeUrl(input: string): string {
+    const trimmed = input.trim();
+    if (!trimmed) return '';
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function isSupportedHttpUrl(value: string): boolean {
+    try {
+        const parsed = new URL(value);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch {
+        return false;
+    }
+}
+
+function toReaderUrl(sourceUrl: string): string {
+    const withoutProtocol = sourceUrl.replace(/^https?:\/\//i, '');
+    return `https://r.jina.ai/http://${withoutProtocol}`;
+}
+
+function isYouTubeHost(hostname: string): boolean {
+    const host = hostname.toLowerCase();
+    return host === 'youtube.com'
+        || host === 'www.youtube.com'
+        || host === 'm.youtube.com'
+        || host === 'youtu.be';
+}
+
+async function parseErrorResponse(res: Response, fallback: string): Promise<string> {
+    try {
+        const body = await res.json();
+        const details = typeof body?.details === 'string' ? body.details : '';
+        const message = typeof body?.message === 'string' ? body.message : '';
+        return details || message || fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function transcriptContentToText(content: unknown): string {
+    if (typeof content === 'string') return content.trim();
+    if (Array.isArray(content)) {
+        return content
+            .map((chunk) => (chunk && typeof chunk === 'object' && 'text' in chunk ? String(chunk.text) : ''))
+            .filter(Boolean)
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+    return '';
+}
+
+async function fetchSupadataTranscript(url: string): Promise<string> {
+    if (!SUPADATA_API_KEY) {
+        throw new Error('SUPADATA_API_KEY is not set in Supabase secrets.');
+    }
+
+    const query = new URLSearchParams({
+        url,
+        text: 'true',
+        mode: 'auto',
+    });
+
+    const firstRes = await fetch(`${SUPADATA_BASE_URL}/transcript?${query.toString()}`, {
+        headers: {
+            'x-api-key': SUPADATA_API_KEY,
+            Accept: 'application/json',
+        },
+    });
+
+    if (firstRes.status === 200) {
+        const body = await firstRes.json();
+        return transcriptContentToText(body?.content);
+    }
+
+    if (firstRes.status === 202) {
+        const job = await firstRes.json();
+        const jobId = typeof job?.jobId === 'string' ? job.jobId : '';
+        if (!jobId) {
+            throw new Error('Supadata transcript job did not return a valid jobId.');
+        }
+
+        for (let attempt = 0; attempt < 45; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            const jobRes = await fetch(`${SUPADATA_BASE_URL}/transcript/${encodeURIComponent(jobId)}`, {
+                headers: {
+                    'x-api-key': SUPADATA_API_KEY,
+                    Accept: 'application/json',
+                },
+            });
+
+            if (!jobRes.ok) {
+                const msg = await parseErrorResponse(jobRes, `Supadata transcript job failed (${jobRes.status}).`);
+                throw new Error(msg);
+            }
+
+            const jobBody = await jobRes.json();
+            const status = typeof jobBody?.status === 'string' ? jobBody.status : '';
+
+            if (status === 'completed') {
+                return transcriptContentToText(jobBody?.content);
+            }
+
+            if (status === 'failed') {
+                const err = typeof jobBody?.error === 'string'
+                    ? jobBody.error
+                    : typeof jobBody?.error?.message === 'string'
+                        ? jobBody.error.message
+                        : 'Supadata transcript job failed.';
+                throw new Error(err);
+            }
+        }
+
+        throw new Error('Timed out waiting for Supadata transcript job result.');
+    }
+
+    const err = await parseErrorResponse(firstRes, `Supadata transcript request failed (${firstRes.status}).`);
+    throw new Error(err);
+}
+
+async function fetchSupadataMetadata(url: string): Promise<YouTubeMeta> {
+    if (!SUPADATA_API_KEY) {
+        return {};
+    }
+
+    const query = new URLSearchParams({ url });
+    const res = await fetch(`${SUPADATA_BASE_URL}/metadata?${query.toString()}`, {
+        headers: {
+            'x-api-key': SUPADATA_API_KEY,
+            Accept: 'application/json',
+        },
+    });
+
+    if (!res.ok) return {};
+
+    const body = await res.json();
+    const authorDisplayName = typeof body?.author?.displayName === 'string' ? body.author.displayName : '';
+    const authorUsername = typeof body?.author?.username === 'string' ? body.author.username : '';
+
+    return {
+        title: typeof body?.title === 'string' ? body.title : undefined,
+        description: typeof body?.description === 'string' ? body.description : undefined,
+        author: authorDisplayName || authorUsername || undefined,
+    };
+}
+
+async function fetchYouTubeMeta(sourceUrl: string): Promise<YouTubeMeta> {
+    const [transcriptRes, metadataRes] = await Promise.allSettled([
+        fetchSupadataTranscript(sourceUrl),
+        fetchSupadataMetadata(sourceUrl),
+    ]);
+
+    const meta: YouTubeMeta = metadataRes.status === 'fulfilled' ? metadataRes.value : {};
+
+    if (transcriptRes.status === 'fulfilled' && transcriptRes.value.length > 0) {
+        meta.transcript = transcriptRes.value;
+    }
+
+    if (!meta.transcript && !(meta.description && meta.description.length > 40)) {
+        const reason = transcriptRes.status === 'rejected'
+            ? (transcriptRes.reason instanceof Error ? transcriptRes.reason.message : 'Transcript unavailable')
+            : 'Transcript unavailable';
+
+        throw new Error(`Supadata could not get a usable transcript/description: ${reason}`);
+    }
+
+    return meta;
+}
+
+function buildYouTubeText(sourceUrl: string, meta: YouTubeMeta): string {
+    const title = meta.title || 'Untitled video';
+    const author = meta.author || 'Unknown channel';
+    const description = (meta.description || '').trim();
+    const transcript = (meta.transcript || '').trim();
+
+    return [
+        `Source: YouTube`,
+        `URL: ${sourceUrl}`,
+        `Title: ${title}`,
+        `Channel: ${author}`,
+        description ? `Description:\n${description}` : '',
+        transcript ? `Transcript:\n${transcript}` : '',
+    ].filter(Boolean).join('\n\n');
+}
+
+function stripHtmlToText(html: string): string {
+    return html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function fetchReadableContent(sourceUrl: string): Promise<string> {
+    const parsed = new URL(sourceUrl);
+    if (isYouTubeHost(parsed.hostname)) {
+        const yt = await fetchYouTubeMeta(sourceUrl);
+        const ytText = buildYouTubeText(sourceUrl, yt);
+
+        // If transcript and description are both missing, avoid summarizing anti-bot/captcha pages.
+        if (!yt.transcript && !(yt.description && yt.description.length > 40)) {
+            throw new Error('Could not extract transcript/description from this YouTube video. Try another video or one with captions enabled.');
+        }
+
+        return ytText;
+    }
+
+    const readerRes = await fetch(toReaderUrl(sourceUrl), {
+        headers: {
+            'User-Agent': 'ZemlyLinkExtractor/1.0',
+        },
+    });
+
+    if (readerRes.ok) {
+        const readerText = (await readerRes.text()).trim();
+        if (/too many requests|unusual traffic|captcha|verify you are human/i.test(readerText)) {
+            throw new Error('The source blocked automated access (rate limit / anti-bot). Please try another URL.');
+        }
+        if (readerText.length > 400) return readerText;
+    }
+
+    const pageRes = await fetch(sourceUrl, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ZemlyBot/1.0; +https://zemly.app)',
+            Accept: 'text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.8',
+        },
+    });
+
+    if (!pageRes.ok) {
+        throw new Error(`Failed to fetch URL content (${pageRes.status})`);
+    }
+
+    const html = await pageRes.text();
+    const text = stripHtmlToText(html);
+    if (text.length < 200) {
+        throw new Error('Could not extract enough readable content from this URL.');
+    }
+
+    return text;
+}
+
+function buildPrompt(sourceUrl: string, readableText: string): string {
+    const clipped = readableText.slice(0, 120000);
+
+    return `
+You are an expert study notes generator.
+
+INPUT:
+- Source URL: ${sourceUrl}
+- Extracted source text:
+${clipped}
+
+TASK:
+1) Understand the source deeply.
+2) Generate dense, high-value study notes.
+
+RULES:
+- Do not mention that text was extracted.
+- Remove noise like navigation/footer text when present.
+- Keep only meaningful concepts, arguments, definitions, facts, formulas, dates, and examples.
+- Be concise but complete.
+
+OUTPUT EXACTLY THIS FORMAT (include the tags):
+
+##TITLE##
+A concise, descriptive title for this source
+
+##NOTES##
+## Overview
+3-4 sentences on what this source is about and why it matters.
+
+## Detailed Notes
+
+### [Major Topic 1]
+- **[Key term]**: concise explanation
+- supporting details/examples
+
+### [Major Topic 2]
+...
+
+## Key Terms & Definitions
+- **[Term]**: definition in this source context
+
+## Must-Know Facts
+Standalone high-yield facts worth memorizing.
+
+## Final Summary
+4-6 sentences with the most important takeaways.
+`;
+}
+
+serve(async (req: Request) => {
+    if (req.method === 'OPTIONS') return handleCors();
+
+    try {
+        const body = (await req.json()) as ExtractLinkRequest;
+        const sourceUrl = normalizeUrl(typeof body?.url === 'string' ? body.url : '');
+
+        if (!sourceUrl || !isSupportedHttpUrl(sourceUrl)) {
+            return new Response(
+                JSON.stringify({ error: 'A valid HTTP/HTTPS URL is required.' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+        }
+
+        const readableText = await fetchReadableContent(sourceUrl);
+        const raw = await promptGemini(buildPrompt(sourceUrl, readableText), {
+            temperature: 0.25,
+            maxOutputTokens: 8192,
+        });
+
+        const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|$)/i);
+        const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)$/i);
+
+        const fallbackTitle = (() => {
+            try {
+                return new URL(sourceUrl).hostname.replace(/^www\./i, '');
+            } catch {
+                return 'Link Note';
+            }
+        })();
+
+        const title = (titleMatch?.[1] || '').trim() || fallbackTitle;
+        const noteContent = (notesMatch?.[1] || raw).trim();
+
+        if (!noteContent) {
+            return new Response(
+                JSON.stringify({ error: 'Could not generate notes from this URL.' }),
+                { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+        }
+
+        return new Response(
+            JSON.stringify({
+                title,
+                noteContent,
+                extractedText: readableText.slice(0, 200000),
+                sourceUrl,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+    } catch (err) {
+        const error = err as Error;
+        console.error('extract-link error:', error);
+        return new Response(
+            JSON.stringify({ error: error.message || 'Internal server error' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+    }
+});

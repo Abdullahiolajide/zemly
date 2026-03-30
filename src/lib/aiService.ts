@@ -58,6 +58,13 @@ export interface UploadAndExtractOptions {
     onPhaseChange?: (phase: 'uploading' | 'processing') => void;
 }
 
+export interface ExtractLinkResult {
+    title: string;
+    noteContent: string;
+    extractedText: string;
+    sourceUrl: string;
+}
+
 const AUDIO_EXTENSION_MIME_MAP: Record<string, string> = {
     '.mp3': 'audio/mpeg',
     '.wav': 'audio/wav',
@@ -271,6 +278,24 @@ export async function uploadAndExtractDocument(
     return {
         ...extracted,
         publicUrl: upload.publicUrl,
+    };
+}
+
+/**
+ * Generate notes from a public website or YouTube URL.
+ */
+export async function extractFromLink(url: string): Promise<ExtractLinkResult> {
+    const { data, error } = await supabase.functions.invoke('extract-link', {
+        body: { url },
+    });
+
+    if (error) throw new Error(await extractErrorMessage(error, 'Link extraction failed'));
+
+    return {
+        title: data.title,
+        noteContent: data.noteContent,
+        extractedText: data.extractedText,
+        sourceUrl: data.sourceUrl,
     };
 }
 

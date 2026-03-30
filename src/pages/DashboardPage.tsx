@@ -15,8 +15,8 @@ import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { createNote, createDocumentNote, createAudioNote, getUserNotes, deleteNote } from '../lib/notesService';
-import { uploadDocumentToStorage, extractDocumentFromStorage, inferAudioMimeType } from '../lib/aiService';
+import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote } from '../lib/notesService';
+import { uploadDocumentToStorage, extractDocumentFromStorage, extractFromLink, inferAudioMimeType } from '../lib/aiService';
 import type { Note } from '../types';
 import ThemeModal from '../components/ThemeModal';
 
@@ -236,6 +236,29 @@ const DashboardPage: React.FC = () => {
             navigate(`/notes/${note.id}`);
         } catch (err) {
             console.error('Failed to create audio note:', err);
+        }
+    };
+
+    const handleCreateWebsiteLinkNote = async (url: string) => {
+        const trimmedUrl = url.trim();
+        if (!trimmedUrl) return;
+
+        try {
+            const result = await extractFromLink(trimmedUrl);
+            const fileName = new URL(result.sourceUrl).hostname;
+
+            const note = await createLinkNote(
+                result.title,
+                result.sourceUrl,
+                result.extractedText,
+                fileName,
+                result.noteContent,
+            );
+
+            navigate(`/notes/${note.id}`);
+        } catch (err) {
+            console.error('Failed to create link note:', err);
+            throw err;
         }
     };
 
@@ -667,7 +690,7 @@ const DashboardPage: React.FC = () => {
             <WebsiteLinkModal
                 open={openModal === 'website'}
                 onClose={() => setOpenModal(null)}
-                onGenerate={(url) => console.log('Website URL:', url)}
+                onGenerate={handleCreateWebsiteLinkNote}
             />
             <ThemeModal
                 open={themeModalOpen}

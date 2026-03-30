@@ -73,6 +73,34 @@ export async function createAudioNote(
 }
 
 /**
+ * Insert a link-sourced note.
+ * Stores the original URL, extracted readable text, and AI-generated content.
+ */
+export async function createLinkNote(
+    title: string,
+    sourceUrl: string,
+    extractedText: string,
+    fileName: string,
+    content: Record<string, unknown> | string,
+): Promise<Note> {
+    const { data, error } = await supabase
+        .from('notes')
+        .insert({
+            title,
+            source_type: 'link',
+            source_url: sourceUrl,
+            extracted_text: extractedText,
+            file_name: fileName,
+            content,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as Note;
+}
+
+/**
  * Fetch a single note by its id.
  */
 export async function getNote(id: number): Promise<Note> {

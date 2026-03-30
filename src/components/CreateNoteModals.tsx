@@ -1027,7 +1027,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 interface WebsiteLinkModalProps {
     open: boolean;
     onClose: () => void;
-    onGenerate?: (url: string) => void;
+    onGenerate?: (url: string) => void | Promise<void>;
 }
 
 export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
@@ -1036,11 +1036,61 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
     onGenerate,
 }) => {
     const [url, setUrl] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [isGenerating, setIsGenerating] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+
+    const normalizeUrl = (value: string): string => {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+        return `https://${trimmed}`;
+    };
+
+    const validateUrl = (value: string): string | null => {
+        if (!value.trim()) return 'Please paste a website or YouTube link.';
+
+        const candidate = normalizeUrl(value);
+        try {
+            const parsed = new URL(candidate);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                return 'Only HTTP and HTTPS links are supported.';
+            }
+            if (!parsed.hostname.includes('.')) {
+                return 'Please enter a valid website URL.';
+            }
+            return null;
+        } catch {
+            return 'Please enter a valid URL.';
+        }
+    };
+
+    const handleGenerate = async () => {
+        if (!onGenerate || isGenerating) return;
+
+        const validationError = validateUrl(url);
+        if (validationError) {
+            setError(validationError);
+            return;
+        }
+
+        try {
+            setIsGenerating(true);
+            setError(null);
+            await onGenerate(normalizeUrl(url));
+            onClose();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to generate notes from this link.');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
 
     useEffect(() => {
         if (open) {
             setUrl('');
+            setError(null);
+            setIsGenerating(false);
             setTimeout(() => inputRef.current?.focus(), 100);
         }
     }, [open]);
@@ -1068,31 +1118,36 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
                     ref={inputRef}
                     type="url"
                     value={url}
-                    onChange={(e) => setUrl(e.target.value)}
+                    onChange={(e) => {
+                        setUrl(e.target.value);
+                        if (error) setError(null);
+                    }}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && url.trim()) {
-                            onGenerate?.(url.trim());
-                            onClose();
+                            void handleGenerate();
                         }
                     }}
                     onFocus={handleInputFocus}
                     onBlur={handleInputBlur}
+                    disabled={isGenerating}
                     placeholder="Paste a website or YouTube link..."
                     className={inputBaseClass}
                     style={inputStyle}
                 />
 
+                {error && (
+                    <div className="mt-3 rounded-lg px-3 py-2.5 text-[13px] text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                        {error}
+                    </div>
+                )}
+
                 {/* Generate Notes Button */}
                 <button
-                    onClick={() => {
-                        if (url.trim()) {
-                            onGenerate?.(url.trim());
-                            onClose();
-                        }
-                    }}
-                    className="btn-emerald mt-5 w-full py-3 text-sm"
+                    onClick={() => { void handleGenerate(); }}
+                    disabled={isGenerating}
+                    className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    Generate Notes
+                    {isGenerating ? 'Generating Notes...' : 'Generate Notes'}
                 </button>
             </div>
         </ModalWrapper>
