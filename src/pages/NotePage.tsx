@@ -193,7 +193,9 @@ const NotePage: React.FC = () => {
 
     const getStudyTextByMode = useCallback((mode: 'fast' | 'deep') => {
         const editorText = editor?.getText() || '';
-        const extractedText = note?.source_type === 'document' ? (note.extracted_text || '') : '';
+        const extractedText = (note?.source_type === 'document' || note?.source_type === 'audio')
+            ? (note.extracted_text || '')
+            : '';
 
         if (mode === 'fast') {
             return editorText.trim() ? editorText : extractedText;

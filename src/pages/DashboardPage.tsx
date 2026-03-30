@@ -15,7 +15,8 @@ import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { createNote, createDocumentNote, getUserNotes, deleteNote } from '../lib/notesService';
+import { createNote, createDocumentNote, createAudioNote, getUserNotes, deleteNote } from '../lib/notesService';
+import { uploadDocumentToStorage, extractDocumentFromStorage } from '../lib/aiService';
 import type { Note } from '../types';
 import ThemeModal from '../components/ThemeModal';
 
@@ -178,6 +179,63 @@ const DashboardPage: React.FC = () => {
             navigate(`/notes/${note.id}`);
         } catch (err) {
             console.error('Failed to create document note:', err);
+        }
+    };
+
+    const handleCreateAudioNote = async (files: File[]) => {
+        if (!files.length) return;
+
+        const perFileResults: {
+            file: File;
+            title: string;
+            noteContent: string;
+            extractedText: string;
+            publicUrl: string;
+        }[] = [];
+
+        try {
+            for (const file of files) {
+                const upload = await uploadDocumentToStorage(file);
+                const extracted = await extractDocumentFromStorage({
+                    publicUrl: upload.publicUrl,
+                    fileName: file.name,
+                    mimeType: file.type || 'audio/webm',
+                });
+
+                perFileResults.push({
+                    file,
+                    ...extracted,
+                    publicUrl: upload.publicUrl,
+                });
+            }
+
+            const combinedTitleBase = perFileResults[0]?.title || files[0]?.name.replace(/\.[^.]+$/, '') || 'Audio Note';
+            const combinedTitle = files.length > 1
+                ? `${combinedTitleBase} + ${files.length - 1} more`
+                : combinedTitleBase;
+
+            const combinedExtractedText = perFileResults
+                .map((item) => `SOURCE: ${item.file.name}\n${item.extractedText}`)
+                .join('\n\n');
+
+            const combinedNoteContent = perFileResults
+                .map((item) => item.noteContent)
+                .join('\n\n');
+
+            const sourceUrl = perFileResults[0]?.publicUrl || '';
+            const fileName = files.map((f) => f.name).join(' | ');
+
+            const note = await createAudioNote(
+                combinedTitle,
+                sourceUrl,
+                combinedExtractedText,
+                fileName,
+                combinedNoteContent,
+            );
+
+            navigate(`/notes/${note.id}`);
+        } catch (err) {
+            console.error('Failed to create audio note:', err);
         }
     };
 
@@ -599,7 +657,7 @@ const DashboardPage: React.FC = () => {
             <AudioModal
                 open={openModal === 'audio'}
                 onClose={() => setOpenModal(null)}
-                onGenerate={(file) => console.log('Audio file:', file)}
+                onGenerate={handleCreateAudioNote}
             />
             <DocumentUploadModal
                 open={openModal === 'document'}

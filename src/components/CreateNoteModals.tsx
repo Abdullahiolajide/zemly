@@ -26,7 +26,7 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
             onClick={onClose}
         >
             {/* Backdrop */}
@@ -35,12 +35,13 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
             {/* Card */}
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="relative z-10 w-full max-w-lg mx-4 rounded-2xl shadow-2xl animate-[modalSlideUp_250ms_ease-out]"
+                className="relative z-10 mx-4 w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-[modalSlideUp_250ms_ease-out]"
                 style={{
                     background: 'rgba(16, 18, 24, 0.97)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     backdropFilter: 'blur(20px)',
                     boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+                    maxHeight: 'min(92vh, 920px)',
                 }}
             >
                 {/* Close button */}
@@ -55,7 +56,9 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
                     <IoClose className="h-5 w-5" />
                 </button>
 
-                {children}
+                <div className="max-h-[inherit] overflow-y-auto">
+                    {children}
+                </div>
             </div>
         </div>
     );
@@ -165,7 +168,12 @@ export const BlankDocumentModal: React.FC<BlankDocumentModalProps> = ({
 interface AudioModalProps {
     open: boolean;
     onClose: () => void;
-    onGenerate?: (file?: File) => void;
+    onGenerate?: (files: File[]) => void | Promise<void>;
+}
+
+interface AudioItemState {
+    file: File;
+    previewUrl: string;
 }
 
 export const AudioModal: React.FC<AudioModalProps> = ({
@@ -173,25 +181,230 @@ export const AudioModal: React.FC<AudioModalProps> = ({
     onClose,
     onGenerate,
 }) => {
-    const [audioFile, setAudioFile] = useState<File | null>(null);
+    const [audioItems, setAudioItems] = useState<AudioItemState[]>([]);
     const [isDragging, setIsDragging] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isRecordingPaused, setIsRecordingPaused] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const recordingStreamRef = useRef<MediaStream | null>(null);
+    const recordingChunksRef = useRef<Blob[]>([]);
+    const recordingTimerRef = useRef<number | null>(null);
+    const previewUrlsRef = useRef<string[]>([]);
+
+    const startTimer = () => {
+        if (recordingTimerRef.current !== null) return;
+        recordingTimerRef.current = window.setInterval(() => {
+            setRecordingSeconds((prev) => prev + 1);
+        }, 1000);
+    };
+
+    const stopTimer = () => {
+        if (recordingTimerRef.current !== null) {
+            window.clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+    };
+
+    const stopStream = () => {
+        if (!recordingStreamRef.current) return;
+        recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+    };
+
+    const cleanupAllPreviews = () => {
+        previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        previewUrlsRef.current = [];
+    };
+
+    const addAudioFile = (file: File) => {
+        if (!file.type.startsWith('audio/')) {
+            setError('Please upload an audio file.');
+            return;
+        }
+
+        if (file.size > 60 * 1024 * 1024) {
+            setError('Audio file is too large. Use a file under 60 MB.');
+            return;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        previewUrlsRef.current.push(previewUrl);
+        setAudioItems((prev) => [...prev, { file, previewUrl }]);
+        setError(null);
+    };
+
+    const removeAudioFile = (index: number) => {
+        setAudioItems((prev) => {
+            const target = prev[index];
+            if (target) {
+                URL.revokeObjectURL(target.previewUrl);
+                previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== target.previewUrl);
+            }
+            return prev.filter((_, i) => i !== index);
+        });
+    };
+
+    const formatDuration = (seconds: number) => {
+        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
+    };
+
+    const pauseRecording = () => {
+        const recorder = mediaRecorderRef.current;
+        if (!recorder || recorder.state !== 'recording') return;
+        recorder.pause();
+        setIsRecordingPaused(true);
+        stopTimer();
+    };
+
+    const resumeRecording = () => {
+        const recorder = mediaRecorderRef.current;
+        if (!recorder || recorder.state !== 'paused') return;
+        recorder.resume();
+        setIsRecordingPaused(false);
+        startTimer();
+    };
+
+    const stopRecording = () => {
+        const recorder = mediaRecorderRef.current;
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.stop();
+        } else {
+            stopStream();
+        }
+        setIsRecording(false);
+        setIsRecordingPaused(false);
+        stopTimer();
+    };
+
+    const startRecording = async () => {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setError('Your browser does not support microphone recording.');
+            return;
+        }
+
+        if (typeof MediaRecorder === 'undefined') {
+            setError('Media recording is not available in this browser.');
+            return;
+        }
+
+        try {
+            setError(null);
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recordingStreamRef.current = stream;
+
+            const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+            const supportedMime = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type));
+            const recorder = supportedMime
+                ? new MediaRecorder(stream, { mimeType: supportedMime })
+                : new MediaRecorder(stream);
+
+            mediaRecorderRef.current = recorder;
+            recordingChunksRef.current = [];
+            setRecordingSeconds(0);
+            setIsRecordingPaused(false);
+
+            recorder.ondataavailable = (event: BlobEvent) => {
+                if (event.data.size > 0) recordingChunksRef.current.push(event.data);
+            };
+
+            recorder.onstop = () => {
+                const mimeType = recorder.mimeType || 'audio/webm';
+                const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+
+                if (blob.size === 0) {
+                    setError('No audio captured. Please try recording again.');
+                    stopStream();
+                    return;
+                }
+
+                const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+                const file = new File([blob], `recording-${Date.now()}.${ext}`, { type: mimeType });
+                addAudioFile(file);
+                stopStream();
+            };
+
+            recorder.onerror = () => {
+                setError('Recording failed. Please try again.');
+                setIsRecording(false);
+                setIsRecordingPaused(false);
+                stopTimer();
+                stopStream();
+            };
+
+            recorder.start(500);
+            setIsRecording(true);
+            startTimer();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Microphone access failed.';
+            setError(message);
+            setIsRecording(false);
+            setIsRecordingPaused(false);
+            stopTimer();
+            stopStream();
+        }
+    };
 
     useEffect(() => {
-        if (open) setAudioFile(null);
+        if (!open) return;
+        setAudioItems([]);
+        setError(null);
+        setIsDragging(false);
+        setIsGenerating(false);
+        setRecordingSeconds(0);
+        setIsRecording(false);
+        setIsRecordingPaused(false);
+        stopTimer();
+        stopStream();
+        cleanupAllPreviews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
+
+    useEffect(() => {
+        return () => {
+            stopTimer();
+            stopStream();
+            cleanupAllPreviews();
+        };
+    }, []);
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
-        const file = e.dataTransfer.files[0];
-        if (file) setAudioFile(file);
+        const files = Array.from(e.dataTransfer.files || []);
+        files.forEach((file) => addAudioFile(file));
+    };
+
+    const handleGenerate = async () => {
+        if (!audioItems.length || isGenerating || isRecording) return;
+
+        try {
+            setIsGenerating(true);
+            setError(null);
+            await onGenerate?.(audioItems.map((item) => item.file));
+            onClose();
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to generate note from audio.';
+            setError(message);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleClose = () => {
+        if (isGenerating) return;
+        if (isRecording || isRecordingPaused) stopRecording();
+        onClose();
     };
 
     return (
-        <ModalWrapper open={open} onClose={onClose}>
+        <ModalWrapper open={open} onClose={handleClose}>
             <div className="px-8 pt-10 pb-8">
-                {/* Icon */}
                 <div
                     className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl"
                     style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid rgba(245,166,35,0.2)' }}
@@ -206,77 +419,132 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                     Create note from audio
                 </h2>
 
-                {/* Make a recording */}
                 <div className="mb-4">
-                    <p className="mb-2.5 text-[13px] font-medium text-zinc-400">
-                        Make a recording
-                    </p>
-                    <div className="flex items-center gap-3">
-                        {/* Mic button */}
+                    <p className="mb-2.5 text-[13px] font-medium text-zinc-400">Make a recording</p>
+
+                    <div className="flex items-center gap-2">
                         <button
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-all duration-200 hover:scale-105"
-                            style={{ background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.25)' }}
+                            onClick={() => { void (isRecording ? Promise.resolve(stopRecording()) : startRecording()); }}
+                            disabled={isGenerating}
+                            className="flex h-10 shrink-0 items-center justify-center rounded-xl px-3 text-[12px] font-semibold text-white transition-all duration-200 hover:scale-105 disabled:opacity-60"
+                            style={{ background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.25)', color: '#F5A623' }}
                         >
-                            <IoMicOutline className="h-5 w-5" style={{ color: '#F5A623' }} />
+                            {isRecording ? 'Stop' : 'Record'}
                         </button>
-                        {/* Progress bar / Waveform placeholder */}
-                        <div
-                            className="flex-1 rounded-full p-0.5"
-                            style={{ background: 'rgba(255,255,255,0.05)' }}
+
+                        <button
+                            onClick={() => { void (isRecordingPaused ? Promise.resolve(resumeRecording()) : Promise.resolve(pauseRecording())); }}
+                            disabled={!isRecording || isGenerating}
+                            className="flex h-10 shrink-0 items-center justify-center rounded-xl px-3 text-[12px] font-semibold text-white transition-all duration-200 hover:scale-105 disabled:opacity-40"
+                            style={{ background: 'rgba(245,166,35,0.15)', border: '1px solid rgba(245,166,35,0.25)', color: '#F5A623' }}
                         >
-                            <div className="h-2 w-full rounded-full" style={{ background: 'linear-gradient(90deg, rgba(245,166,35,0.2), rgba(245,166,35,0.4), rgba(245,166,35,0.2))' }} />
+                            {isRecordingPaused ? 'Resume' : 'Pause'}
+                        </button>
+
+                        <div className="flex-1 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            <div
+                                className="h-2 rounded-full transition-all duration-300"
+                                style={{
+                                    width: isRecording ? `${Math.min(100, (recordingSeconds / 180) * 100)}%` : audioItems.length ? '100%' : '12%',
+                                    background: isRecording
+                                        ? 'linear-gradient(90deg, rgba(245,166,35,0.4), rgba(245,166,35,0.95))'
+                                        : audioItems.length
+                                            ? 'rgba(245,166,35,0.9)'
+                                            : 'rgba(245,166,35,0.2)',
+                                }}
+                            />
                         </div>
                     </div>
+
+                    <p className="mt-2 text-xs text-zinc-500">
+                        {isRecording
+                            ? `${isRecordingPaused ? 'Paused' : 'Recording'}... ${formatDuration(recordingSeconds)}`
+                            : audioItems.length
+                                ? `${audioItems.length} audio file${audioItems.length > 1 ? 's' : ''} ready`
+                                : 'Tap record, then stop to add it. You can add multiple audio files.'}
+                    </p>
                 </div>
 
-                {/* Divider */}
                 <div className="my-5 flex items-center gap-4">
                     <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
                     <span className="text-xs font-medium text-zinc-600">Or</span>
                     <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
                 </div>
 
-                {/* Audio Upload Drop Zone */}
                 <div
                     onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                     onDragLeave={() => setIsDragging(false)}
                     onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-all duration-200"
+                    onClick={() => !isGenerating && fileInputRef.current?.click()}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-all duration-200 ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
                     style={{
-                        borderColor: isDragging ? 'rgba(245,166,35,0.5)' : 'rgba(255,255,255,0.08)',
-                        background: isDragging ? 'rgba(245,166,35,0.05)' : 'rgba(255,255,255,0.02)',
+                        borderColor: isDragging ? 'rgba(245,166,35,0.5)' : audioItems.length ? 'rgba(245,166,35,0.35)' : 'rgba(255,255,255,0.08)',
+                        background: isDragging ? 'rgba(245,166,35,0.05)' : audioItems.length ? 'rgba(245,166,35,0.04)' : 'rgba(255,255,255,0.02)',
                     }}
                 >
-                    <FiUploadCloud
-                        className="mb-2 h-6 w-6"
-                        style={{ color: isDragging ? '#F5A623' : '#52525b' }}
-                    />
-                    <p className="text-sm text-zinc-500">
-                        {audioFile ? (
-                            <span className="font-medium" style={{ color: '#F5A623' }}>{audioFile.name}</span>
+                    <FiUploadCloud className="mb-2 h-6 w-6" style={{ color: isDragging || audioItems.length ? '#F5A623' : '#52525b' }} />
+                    <p className="text-center text-sm text-zinc-500">
+                        {audioItems.length ? (
+                            <span className="font-medium" style={{ color: '#F5A623' }}>+ Add more audio files</span>
                         ) : (
-                            <>Drag audio here, or click to upload (MP3, WAV…)</>
+                            <>Drag audio files here, or click to upload (MP3, WAV, M4A...)</>
                         )}
                     </p>
                     <input
                         ref={fileInputRef}
                         type="file"
                         accept="audio/*"
+                        multiple
                         className="hidden"
                         onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setAudioFile(file);
+                            const files = Array.from(e.target.files || []);
+                            files.forEach((file) => addAudioFile(file));
+                            e.currentTarget.value = '';
                         }}
                     />
                 </div>
 
-                {/* Generate Notes Button */}
+                {audioItems.length > 0 && (
+                    <div className="mt-4 max-h-56 space-y-2 overflow-y-auto pr-1">
+                        {audioItems.map((item, index) => (
+                            <div
+                                key={`${item.file.name}-${item.file.lastModified}-${index}`}
+                                className="rounded-xl px-3 py-3"
+                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+                            >
+                                <div className="mb-2 flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-zinc-200">{item.file.name}</p>
+                                        <p className="mt-0.5 text-xs text-zinc-500">{(item.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                    </div>
+                                    {!isGenerating && (
+                                        <button
+                                            onClick={() => removeAudioFile(index)}
+                                            className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                                            style={{ background: 'rgba(255,255,255,0.04)' }}
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
+                                </div>
+                                <audio className="w-full" controls src={item.previewUrl} />
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {error && (
+                    <div className="mt-3 rounded-lg px-3 py-2.5 text-[13px] text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                        {error}
+                    </div>
+                )}
+
                 <button
-                    onClick={() => { onGenerate?.(audioFile ?? undefined); onClose(); }}
-                    className="btn-emerald mt-5 w-full py-3 text-sm"
+                    onClick={() => { void handleGenerate(); }}
+                    disabled={isGenerating || isRecording || !audioItems.length}
+                    className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    Generate Notes
+                    {isGenerating ? 'Generating Notes...' : 'Generate Combined Note'}
                 </button>
             </div>
         </ModalWrapper>

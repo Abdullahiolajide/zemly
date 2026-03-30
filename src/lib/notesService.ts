@@ -45,6 +45,34 @@ export async function createDocumentNote(
 }
 
 /**
+ * Insert an audio-sourced note.
+ * Stores the public file URL, transcript text, and AI-generated content.
+ */
+export async function createAudioNote(
+    title: string,
+    sourceUrl: string,
+    extractedText: string,
+    fileName: string,
+    content: Record<string, unknown> | string,
+): Promise<Note> {
+    const { data, error } = await supabase
+        .from('notes')
+        .insert({
+            title,
+            source_type: 'audio',
+            source_url: sourceUrl,
+            extracted_text: extractedText,
+            file_name: fileName,
+            content,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data as Note;
+}
+
+/**
  * Fetch a single note by its id.
  */
 export async function getNote(id: number): Promise<Note> {

@@ -1,5 +1,5 @@
 // supabase/functions/extract-document/index.ts
-// Document extractor + AI note generator — plain text output, no JSON parsing issues
+// Content extractor + AI note generator for document and audio inputs.
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
@@ -112,8 +112,61 @@ serve(async (req: Request) => {
 
         const fileBase64 = uint8ToBase64(fileBytes);
 
-        // ── Single call: extract text + generate notes + title in plain text ──
-        const prompt = `
+        const isAudio = mimeType.toLowerCase().startsWith('audio/');
+
+        // Single call: extract transcript/text + generate notes + title in plain text.
+        const prompt = isAudio
+            ? `
+                You are an expert study notes generator and transcription assistant.
+
+                INPUT:
+                - The uploaded file is an audio recording (lecture, discussion, lesson, or voice note).
+
+                TASK:
+                1) Transcribe the audio faithfully into clean readable text.
+                2) Turn the transcription into dense, high-value study notes.
+
+                RULES:
+                - Keep speaker wording faithful while cleaning obvious filler words and stutters.
+                - Preserve technical terms, formulas, dates, named entities, and key examples.
+                - If audio is unclear in places, note it briefly as [inaudible] rather than guessing.
+                - Notes must be concise, structured, and complete.
+                - Do not include any analysis about being an AI model.
+
+                OUTPUT EXACTLY THIS FORMAT (include the tags):
+
+                ##TITLE##
+                A concise, descriptive title for this audio lesson
+
+                ##NOTES##
+                ## 📌 Overview
+                3-4 sentences. What is this recording about and why does it matter?
+
+                ## 🗣️ Clean Transcript (Condensed)
+                - A readable transcript summary in chronological flow
+                - Preserve key quotes only when they matter
+
+                ## 📚 Detailed Notes
+
+                ### [Major Topic 1]
+                - **[Key term]**: Concise but complete explanation
+                - Supporting facts/examples from the recording
+
+                ### [Major Topic 2]
+                ...
+
+                ## 🔑 Key Terms & Definitions
+                - **[Term]**: Definition as intended in the recording
+
+                ## ⚡ Must-Know Facts
+                Standalone facts, formulas, dates, and stats worth memorizing.
+
+                ## 📝 Final Summary
+                4-6 sentences covering the most critical takeaways.
+
+                Audio filename: ${fileName}
+                `
+            : `
                     You are an expert study notes generator. Distill this document into the densest, most useful study notes possible.
 
                     CORE PHILOSOPHY:
