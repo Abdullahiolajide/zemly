@@ -1,9 +1,9 @@
 // supabase/functions/chat/index.ts
-// Chat Bot — optimized for Gemini free tier
+// Chat Bot — streaming responses, optimized for Gemini free tier
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { callGemini, truncateNote } from '../_shared/gemini.ts';
+import { streamGemini, callGemini, truncateNote } from '../_shared/gemini.ts';
 
 interface ChatRequest {
     noteContent: string;
@@ -36,27 +36,111 @@ serve(async (req: Request) => {
         const hasMemory = !!memory?.trim();
         const isFirstMessage = recentMessages.length <= 1;
 
-        const contextBlock = hasNoteContext && hasMemory
-            ? `\n\nCOMPACT NOTE MEMORY:\n${memory}\n\nRELEVANT NOTE SNIPPET:\n${truncateNote(noteContent, 2500)}`
+        // Use memory if available (follow-ups), otherwise note context (first message).
+        // Never send both — memory already captures the note content.
+        const contextBlock = hasMemory
+            ? `\n\nCOMPACT NOTE MEMORY:\n${memory}`
             : hasNoteContext
                 ? `\n\nNOTE CONTEXT:\n${truncateNote(noteContent)}`
-                : hasMemory
-                    ? `\n\nCOMPACT NOTE MEMORY:\n${memory}`
-                    : '';
+                : '';
 
         const systemInstruction = isFirstMessage
-            ? `You are Zemly AI, a concise study assistant. The student's note is provided below as context.\n\nAnswer in plain text only. No markdown, no headings, no bullet points, no bold formatting. Keep it short and direct (about 3-6 sentences), but still accurate and helpful.${contextBlock}`
-            : `You are Zemly AI, a concise study assistant. Continue helping based on the conversation so far.\n\nAnswer in plain text only. No markdown, no headings, no bullet points, no bold formatting. Keep follow-up answers short and direct (about 2-5 sentences). Always ground answers in the provided note context when available.${contextBlock}`;
+            ? `You are Zemly AI, a concise study assistant. The student's note is provided below as context.
 
-        const { text } = await callGemini(geminiMessages, {
+You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response clearly. Use markdown formatting to make your answer easier to scan and understand. Keep it concise but well-structured (about 3-6 main points or paragraphs).
+
+When answering:
+- Ground your response in the provided note when available
+- You can supplement with your knowledge base for clarity and deeper understanding
+- Use formatting to highlight key concepts, definitions, or important information
+- Format lists and key points with bullets or numbers for readability${contextBlock}`
+            : `You are Zemly AI, a concise study assistant. Continue helping based on the conversation so far.
+
+You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response. Use markdown formatting strategically to improve clarity. Keep follow-up answers concise but well-formatted (about 2-5 main points or short paragraphs).
+
+When answering:
+- Ground your response in the provided note when available
+- You can supplement with your knowledge base for fuller explanations
+- Use formatting to highlight key concepts and make connections clear
+- Format lists and definitions with bullets or numbers for better readability${contextBlock}`;
+
+        // --- Stream the main reply ---
+        const geminiRes = await streamGemini(geminiMessages, {
             systemInstruction,
-            temperature: 0.4,
-            maxOutputTokens: isFirstMessage ? 320 : 220,
+            temperature: 0.5,
+            maxOutputTokens: isFirstMessage ? 2000 : 1400,
         });
 
-        let nextMemory = hasMemory ? memory : '';
-        if (hasNoteContext && !hasMemory) {
-            const memoryPrompt = `Create a compact study memory from the note for multi-turn chat.
+        const geminiBody = geminiRes.body;
+        if (!geminiBody) {
+            throw new Error('No response body from Gemini streaming endpoint');
+        }
+
+        // We'll collect the full reply text so we can generate memory afterward
+        let fullReplyText = '';
+
+        // Whether we should generate memory after streaming finishes
+        const shouldGenerateMemory = hasNoteContext && !hasMemory && recentMessages.length > 1;
+
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+
+        const outputStream = new ReadableStream({
+            async start(controller) {
+                try {
+                    const reader = geminiBody.getReader();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Process complete SSE lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || ''; // keep incomplete line in buffer
+
+                        for (const line of lines) {
+                            if (!line.startsWith('data: ')) continue;
+                            const jsonStr = line.slice(6).trim();
+                            if (!jsonStr) continue;
+
+                            try {
+                                const parsed = JSON.parse(jsonStr);
+                                const chunk = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                                if (chunk) {
+                                    fullReplyText += chunk;
+                                    // Send as SSE text event
+                                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+                                }
+                            } catch {
+                                // skip unparseable lines
+                            }
+                        }
+                    }
+
+                    // Process any remaining buffer
+                    if (buffer.startsWith('data: ')) {
+                        const jsonStr = buffer.slice(6).trim();
+                        if (jsonStr) {
+                            try {
+                                const parsed = JSON.parse(jsonStr);
+                                const chunk = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                                if (chunk) {
+                                    fullReplyText += chunk;
+                                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`));
+                                }
+                            } catch { /* ignore */ }
+                        }
+                    }
+
+                    // --- Generate memory (non-streaming, after reply is done) ---
+                    let nextMemory = hasMemory ? memory! : '';
+
+                    if (shouldGenerateMemory) {
+                        try {
+                            const memoryPrompt = `Create a compact study memory from the note for multi-turn chat.
 Rules:
 - Keep only key facts, definitions, formulas, names, dates, and section-level points.
 - Preserve crucial details that are easy to lose in summaries.
@@ -66,21 +150,46 @@ Rules:
 NOTE:
 ${truncateNote(noteContent)}`;
 
-            const { text: memoryText } = await callGemini([
-                { role: 'user', parts: [{ text: memoryPrompt }] },
-            ], {
-                systemInstruction: 'You compress large study notes into accurate compact memory for later Q&A turns.',
-                temperature: 0.2,
-                maxOutputTokens: 700,
-            });
+                            const { text: memoryText } = await callGemini([
+                                { role: 'user', parts: [{ text: memoryPrompt }] },
+                            ], {
+                                systemInstruction: 'You compress large study notes into accurate compact memory for later Q&A turns.',
+                                temperature: 0.2,
+                                maxOutputTokens: 700,
+                            });
 
-            nextMemory = memoryText.trim().slice(0, 2000);
-        }
+                            nextMemory = memoryText.trim().slice(0, 2000);
+                        } catch (memErr) {
+                            console.error('Memory generation failed (non-fatal):', memErr);
+                        }
+                    }
 
-        return new Response(
-            JSON.stringify({ reply: text, memory: nextMemory }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+                    // Send memory event
+                    controller.enqueue(
+                        encoder.encode(`event: memory\ndata: ${JSON.stringify({ memory: nextMemory })}\n\n`),
+                    );
+
+                    // Signal stream end
+                    controller.enqueue(encoder.encode(`event: done\ndata: {}\n\n`));
+                    controller.close();
+                } catch (err) {
+                    console.error('Stream processing error:', err);
+                    controller.enqueue(
+                        encoder.encode(`event: error\ndata: ${JSON.stringify({ error: (err as Error).message })}\n\n`),
+                    );
+                    controller.close();
+                }
+            },
+        });
+
+        return new Response(outputStream, {
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
     } catch (err) {
         const error = err as Error;
         console.error('Chat function error:', error);

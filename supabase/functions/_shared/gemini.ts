@@ -4,8 +4,9 @@
 declare const Deno: { env: { get(key: string): string | undefined } };
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+//Deno.env.get('GEMINI_MODEL') || 
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`;
 
 /** Max characters of note content to send — supports up to ~30 pages (~25k tokens) */
 const MAX_NOTE_CHARS = 100000;
@@ -35,17 +36,11 @@ export function truncateNote(content: string, maxChars = MAX_NOTE_CHARS): string
     return content.slice(0, maxChars) + '\n...(truncated)';
 }
 
-/**
- * Call the Gemini API with a list of messages.
- */
-export async function callGemini(
+/** Build the request body shared by both callGemini and streamGemini. */
+function buildRequestBody(
     contents: GeminiMessage[],
-    options: GeminiOptions = {},
-): Promise<GeminiResponse> {
-    if (!GEMINI_API_KEY) {
-        throw new Error('GEMINI_API_KEY is not set. Run: supabase secrets set GEMINI_API_KEY=your-key');
-    }
-
+    options: GeminiOptions,
+): Record<string, unknown> {
     const {
         systemInstruction,
         temperature = 0.7,
@@ -54,29 +49,33 @@ export async function callGemini(
 
     const body: Record<string, unknown> = {
         contents,
-        generationConfig: {
-            temperature,
-            maxOutputTokens,
-        },
+        generationConfig: { temperature, maxOutputTokens },
     };
 
     if (systemInstruction) {
-        body.system_instruction = {
-            parts: [{ text: systemInstruction }],
-        };
+        body.system_instruction = { parts: [{ text: systemInstruction }] };
+    }
+
+    return body;
+}
+
+/** Fetch with retry logic shared by both call paths. */
+async function fetchWithRetry(url: string, body: Record<string, unknown>): Promise<Response> {
+    if (!GEMINI_API_KEY) {
+        throw new Error('GEMINI_API_KEY is not set. Run: supabase secrets set GEMINI_API_KEY=your-key');
     }
 
     let res: Response | null = null;
     const MAX_RETRIES = 2;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        res = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+        const separator = url.includes('?') ? '&' : '?';
+        res = await fetch(`${url}${separator}key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
         });
 
-        // Retry on 429 (rate limit) or 503 (overloaded) with exponential back-off
         if ((res.status === 429 || res.status === 503) && attempt < MAX_RETRIES) {
             await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
             continue;
@@ -87,14 +86,12 @@ export async function callGemini(
     if (!res || !res.ok) {
         const errText = res ? await res.text() : 'No response';
         if (res?.status === 429) {
-            // Check if the model is completely unavailable on the free tier (limit: 0)
             if (errText.includes('limit: 0')) {
                 throw new Error(
                     `The model "${GEMINI_MODEL}" is not available on the free tier. ` +
                     'Update the GEMINI_MODEL secret to a free-tier model (e.g. gemini-2.0-flash-lite).',
                 );
             }
-            // Extract retry delay if present
             const retryMatch = errText.match(/retry in ([\d.]+)s/i);
             const wait = retryMatch ? Math.ceil(Number(retryMatch[1])) : 15;
             throw new Error(
@@ -104,10 +101,40 @@ export async function callGemini(
         throw new Error(`Gemini API error (${res?.status}): ${errText}`);
     }
 
+    return res;
+}
+
+/**
+ * Call the Gemini API with a list of messages (non-streaming).
+ */
+export async function callGemini(
+    contents: GeminiMessage[],
+    options: GeminiOptions = {},
+): Promise<GeminiResponse> {
+    const body = buildRequestBody(contents, options);
+    const res = await fetchWithRetry(`${GEMINI_URL}:generateContent`, body);
+
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 
     return { text, raw: data };
+}
+
+/**
+ * Stream Gemini response as SSE. Returns the raw Response whose body is
+ * an SSE stream (`data:` lines containing JSON with
+ * `candidates[0].content.parts[0].text`).
+ */
+export async function streamGemini(
+    contents: GeminiMessage[],
+    options: GeminiOptions = {},
+): Promise<Response> {
+    const body = buildRequestBody(contents, options);
+    const res = await fetchWithRetry(
+        `${GEMINI_URL}:streamGenerateContent?alt=sse`,
+        body,
+    );
+    return res;
 }
 
 /**

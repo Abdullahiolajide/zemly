@@ -18,6 +18,7 @@ import type { Note } from '../types';
 import FlashcardsPanel from '../components/FlashcardsPanel';
 import QuizPanel from '../components/QuizPanel';
 import ChatPanel from '../components/ChatPanel';
+import PodcastPanel from '../components/PodcastPanel';
 import ImageUploadModal from '../components/ImageUploadModal';
 import BubbleToolbar from '../components/BubbleToolbar';
 import ImageToolbar from '../components/ImageToolbar';
@@ -507,8 +508,14 @@ const NotePage: React.FC = () => {
                             </div>
 
                             {/* ── Right Side Panel (AI Chat) ── */}
-                            {chatPanelOpen ? (
-                                <div className="chat-side-panel hidden w-[380px] shrink-0 md:flex md:flex-col" style={{ borderLeft: glassBorder }}>
+                            <div
+                                className={`chat-side-panel hidden shrink-0 overflow-hidden md:flex md:flex-col ${chatPanelOpen ? 'w-[380px] opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
+                                style={{
+                                    borderLeft: glassBorder,
+                                    transition: 'width 280ms ease, opacity 220ms ease',
+                                }}
+                            >
+                                <div className="flex h-full min-w-[380px] flex-col">
                                     <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: glassBorder }}>
                                         <span className="text-[13px] font-semibold text-zinc-300" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Zemly AI</span>
                                         <button
@@ -561,10 +568,11 @@ const NotePage: React.FC = () => {
                                             highlightedText={askAiText}
                                             onClearHighlight={() => setAskAiText(null)}
                                             onHasMessages={setChatHasMessages}
+                                            persistenceKey={id ? `chat-state-${id}` : undefined}
                                         />
                                     </div>
                                 </div>
-                            ) : null}
+                            </div>
 
                             {!chatPanelOpen && (
                                 <button
@@ -636,13 +644,23 @@ const NotePage: React.FC = () => {
                                         </span>
                                     </div>
                                     <div className="flex min-h-0 flex-1 flex-col">
-                                        <ChatPanel getNoteText={() => note.extracted_text || ''} highlightedText={askAiText} onClearHighlight={() => setAskAiText(null)} />
+                                        <ChatPanel
+                                            getNoteText={() => note.extracted_text || ''}
+                                            highlightedText={askAiText}
+                                            onClearHighlight={() => setAskAiText(null)}
+                                            persistenceKey={id ? `chat-state-${id}` : undefined}
+                                        />
                                     </div>
                                 </div>
                             </div>
                         ) : (
                             <div className="flex-1 overflow-hidden">
-                                <ChatPanel getNoteText={() => editor?.getText() || ''} highlightedText={askAiText} onClearHighlight={() => setAskAiText(null)} />
+                                <ChatPanel
+                                    getNoteText={() => editor?.getText() || ''}
+                                    highlightedText={askAiText}
+                                    onClearHighlight={() => setAskAiText(null)}
+                                    persistenceKey={id ? `chat-state-${id}` : undefined}
+                                />
                             </div>
                         )
                     )}
@@ -667,17 +685,14 @@ const NotePage: React.FC = () => {
                         </div>
                     )}
 
-                    {/* ── Placeholder (Podcast etc.) ── */}
-                    {activeSection !== 'Document' && activeSection !== 'Flashcards' && activeSection !== 'Quiz' && activeSection !== 'Chat Bot' && (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-4">
-                            <div
-                                className="flex h-16 w-16 items-center justify-center rounded-2xl"
-                                style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
-                            >
-                                <MdAutoAwesome className="h-8 w-8" style={{ color: '#00C896' }} />
-                            </div>
-                            <h3 className="text-lg font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>{activeSection}</h3>
-                            <p className="text-[14px] text-zinc-500">Coming soon...</p>
+                    {/* ── Podcast Section ── */}
+                    {activeSection === 'Podcast' && id && (
+                        <div className="flex-1 overflow-hidden">
+                            <PodcastPanel
+                                noteId={Number(id)}
+                                noteTitle={note.title}
+                                getNoteText={getStudyTextByMode}
+                            />
                         </div>
                     )}
                 </div>

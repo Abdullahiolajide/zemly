@@ -4,9 +4,12 @@ import { IoSearch } from 'react-icons/io5';
 import { BsThreeDotsVertical } from 'react-icons/bs';
 import { BiMenu } from 'react-icons/bi';
 import { IoMdClose } from 'react-icons/io';
+import { useAuthStore } from '../store/useAuthStore';
 
 const Navbar: React.FC = () => {
     const [mobileOpen, setMobileOpen] = useState(false);
+    const user = useAuthStore((state) => state.user);
+    const isLoggedIn = Boolean(user);
 
     return (
         <nav
@@ -75,18 +78,29 @@ const Navbar: React.FC = () => {
                         <BsThreeDotsVertical className="h-[17px] w-[17px]" />
                     </button>
                     <div className="mx-2 h-5 w-px bg-zinc-800" />
-                    <Link
-                        to="/auth"
-                        className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-200"
-                    >
-                        Log in
-                    </Link>
-                    <Link
-                        to="/auth"
-                        className="btn-emerald ml-1 rounded-lg px-5 py-2 text-sm"
-                    >
-                        Get Started
-                    </Link>
+                    {isLoggedIn ? (
+                        <Link
+                            to="/dashboard"
+                            className="btn-emerald ml-1 rounded-lg px-5 py-2 text-sm"
+                        >
+                            Dashboard
+                        </Link>
+                    ) : (
+                        <>
+                            <Link
+                                to="/auth"
+                                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-200"
+                            >
+                                Log in
+                            </Link>
+                            <Link
+                                to="/auth"
+                                className="btn-emerald ml-1 rounded-lg px-5 py-2 text-sm"
+                            >
+                                Get Started
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 {/* Mobile Toggle */}
@@ -153,20 +167,32 @@ const Navbar: React.FC = () => {
                         </div>
 
                         <div className="flex flex-col gap-3 pt-1">
-                            <Link
-                                to="/auth"
-                                className="rounded-lg px-5 py-3 text-center text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
-                                onClick={() => setMobileOpen(false)}
-                            >
-                                Log in
-                            </Link>
-                            <Link
-                                to="/auth"
-                                className="btn-emerald w-full py-3 text-sm"
-                                onClick={() => setMobileOpen(false)}
-                            >
-                                Get Started
-                            </Link>
+                            {isLoggedIn ? (
+                                <Link
+                                    to="/dashboard"
+                                    className="btn-emerald w-full py-3 text-sm"
+                                    onClick={() => setMobileOpen(false)}
+                                >
+                                    Dashboard
+                                </Link>
+                            ) : (
+                                <>
+                                    <Link
+                                        to="/auth"
+                                        className="rounded-lg px-5 py-3 text-center text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
+                                        onClick={() => setMobileOpen(false)}
+                                    >
+                                        Log in
+                                    </Link>
+                                    <Link
+                                        to="/auth"
+                                        className="btn-emerald w-full py-3 text-sm"
+                                        onClick={() => setMobileOpen(false)}
+                                    >
+                                        Get Started
+                                    </Link>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

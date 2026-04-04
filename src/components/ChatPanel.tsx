@@ -1,14 +1,66 @@
-import { useState, useRef, useEffect } from 'react';
-import { chatWithNote } from '../lib/aiService';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { chatWithNoteStream } from '../lib/aiService';
 import type { ChatMessage } from '../lib/aiService';
 import { MdAutoAwesome } from 'react-icons/md';
 import { FiSend, FiX } from 'react-icons/fi';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatPanelProps {
     getNoteText: () => string;
     highlightedText: string | null;
     onClearHighlight: () => void;
     onHasMessages?: (has: boolean) => void;
+    persistenceKey?: string;
+}
+
+interface PersistedChatState {
+    messages: ChatMessage[];
+    memory: string;
+    expiresAt: number;
+}
+
+const CHAT_STATE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function readPersistedChatState(key?: string): PersistedChatState | null {
+    if (!key || typeof window === 'undefined') return null;
+
+    try {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return null;
+
+        const parsed = JSON.parse(raw) as Partial<PersistedChatState>;
+        if (!Array.isArray(parsed.messages) || typeof parsed.memory !== 'string' || typeof parsed.expiresAt !== 'number') {
+            return null;
+        }
+
+        if (Date.now() > parsed.expiresAt) {
+            window.localStorage.removeItem(key);
+            return null;
+        }
+
+        return {
+            messages: parsed.messages,
+            memory: parsed.memory,
+            expiresAt: parsed.expiresAt,
+        };
+    } catch {
+        return null;
+    }
+}
+
+function writePersistedChatState(key: string | undefined, state: Omit<PersistedChatState, 'expiresAt'>): void {
+    if (!key || typeof window === 'undefined') return;
+
+    try {
+        const payload: PersistedChatState = {
+            ...state,
+            expiresAt: Date.now() + CHAT_STATE_TTL_MS,
+        };
+        window.localStorage.setItem(key, JSON.stringify(payload));
+    } catch {
+        // Ignore storage failures.
+    }
 }
 
 function buildRelevantContext(fullText: string, query: string, maxChars = 1800): string {
@@ -56,28 +108,38 @@ function buildRelevantContext(fullText: string, query: string, maxChars = 1800):
     return out;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onClearHighlight, onHasMessages }) => {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [chatMemory, setChatMemory] = useState('');
+const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onClearHighlight, onHasMessages, persistenceKey }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>(() => readPersistedChatState(persistenceKey)?.messages ?? []);
+    const [chatMemory, setChatMemory] = useState(() => readPersistedChatState(persistenceKey)?.memory ?? '');
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isStreaming, setIsStreaming] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const abortRef = useRef<AbortController | null>(null);
+    const streamTextRef = useRef('');
 
-    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading]);
+    useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, isLoading, isStreaming]);
     useEffect(() => { onHasMessages?.(messages.length > 0); }, [messages.length, onHasMessages]);
     useEffect(() => { if (highlightedText) { inputRef.current?.focus(); } }, [highlightedText]);
+    useEffect(() => {
+        writePersistedChatState(persistenceKey, { messages, memory: chatMemory });
+    }, [messages, chatMemory, persistenceKey]);
 
-    const handleSend = async () => {
+    const handleSend = useCallback(async () => {
         const trimmed = input.trim();
         if (!trimmed && !highlightedText) return;
 
         const isFirstMessage = messages.length === 0;
         const fullNoteText = getNoteText();
+        // First message: send full note. Follow-ups: if memory exists, skip the snippet
+        // (memory already captures the note). Only use snippet as fallback before memory is ready.
         const noteText = isFirstMessage
             ? fullNoteText
-            : buildRelevantContext(fullNoteText, trimmed || highlightedText || '');
+            : chatMemory
+                ? ''
+                : buildRelevantContext(fullNoteText, trimmed || highlightedText || '');
 
         if (isFirstMessage && !noteText.trim()) {
             setError('Your note is empty. Write some content first!');
@@ -95,20 +157,52 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
         setInput('');
         setError(null);
         setIsLoading(true);
+        setIsStreaming(false);
+        streamTextRef.current = '';
+
+        // Add an empty model message that we'll fill incrementally
+        const withPlaceholder: ChatMessage[] = [...newMessages, { role: 'model', content: '' }];
+        setMessages(withPlaceholder);
+
+        const abort = new AbortController();
+        abortRef.current = abort;
 
         try {
-            const result = await chatWithNote(noteText, newMessages, chatMemory);
-            if (result.memory) {
-                setChatMemory(result.memory);
-            }
-            setMessages((prev) => [...prev, { role: 'model', content: result.reply }]);
+            await chatWithNoteStream(
+                noteText,
+                newMessages,
+                {
+                    onChunk: (text) => {
+                        setIsLoading(false);
+                        setIsStreaming(true);
+                        streamTextRef.current += text;
+                        const accumulated = streamTextRef.current;
+                        setMessages((prev) => {
+                            const updated = [...prev];
+                            updated[updated.length - 1] = { role: 'model', content: accumulated };
+                            return updated;
+                        });
+                    },
+                    onMemory: (mem) => {
+                        if (mem) setChatMemory(mem);
+                    },
+                    signal: abort.signal,
+                },
+                chatMemory,
+            );
         } catch (err) {
+            if ((err as Error).name === 'AbortError') return;
             const msg = err instanceof Error ? err.message : 'Failed to get response';
+            if (!streamTextRef.current) {
+                setMessages(newMessages);
+            }
             setError(msg);
         } finally {
             setIsLoading(false);
+            setIsStreaming(false);
+            abortRef.current = null;
         }
-    };
+    }, [input, highlightedText, messages, getNoteText, onClearHighlight, chatMemory]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -163,17 +257,46 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                                     }
                                 }
                             >
-                                <div className="space-y-1">
-                                    {msg.content.split('\n').map((line, j) => (
-                                        <p key={j} className={line === '' ? 'h-2' : ''}>{line}</p>
-                                    ))}
-                                </div>
+                                {msg.role === 'user' ? (
+                                    <div className="space-y-1">
+                                        {msg.content.split('\n').map((line, j) => (
+                                            <p key={j} className={line === '' ? 'h-2' : ''}>{line}</p>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className={`prose prose-invert max-w-none text-[13px]${isStreaming && i === messages.length - 1 ? ' chat-streaming-fade' : ''}`}>
+                                        <ReactMarkdown
+                                            components={{
+                                                p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
+                                                ul: ({ children }) => <ul className="mb-2 ml-4 list-inside list-disc space-y-1 leading-relaxed">{children}</ul>,
+                                                ol: ({ children }) => <ol className="mb-2 ml-4 list-inside list-decimal space-y-1 leading-relaxed">{children}</ol>,
+                                                li: ({ children }) => <li className="ml-0">{children}</li>,
+                                                h1: ({ children }) => <h1 className="mb-2 text-base font-bold">{children}</h1>,
+                                                h2: ({ children }) => <h2 className="mb-2 text-sm font-bold">{children}</h2>,
+                                                h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold">{children}</h3>,
+                                                strong: ({ children }) => <strong className="font-semibold text-emerald-300">{children}</strong>,
+                                                em: ({ children }) => <em className="italic text-zinc-300">{children}</em>,
+                                                code: ({ children, className }: { children?: ReactNode; className?: string }) => {
+                                                    const isInline = !className?.includes('language-');
+                                                    return isInline ? (
+                                                        <code className="inline-block rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-emerald-300">{children}</code>
+                                                    ) : (
+                                                        <code className="mb-2 block rounded bg-zinc-800 p-2 text-xs font-mono text-emerald-300">{children}</code>
+                                                    );
+                                                },
+                                                blockquote: ({ children }) => <blockquote className="mb-2 border-l-2 border-emerald-400/50 pl-3 italic text-zinc-400">{children}</blockquote>,
+                                            }}
+                                        >
+                                            {msg.content}
+                                        </ReactMarkdown>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
 
-                    {/* Loading dots */}
-                    {isLoading && (
+                    {/* Loading dots — only shown before first chunk arrives */}
+                    {isLoading && !isStreaming && (
                         <div className="flex justify-start">
                             <div
                                 className="flex items-center gap-2 rounded-2xl px-4 py-3"
@@ -240,11 +363,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                         placeholder={highlightedText ? 'Ask about this text…' : 'Ask about your notes…'}
                         rows={1}
                         className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent text-[13px] text-zinc-200 placeholder-zinc-500 outline-none"
-                        disabled={isLoading}
+                        disabled={isLoading || isStreaming}
                     />
                     <button
                         onClick={handleSend}
-                        disabled={isLoading || (!input.trim() && !highlightedText)}
+                        disabled={isLoading || isStreaming || (!input.trim() && !highlightedText)}
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-30"
                         style={{
                             background: 'linear-gradient(135deg, #00C896, #00A87A)',

@@ -320,6 +320,96 @@ export async function chatWithNote(
 }
 
 /**
+ * Chat with the AI about a note's content — streaming version.
+ * Tokens arrive via onChunk callback for typewriter effect.
+ */
+export async function chatWithNoteStream(
+    noteContent: string,
+    messages: ChatMessage[],
+    callbacks: {
+        onChunk: (text: string) => void;
+        onMemory?: (memory: string) => void;
+        signal?: AbortSignal;
+    },
+    memory?: string,
+): Promise<void> {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ noteContent, messages, memory }),
+        signal: callbacks.signal,
+    });
+
+    if (!res.ok) {
+        let errMsg = 'Chat request failed';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = body.error;
+        } catch { /* ignore */ }
+        throw new Error(errMsg);
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = '';
+        for (const line of lines) {
+            if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim();
+                continue;
+            }
+
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+                const parsed = JSON.parse(jsonStr);
+
+                if (currentEvent === 'memory') {
+                    callbacks.onMemory?.(parsed.memory ?? '');
+                } else if (currentEvent === 'done') {
+                    // Stream finished
+                } else if (currentEvent === 'error') {
+                    throw new Error(parsed.error || 'Stream error');
+                } else {
+                    // Default: text chunk
+                    if (parsed.text) {
+                        callbacks.onChunk(parsed.text);
+                    }
+                }
+            } catch (e) {
+                if (e instanceof Error && e.message !== 'Stream error') {
+                    // JSON parse error, skip
+                } else {
+                    throw e;
+                }
+            }
+            currentEvent = '';
+        }
+    }
+}
+
+/**
  * Generate study flashcards from note content.
  * The model decides the final count based on note length (15-30).
  */
