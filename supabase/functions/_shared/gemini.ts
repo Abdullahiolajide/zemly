@@ -20,6 +20,8 @@ interface GeminiOptions {
     systemInstruction?: string;
     temperature?: number;
     maxOutputTokens?: number;
+    responseMimeType?: string;
+    responseSchema?: Record<string, unknown>;
 }
 
 interface GeminiResponse {
@@ -36,6 +38,33 @@ export function truncateNote(content: string, maxChars = MAX_NOTE_CHARS): string
     return content.slice(0, maxChars) + '\n...(truncated)';
 }
 
+/**
+ * When a note contains multiple SOURCE blocks, keep representation from each block
+ * instead of truncating only the beginning of the combined note.
+ */
+export function balanceMultiSourceNote(content: string, maxChars = MAX_NOTE_CHARS): string {
+    const sourceMatches = content.match(/(^\s*SOURCE:\s*.*$)/gmi);
+    if (!sourceMatches || sourceMatches.length <= 1) {
+        return truncateNote(content, maxChars);
+    }
+
+    const sections = content
+        .split(/(?=^\s*SOURCE:\s*.*$)/gmi)
+        .map((section) => section.trim())
+        .filter(Boolean);
+
+    if (sections.length <= 1) {
+        return truncateNote(content, maxChars);
+    }
+
+    const perSectionBudget = Math.max(800, Math.floor(maxChars / sections.length));
+    const balanced = sections
+        .map((section) => section.slice(0, perSectionBudget).trim())
+        .join('\n\n');
+
+    return balanced.length > maxChars ? truncateNote(balanced, maxChars) : balanced;
+}
+
 /** Build the request body shared by both callGemini and streamGemini. */
 function buildRequestBody(
     contents: GeminiMessage[],
@@ -45,11 +74,26 @@ function buildRequestBody(
         systemInstruction,
         temperature = 0.7,
         maxOutputTokens = 1024,
+        responseMimeType,
+        responseSchema,
     } = options;
+
+    const generationConfig: Record<string, unknown> = {
+        temperature,
+        maxOutputTokens,
+    };
+
+    if (responseMimeType) {
+        generationConfig.responseMimeType = responseMimeType;
+    }
+
+    if (responseSchema) {
+        generationConfig.responseSchema = responseSchema;
+    }
 
     const body: Record<string, unknown> = {
         contents,
-        generationConfig: { temperature, maxOutputTokens },
+        generationConfig,
     };
 
     if (systemInstruction) {

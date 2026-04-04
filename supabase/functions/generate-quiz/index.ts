@@ -3,7 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { promptGemini, truncateNote } from '../_shared/gemini.ts';
+import { balanceMultiSourceNote, promptGemini } from '../_shared/gemini.ts';
 
 interface QuizRequest {
     noteContent: string;
@@ -38,13 +38,14 @@ serve(async (req: Request) => {
         }
 
         const safeCount = getQuizCount(noteContent);
-        const note = truncateNote(noteContent);
+        const note = balanceMultiSourceNote(noteContent, 16000);
 
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
     - Generate exactly ${safeCount} questions.
     - Keep difficulty and coverage proportional to the note depth.
+    - If the note contains multiple SOURCE blocks, sample questions across all sources, not just the first one.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
 - Return ONLY valid JSON, no markdown fences.

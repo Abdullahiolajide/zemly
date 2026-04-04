@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MdAutoAwesome } from 'react-icons/md';
 import { BsMic, BsDownload } from 'react-icons/bs';
 import {
     IoPlaySharp, IoPauseSharp,
@@ -32,7 +31,7 @@ type PodcastView = 'loading' | 'generate' | 'player';
 interface PodcastPanelProps {
     noteId: number;
     noteTitle?: string;
-    getNoteText: (mode: 'fast' | 'deep') => string;
+    getNoteText: () => string;
 }
 
 /* ── Persistence helpers ── */
@@ -58,12 +57,43 @@ function formatTime(seconds: number): string {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+function normalizePodcastScript(script: PodcastLine[]): PodcastLine[] {
+    const cleaned = script
+        .filter((line) => typeof line?.text === 'string' && line.text.trim().length > 0)
+        .map((line) => ({
+            speaker: (line.speaker || '').trim(),
+            text: line.text.trim(),
+        }));
+
+    if (cleaned.length === 0) return [];
+
+    const knownHope = ['hope', 'alex', 'host'];
+    const knownCorey = ['corey', 'sam', 'cohost', 'co-host'];
+
+    let nextSpeaker: 'Hope' | 'Corey' = 'Hope';
+
+    return cleaned.map((line, idx) => {
+        const key = line.speaker.toLowerCase();
+        if (knownHope.some((token) => key.includes(token))) {
+            nextSpeaker = 'Corey';
+            return { speaker: 'Hope', text: line.text };
+        }
+        if (knownCorey.some((token) => key.includes(token))) {
+            nextSpeaker = 'Hope';
+            return { speaker: 'Corey', text: line.text };
+        }
+
+        const speaker = idx === 0 ? 'Hope' : nextSpeaker;
+        nextSpeaker = speaker === 'Hope' ? 'Corey' : 'Hope';
+        return { speaker, text: line.text };
+    });
+}
+
 const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteText }) => {
     const [view, setView] = useState<PodcastView>('loading');
     const [script, setScript] = useState<PodcastLine[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
-    const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
 
     /* ── Player state ── */
     const [isPlaying, setIsPlaying] = useState(false);
@@ -78,14 +108,15 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     /* Duration estimate: ~3s per line at 1x speed */
+    const normalizedScript = useMemo(() => normalizePodcastScript(script), [script]);
     const LINE_DURATION = 3;
-    const totalDuration = script.length * LINE_DURATION;
+    const totalDuration = normalizedScript.length * LINE_DURATION;
 
     /* ── Load saved script ── */
     useEffect(() => {
         const saved = loadSavedScript(noteId);
         if (saved && saved.length > 0) {
-            setScript(saved);
+            setScript(normalizePodcastScript(saved));
             setView('player');
         } else {
             setView('generate');
@@ -103,7 +134,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
     /* ── Simulated playback ── */
     useEffect(() => {
-        if (isPlaying && script.length > 0) {
+        if (isPlaying && normalizedScript.length > 0) {
             const tickMs = 100 / playbackSpeed;
             intervalRef.current = setInterval(() => {
                 setProgress(prev => {
@@ -114,8 +145,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                     }
                     /* Update current line based on progress */
                     const lineIdx = Math.min(
-                        Math.floor((next / 100) * script.length),
-                        script.length - 1
+                        Math.floor((next / 100) * normalizedScript.length),
+                        normalizedScript.length - 1
                     );
                     setCurrentLineIdx(lineIdx);
                     return next;
@@ -126,11 +157,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [isPlaying, playbackSpeed, script.length, totalDuration]);
+    }, [isPlaying, playbackSpeed, normalizedScript.length, totalDuration]);
 
     /* ── Generate podcast ── */
     const handleGenerate = useCallback(async () => {
-        const text = getNoteText(generationMode);
+        const text = getNoteText();
         if (!text.trim()) {
             setError('Your note is empty. Write some content first, then generate the podcast.');
             return;
@@ -139,8 +170,9 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         setError(null);
         try {
             const generated: PodcastLine[] = await generatePodcast(text);
-            setScript(generated);
-            saveScript(noteId, generated);
+            const normalized = normalizePodcastScript(generated);
+            setScript(normalized);
+            saveScript(noteId, normalized);
             setView('player');
         } catch (err) {
             console.error('Podcast generation failed:', err);
@@ -148,7 +180,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         } finally {
             setIsGenerating(false);
         }
-    }, [generationMode, getNoteText, noteId]);
+    }, [getNoteText, noteId]);
 
     /* ── Player controls ── */
     const togglePlay = () => {
@@ -160,23 +192,26 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     };
 
     const skipForward = () => {
-        const nextLine = Math.min(currentLineIdx + 1, script.length - 1);
+        if (normalizedScript.length === 0) return;
+        const nextLine = Math.min(currentLineIdx + 1, normalizedScript.length - 1);
         setCurrentLineIdx(nextLine);
-        setProgress((nextLine / script.length) * 100);
+        setProgress(normalizedScript.length > 0 ? (nextLine / normalizedScript.length) * 100 : 0);
     };
 
     const skipBackward = () => {
+        if (normalizedScript.length === 0) return;
         const prevLine = Math.max(currentLineIdx - 1, 0);
         setCurrentLineIdx(prevLine);
-        setProgress((prevLine / script.length) * 100);
+        setProgress(normalizedScript.length > 0 ? (prevLine / normalizedScript.length) * 100 : 0);
     };
 
     const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (normalizedScript.length === 0) return;
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
         setProgress(pct);
-        const lineIdx = Math.min(Math.floor((pct / 100) * script.length), script.length - 1);
+        const lineIdx = Math.min(Math.floor((pct / 100) * normalizedScript.length), normalizedScript.length - 1);
         setCurrentLineIdx(lineIdx);
     };
 
@@ -190,9 +225,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const remainingTime = totalDuration - currentTime;
 
     const getSpeakerConfig = (speakerName: string) => {
-        if (speakerName.toLowerCase().includes('hope') || speakerName.toLowerCase().includes('female'))
-            return SPEAKERS.Hope;
-        return SPEAKERS.Corey;
+        return speakerName.toLowerCase().includes('corey') ? SPEAKERS.Corey : SPEAKERS.Hope;
     };
 
     /* ── Loading ── */
@@ -228,53 +261,6 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                         {error}
                     </div>
                 )}
-
-                {/* Speaker Preview */}
-                <div className="mb-8 flex items-center justify-center gap-8">
-                    {Object.values(SPEAKERS).map(speaker => (
-                        <div key={speaker.name} className="flex flex-col items-center gap-2">
-                            <div
-                                className="flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold text-white shadow-lg"
-                                style={{ background: speaker.avatarBg, boxShadow: `0 4px 20px ${speaker.color}40` }}
-                            >
-                                {speaker.name[0]}
-                            </div>
-                            <span className="text-[13px] font-semibold" style={{ color: speaker.color }}>
-                                {speaker.name}
-                            </span>
-                            <span className="text-[11px] text-zinc-600">
-                                {speaker.name === 'Hope' ? 'Host' : 'Co-host'}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Mode toggle */}
-                <div className="mb-5 flex items-center justify-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setGenerationMode('deep')}
-                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'deep' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        style={{
-                            background: generationMode === 'deep' ? 'rgba(0,200,150,0.18)' : 'rgba(255,255,255,0.03)',
-                            border: generationMode === 'deep' ? '1px solid rgba(0,200,150,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                        }}
-                    >
-                        Deep (full extracted text)
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setGenerationMode('fast')}
-                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'fast' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        style={{
-                            background: generationMode === 'fast' ? 'rgba(79,156,249,0.16)' : 'rgba(255,255,255,0.03)',
-                            border: generationMode === 'fast' ? '1px solid rgba(79,156,249,0.38)' : '1px solid rgba(255,255,255,0.08)',
-                        }}
-                    >
-                        Fast (summary note)
-                    </button>
-                </div>
-
                 <button
                     onClick={handleGenerate}
                     disabled={isGenerating}
@@ -307,60 +293,73 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         <div className="flex h-full flex-col">
             {/* ── Top: Podcast Player Header ── */}
             <div
-                className="shrink-0 px-6 py-5"
+                className="shrink-0 px-6 py-4"
                 style={{
-                    background: 'linear-gradient(180deg, rgba(140,60,60,0.12) 0%, transparent 100%)',
-                    borderBottom: '1px solid var(--border-glass)',
+                    background: 'transparent',
+                    borderBottom: 'none',
                 }}
             >
                 {/* Cover card */}
                 <div
-                    className="mx-auto mb-5 flex max-w-lg items-center gap-4 rounded-2xl px-5 py-4"
+                    className="mx-auto max-w-5xl rounded-[26px] px-5 py-4"
                     style={{
-                        background: 'linear-gradient(135deg, rgba(180,70,70,0.15), rgba(100,40,80,0.12))',
-                        border: '1px solid rgba(224,112,112,0.18)',
+                        background: 'radial-gradient(120% 150% at 8% 10%, rgba(16,185,129,0.14) 0%, rgba(5,150,105,0.1) 38%, rgba(17,18,25,0.94) 100%)',
+                        border: '1px solid rgba(255,255,255,0.12)',
                         backdropFilter: 'blur(12px)',
                     }}
                 >
-                    {/* Avatar */}
-                    <div
-                        className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
-                        style={{
-                            background: 'linear-gradient(135deg, #D35F5F, #8B3A62)',
-                            boxShadow: '0 4px 20px rgba(180,70,70,0.35)',
-                        }}
-                    >
-                        <BsMic className="h-6 w-6 text-white" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <p
-                            className="truncate text-[15px] font-bold text-zinc-100"
-                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                        >
-                            {noteTitle || 'Study Session'}
-                        </p>
-                        <p className="text-[12px] text-zinc-500">
-                            <span className="mr-1">⏱</span>
-                            {formatTime(totalDuration)} • {script.length} exchanges
-                        </p>
-                    </div>
-                    {/* Raise Hand */}
-                    <button
-                        onClick={() => setShowRaiseHand(prev => !prev)}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all"
-                        style={{
-                            background: showRaiseHand ? 'rgba(79,156,249,0.18)' : 'rgba(255,255,255,0.06)',
-                            border: showRaiseHand ? '1px solid rgba(79,156,249,0.35)' : '1px solid var(--border-glass)',
-                            color: showRaiseHand ? '#4F9CF9' : '#a1a1aa',
-                        }}
-                    >
-                        <HiOutlineHand className="h-3.5 w-3.5" />
-                        Raise Hand
-                    </button>
-                </div>
+                    <div className="flex items-start gap-4">
+                        {/* Dual speaker avatar stack */}
+                        <div className="relative mt-1 h-14 w-16 shrink-0">
+                            <div
+                                className="absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                                style={{
+                                    background: SPEAKERS.Hope.avatarBg,
+                                    border: '2px solid rgba(12,12,18,0.95)',
+                                }}
+                            >
+                                {SPEAKERS.Hope.name[0]}
+                            </div>
+                            <div
+                                className="absolute bottom-0 left-6 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                                style={{
+                                    background: SPEAKERS.Corey.avatarBg,
+                                    border: '2px solid rgba(12,12,18,0.95)',
+                                }}
+                            >
+                                {SPEAKERS.Corey.name[0]}
+                            </div>
+                        </div>
 
-                {/* ── Progress Bar ── */}
-                <div className="mx-auto max-w-lg">
+                        <div className="min-w-0 flex-1 pt-0.5">
+                            <p
+                                className="truncate text-base font-bold leading-tight text-zinc-100 md:text-base"
+                                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                            >
+                                {noteTitle || 'Study Session'}
+                            </p>
+                            <p className="mt-1 text-[13px] text-zinc-400">
+                                <span className="mr-1">⏱</span>
+                                {formatTime(totalDuration)} • {normalizedScript.length} exchanges
+                            </p>
+                        </div>
+                        {/* Raise Hand */}
+                        <button
+                            onClick={() => setShowRaiseHand(prev => !prev)}
+                            className="mt-1 flex items-center gap-1.5 rounded-2xl px-4 py-2 text-[14px] font-semibold transition-all"
+                            style={{
+                                background: showRaiseHand ? 'rgba(43,119,232,0.26)' : 'rgba(33,89,170,0.2)',
+                                border: '1px solid rgba(79,156,249,0.45)',
+                                color: '#5EA9FF',
+                            }}
+                        >
+                            <HiOutlineHand className="h-4 w-4" />
+                            Raise Hand
+                        </button>
+                    </div>
+
+                    {/* ── Progress Bar ── */}
+                    <div className="mt-3">
                     <div
                         className="group relative h-1.5 cursor-pointer rounded-full"
                         style={{ background: 'rgba(255,255,255,0.08)' }}
@@ -385,14 +384,14 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             }}
                         />
                     </div>
-                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-600">
+                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-500">
                         <span>{formatTime(currentTime)}</span>
                         <span>-{formatTime(remainingTime)}</span>
                     </div>
-                </div>
+                    </div>
 
-                {/* ── Controls ── */}
-                <div className="mx-auto flex max-w-lg items-center justify-between">
+                    {/* ── Controls ── */}
+                    <div className="mt-2 flex items-center justify-between">
                     {/* Volume */}
                     <div className="flex items-center gap-2">
                         <button
@@ -420,26 +419,26 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                     <div className="flex items-center gap-3">
                         <button
                             onClick={skipBackward}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
+                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
                         >
                             <IoPlaySkipBackSharp className="h-5 w-5" />
                         </button>
                         <button
                             onClick={togglePlay}
-                            className="flex h-12 w-12 items-center justify-center rounded-full transition-all hover:scale-105"
+                            className="flex h-14 w-14 items-center justify-center rounded-full transition-all hover:scale-105"
                             style={{
                                 background: '#ffffff',
-                                boxShadow: '0 4px 20px rgba(255,255,255,0.15)',
+                                boxShadow: '0 6px 22px rgba(255,255,255,0.2)',
                             }}
                         >
                             {isPlaying
-                                ? <IoPauseSharp className="h-6 w-6 text-zinc-900" />
-                                : <IoPlaySharp className="ml-0.5 h-6 w-6 text-zinc-900" />
+                                ? <IoPauseSharp className="h-7 w-7 text-zinc-900" />
+                                : <IoPlaySharp className="ml-0.5 h-7 w-7 text-zinc-900" />
                             }
                         </button>
                         <button
                             onClick={skipForward}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
+                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
                         >
                             <IoPlaySkipForwardSharp className="h-5 w-5" />
                         </button>
@@ -461,29 +460,22 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             <BsDownload className="h-4 w-4" />
                         </button>
                     </div>
+                    </div>
                 </div>
             </div>
 
             {/* ── Transcript ── */}
             <div ref={transcriptRef} className="flex-1 overflow-y-auto px-6 py-4">
-                {/* TTS notice */}
+                {/* Messages */}
                 <div
-                    className="mb-5 flex items-center gap-2.5 rounded-xl px-4 py-3"
+                    className="mx-auto max-w-5xl space-y-4 rounded-2xl p-4"
                     style={{
-                        background: 'rgba(79,156,249,0.06)',
-                        border: '1px solid rgba(79,156,249,0.15)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'linear-gradient(180deg, rgba(16,17,22,0.88), rgba(10,10,14,0.92))',
                     }}
                 >
-                    <MdAutoAwesome className="h-4 w-4 shrink-0" style={{ color: '#4F9CF9' }} />
-                    <p className="text-[12px] text-zinc-500">
-                        <span className="font-semibold text-zinc-400">Transcript mode</span> — Audio will play once a Text-to-Speech API is connected. Follow along with the transcript below!
-                    </p>
-                </div>
-
-                {/* Messages */}
-                <div className="space-y-4">
                     <AnimatePresence initial={false}>
-                        {script.map((line, idx) => {
+                        {normalizedScript.map((line, idx) => {
                             const speaker = getSpeakerConfig(line.speaker);
                             const isRight = speaker.align === 'right';
                             const isActive = idx === currentLineIdx && isPlaying;
@@ -503,7 +495,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                     }}
                                     onClick={() => {
                                         setCurrentLineIdx(idx);
-                                        setProgress((idx / script.length) * 100);
+                                        setProgress(normalizedScript.length > 0 ? (idx / normalizedScript.length) * 100 : 0);
                                     }}
                                 >
                                     {/* Avatar */}
@@ -594,32 +586,9 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 <div className="h-6" />
             </div>
 
-            {/* ── Bottom: Regenerate ── */}
-            <div
-                className="shrink-0 flex items-center justify-between px-6 py-3"
-                style={{ borderTop: '1px solid var(--border-glass)' }}
-            >
-                <span className="text-[12px] text-zinc-600">
-                    {script.length} exchanges • ~{formatTime(totalDuration)} listen
-                </span>
-                <button
-                    onClick={() => {
-                        localStorage.removeItem(getPersistenceKey(noteId));
-                        setScript([]);
-                        setView('generate');
-                        setProgress(0);
-                        setCurrentLineIdx(0);
-                        setIsPlaying(false);
-                    }}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold text-zinc-500 transition-all hover:text-zinc-300"
-                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
-                >
-                    <MdAutoAwesome className="h-3.5 w-3.5" style={{ color: 'var(--brand-emerald)' }} />
-                    Regenerate
-                </button>
-            </div>
         </div>
     );
 };
 
 export default PodcastPanel;
+

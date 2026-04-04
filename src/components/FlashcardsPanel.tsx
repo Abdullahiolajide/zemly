@@ -19,7 +19,7 @@ type FlashcardsView = 'generate' | 'overview' | 'study';
 
 interface FlashcardsPanelProps {
     noteId: number;
-    getNoteText: (mode: 'fast' | 'deep') => string;
+    getNoteText: () => string;
 }
 
 const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }) => {
@@ -29,7 +29,6 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     const [isLoading, setIsLoading] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
 
     useEffect(() => {
         let cancelled = false;
@@ -54,7 +53,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
     }, [noteId]);
 
     const handleGenerate = useCallback(async () => {
-        const text = getNoteText(generationMode);
+        const text = getNoteText();
         if (!text.trim()) { setError('Your note is empty. Write some content first!'); return; }
         setIsGenerating(true);
         setError(null);
@@ -71,7 +70,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
         } finally {
             setIsGenerating(false);
         }
-    }, [generationMode, getNoteText, noteId, setId]);
+    }, [getNoteText, noteId, setId]);
 
     const handleCardUpdate = useCallback(async (cardId: number, status: FlashcardStatus, knowCount: number) => {
         setCards((prev) => prev.map((c) => c.id === cardId ? { ...c, status, know_count: knowCount } : c));
@@ -149,31 +148,6 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                     {error}
                 </div>
             )}
-
-            <div className="mb-5 flex items-center justify-center gap-2">
-                <button
-                    type="button"
-                    onClick={() => setGenerationMode('deep')}
-                    className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'deep' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    style={{
-                        background: generationMode === 'deep' ? 'rgba(0,200,150,0.18)' : 'rgba(255,255,255,0.03)',
-                        border: generationMode === 'deep' ? '1px solid rgba(0,200,150,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                    }}
-                >
-                    Deep (full extracted text)
-                </button>
-                <button
-                    type="button"
-                    onClick={() => setGenerationMode('fast')}
-                    className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'fast' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    style={{
-                        background: generationMode === 'fast' ? 'rgba(79,156,249,0.16)' : 'rgba(255,255,255,0.03)',
-                        border: generationMode === 'fast' ? '1px solid rgba(79,156,249,0.38)' : '1px solid rgba(255,255,255,0.08)',
-                    }}
-                >
-                    Fast (summary note)
-                </button>
-            </div>
 
             <button
                 onClick={handleGenerate}

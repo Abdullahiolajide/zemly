@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { FiChevronLeft } from 'react-icons/fi';
 import { IoClose, IoCheckmark } from 'react-icons/io5';
 import type { FlashcardCard, FlashcardStatus } from '../types';
@@ -13,8 +13,11 @@ interface FlashcardsStudyProps {
 }
 
 const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCardUpdate, onReset, onExit }) => {
+    const CARD_ADVANCE_MS = 180;
     const [isFlipped, setIsFlipped] = useState(false);
     const [showMastery, setShowMastery] = useState(false);
+    const [isAdvancing, setIsAdvancing] = useState(false);
+    const advanceTimerRef = useRef<number | null>(null);
 
     const unfamiliarCount = cards.filter((c) => c.status === 'unfamiliar').length;
     const newCount = cards.filter((c) => c.status === 'new').length;
@@ -29,8 +32,18 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
     const currentCard = studyQueue[0] ?? null;
     const progressPercent = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0;
 
+    useEffect(() => {
+        return () => {
+            if (advanceTimerRef.current !== null) {
+                window.clearTimeout(advanceTimerRef.current);
+            }
+        };
+    }, []);
+
     const handleAnswer = useCallback((knows: boolean) => {
-        if (!currentCard) return;
+        if (!currentCard || isAdvancing) return;
+        setIsAdvancing(true);
+
         let newStatus: FlashcardStatus;
         let newKnowCount: number;
         if (knows) {
@@ -40,13 +53,16 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
             newKnowCount = 0;
             newStatus = 'unfamiliar';
         }
-        onCardUpdate(currentCard.id, newStatus, newKnowCount);
-        setIsFlipped(false);
-        const remainingAfterUpdate = studyQueue.length - 1;
-        if (newStatus === 'mastered' && remainingAfterUpdate === 0) {
-            setTimeout(() => setShowMastery(true), 400);
-        }
-    }, [currentCard, onCardUpdate, studyQueue.length]);
+        advanceTimerRef.current = window.setTimeout(() => {
+            onCardUpdate(currentCard.id, newStatus, newKnowCount);
+            setIsFlipped(false);
+            const remainingAfterUpdate = studyQueue.length - 1;
+            if (newStatus === 'mastered' && remainingAfterUpdate === 0) {
+                window.setTimeout(() => setShowMastery(true), 400);
+            }
+            setIsAdvancing(false);
+        }, CARD_ADVANCE_MS);
+    }, [CARD_ADVANCE_MS, currentCard, isAdvancing, onCardUpdate, studyQueue.length]);
 
     const handleReset = () => { setShowMastery(false); setIsFlipped(false); onReset(); };
     const handleExit = () => { setShowMastery(false); onExit(); };
@@ -91,11 +107,12 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
             {/* Card */}
             {currentCard ? (
                 <>
-                    <div
-                        className="study-card-container mb-8 cursor-pointer"
-                        onClick={() => setIsFlipped(!isFlipped)}
-                    >
-                        <div className={`study-card-inner ${isFlipped ? 'study-card-flipped' : ''}`}>
+                    <div className={`study-card-shell ${isAdvancing ? 'study-card-leaving' : ''}`} key={currentCard.id}>
+                        <div
+                            className={`study-card-container mb-8 ${isAdvancing ? 'cursor-default' : 'cursor-pointer'}`}
+                            onClick={() => { if (!isAdvancing) setIsFlipped(!isFlipped); }}
+                        >
+                            <div className={`study-card-inner ${isFlipped ? 'study-card-flipped' : ''}`}>
                             {/* Front */}
                             <div
                                 className="study-card-face study-card-front flex min-h-[280px] items-center justify-center rounded-2xl p-8"
@@ -114,6 +131,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                                     {currentCard.back}
                                 </p>
                             </div>
+                            </div>
                         </div>
                     </div>
 
@@ -123,7 +141,8 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                     <div className="flex items-center justify-center gap-4">
                         <button
                             onClick={() => handleAnswer(false)}
-                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-red-400 transition-all"
+                            disabled={isAdvancing}
+                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-red-400 transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.18)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; }}
@@ -132,7 +151,8 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                         </button>
                         <button
                             onClick={() => handleAnswer(true)}
-                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-green-400 transition-all"
+                            disabled={isAdvancing}
+                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-green-400 transition-all disabled:cursor-not-allowed disabled:opacity-60"
                             style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.18)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.1)'; }}

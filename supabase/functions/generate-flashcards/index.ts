@@ -3,10 +3,15 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { promptGemini, truncateNote } from '../_shared/gemini.ts';
+import { balanceMultiSourceNote, promptGemini } from '../_shared/gemini.ts';
 
 interface FlashcardsRequest {
     noteContent: string;
+}
+
+interface Flashcard {
+    front: string;
+    back: string;
 }
 
 function getFlashcardCount(noteContent: string): number {
@@ -17,11 +22,107 @@ function getFlashcardCount(noteContent: string): number {
     return Math.round(15 + ratio * 35);
 }
 
-function parseFlashcards(raw: string): unknown[] {
-    const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed.flashcards)) return [];
-    return parsed.flashcards;
+function extractLikelyJsonObject(input: string): string | null {
+    const text = input.trim();
+    const start = text.indexOf('{');
+    if (start < 0) return null;
+
+    let inString = false;
+    let escaped = false;
+    let depth = 0;
+
+    for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+            continue;
+        }
+
+        if (ch === '{') {
+            depth++;
+            continue;
+        }
+
+        if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return text.slice(start, i + 1);
+            }
+        }
+    }
+
+    return null;
+}
+
+function normalizeFlashcards(flashcards: unknown[]): Flashcard[] {
+    return flashcards
+        .filter((card): card is Record<string, unknown> => !!card && typeof card === 'object')
+        .map((card) => ({
+            front: String(card.front ?? '').trim(),
+            back: String(card.back ?? '').trim(),
+        }))
+        .filter((card) => card.front.length > 0 && card.back.length > 0);
+}
+
+function parseFlashcards(raw: string): Flashcard[] {
+    const candidates = [
+        raw,
+        raw.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim(),
+    ];
+
+    const extracted = extractLikelyJsonObject(raw);
+    if (extracted) candidates.push(extracted);
+
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        try {
+            const parsed = JSON.parse(candidate);
+            if (!Array.isArray(parsed?.flashcards)) continue;
+            return normalizeFlashcards(parsed.flashcards);
+        } catch {
+            // Try the next parse strategy.
+        }
+    }
+
+    throw new Error('Model returned invalid JSON. Please try generating again.');
+}
+
+async function repairFlashcards(raw: string, targetCount: number): Promise<Flashcard[]> {
+    const repairPrompt = `Convert the following output into strict valid JSON.
+
+Rules:
+- Return ONLY JSON.
+- JSON shape must be: {"flashcards":[{"front":"...","back":"..."}]}
+- Keep the same meaning as much as possible.
+- Keep exactly ${targetCount} flashcards when possible.
+- Do not include markdown fences or explanation.
+
+BROKEN OUTPUT:
+${raw}`;
+
+    const repaired = await promptGemini(repairPrompt, {
+        temperature: 0.1,
+        maxOutputTokens: 6144,
+        responseMimeType: 'application/json',
+    });
+
+    return parseFlashcards(repaired);
 }
 
 serve(async (req: Request) => {
@@ -38,9 +139,10 @@ serve(async (req: Request) => {
         }
 
         const safeCount = getFlashcardCount(noteContent);
-        const note = truncateNote(noteContent);
+        const note = balanceMultiSourceNote(noteContent, 16000);
 
         const prompt = `Generate exactly ${safeCount} flashcards from this note. Each has "front" (question/term) and "back" (short answer).
+        If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
         ${note}`;
@@ -48,9 +150,15 @@ serve(async (req: Request) => {
         const raw = await promptGemini(prompt, {
             temperature: 0.5,
             maxOutputTokens: 6144,
+            responseMimeType: 'application/json',
         });
 
-        let flashcards = parseFlashcards(raw);
+        let flashcards: Flashcard[] = [];
+        try {
+            flashcards = parseFlashcards(raw);
+        } catch {
+            flashcards = await repairFlashcards(raw, safeCount);
+        }
 
         // Retry once if model under-returns. Do not deduplicate in backend.
         if (flashcards.length < 15) {
@@ -66,8 +174,14 @@ ${note}`;
             const retryRaw = await promptGemini(retryPrompt, {
                 temperature: 0.4,
                 maxOutputTokens: 6144,
+                responseMimeType: 'application/json',
             });
-            flashcards = parseFlashcards(retryRaw);
+
+            try {
+                flashcards = parseFlashcards(retryRaw);
+            } catch {
+                flashcards = await repairFlashcards(retryRaw, safeCount);
+            }
         }
 
         if (flashcards.length < 15) {

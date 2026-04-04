@@ -19,7 +19,7 @@ type QuizView = 'loading' | 'generate' | 'quiz' | 'results';
 
 interface QuizPanelProps {
     noteId: number;
-    getNoteText: (mode: 'fast' | 'deep') => string;
+    getNoteText: () => string;
 }
 
 const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
@@ -33,7 +33,6 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const [explanationsMap, setExplanationsMap] = useState<Record<number, string>>({});
     const [loadingExplanation, setLoadingExplanation] = useState(false);
     const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
-    const [generationMode, setGenerationMode] = useState<'fast' | 'deep'>('deep');
 
     const currentQ = questions[currentIndex] ?? null;
     const selectedOption = currentQ ? (answersMap[currentQ.id] ?? null) : null;
@@ -69,7 +68,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
     const handleGenerate = useCallback(async () => {
         if (setId) { setError('Quiz has already been generated for this note.'); return; }
-        const text = getNoteText(generationMode);
+        const text = getNoteText();
         if (!text.trim()) { setError('Your note is empty. Write some content first, then generate the quiz.'); return; }
         setIsGenerating(true);
         setError(null);
@@ -89,7 +88,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         } finally {
             setIsGenerating(false);
         }
-    }, [generationMode, setId, getNoteText, noteId]);
+    }, [setId, getNoteText, noteId]);
 
     const handleSelect = useCallback(async (optionIndex: number) => {
         if (answered || !currentQ) return;
@@ -118,7 +117,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         if (!currentQ || loadingExplanation) return;
         setLoadingExplanation(true);
         try {
-            const text = getNoteText(generationMode);
+            const text = getNoteText();
             const result = await generateQuizExplanation(currentQ.question, currentQ.options, currentQ.correct_index, text);
             setExplanationsMap((prev) => ({ ...prev, [currentQ.id]: result }));
         } catch (err) {
@@ -127,7 +126,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
         } finally {
             setLoadingExplanation(false);
         }
-    }, [currentQ, generationMode, loadingExplanation, getNoteText]);
+    }, [currentQ, loadingExplanation, getNoteText]);
 
     const handleReset = useCallback(async () => {
         if (!setId) return;
@@ -172,31 +171,6 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                         {error}
                     </div>
                 )}
-
-                <div className="mb-5 flex items-center justify-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setGenerationMode('deep')}
-                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'deep' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        style={{
-                            background: generationMode === 'deep' ? 'rgba(0,200,150,0.18)' : 'rgba(255,255,255,0.03)',
-                            border: generationMode === 'deep' ? '1px solid rgba(0,200,150,0.4)' : '1px solid rgba(255,255,255,0.08)',
-                        }}
-                    >
-                        Deep (full extracted text)
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setGenerationMode('fast')}
-                        className={`rounded-lg px-3.5 py-2 text-[12px] font-semibold transition-colors ${generationMode === 'fast' ? 'text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
-                        style={{
-                            background: generationMode === 'fast' ? 'rgba(79,156,249,0.16)' : 'rgba(255,255,255,0.03)',
-                            border: generationMode === 'fast' ? '1px solid rgba(79,156,249,0.38)' : '1px solid rgba(255,255,255,0.08)',
-                        }}
-                    >
-                        Fast (summary note)
-                    </button>
-                </div>
 
                 <button
                     onClick={handleGenerate}

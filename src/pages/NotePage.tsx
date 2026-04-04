@@ -198,18 +198,15 @@ const NotePage: React.FC = () => {
         [id],
     );
 
-    const getStudyTextByMode = useCallback((mode: 'fast' | 'deep') => {
+    const getStudyText = useCallback(() => {
         const editorText = editor?.getText() || '';
-        const extractedText = (note?.source_type === 'document' || note?.source_type === 'audio')
-            ? (note.extracted_text || '')
-            : '';
+        const extractedText = note?.extracted_text || '';
 
-        if (mode === 'fast') {
-            return editorText.trim() ? editorText : extractedText;
-        }
-
-        return extractedText.trim() ? extractedText : editorText;
-    }, [editor, note?.extracted_text, note?.source_type]);
+        // Study generators should use stored extracted summary/context by default.
+        // Fallback to editor text only when extracted text is missing.
+        if (extractedText.trim()) return extractedText;
+        return editorText;
+    }, [editor, note?.extracted_text]);
 
     const handleExportPdf = useCallback(async () => {
         const el = editorContentRef.current?.querySelector('.ProseMirror') as HTMLElement | null;
@@ -670,7 +667,7 @@ const NotePage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto">
                             <FlashcardsPanel
                                 noteId={Number(id)}
-                                getNoteText={getStudyTextByMode}
+                                getNoteText={getStudyText}
                             />
                         </div>
                     )}
@@ -680,7 +677,7 @@ const NotePage: React.FC = () => {
                         <div className="flex-1 overflow-y-auto">
                             <QuizPanel
                                 noteId={Number(id)}
-                                getNoteText={getStudyTextByMode}
+                                getNoteText={getStudyText}
                             />
                         </div>
                     )}
@@ -691,7 +688,7 @@ const NotePage: React.FC = () => {
                             <PodcastPanel
                                 noteId={Number(id)}
                                 noteTitle={note.title}
-                                getNoteText={getStudyTextByMode}
+                                getNoteText={getStudyText}
                             />
                         </div>
                     )}
