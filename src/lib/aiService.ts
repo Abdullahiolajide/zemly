@@ -484,3 +484,42 @@ export async function generatePodcast(
     if (error) throw new Error(await extractErrorMessage(error, 'Podcast generation failed'));
     return data.script;
 }
+
+/**
+ * Generate podcast audio from a script using Azure Speech Service (TTS).
+ * Returns an audio Blob (MP3) ready for playback.
+ */
+export async function generatePodcastAudio(
+    script: PodcastLine[],
+): Promise<Blob> {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-podcast-audio`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ script }),
+    });
+
+    if (!res.ok) {
+        let errMsg = 'Podcast audio generation failed';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = body.error;
+        } catch { /* ignore */ }
+        throw new Error(errMsg);
+    }
+
+    const result = await res.json();
+    // Decode base64 audio to a Blob
+    const binaryString = atob(result.audio);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: result.mimeType || 'audio/mpeg' });
+}

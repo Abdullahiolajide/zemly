@@ -50,27 +50,61 @@ function buildCoveragePrompt(note: string): { prompt: string; minLines: number }
 
     const sourceDigest = sections
         .map((section, idx) => {
-            const clipped = section.body.slice(0, 1400);
+            const clipped = section.body.slice(0, 3000);
             return `SOURCE ${idx + 1}: ${section.label}\n${clipped}`;
         })
         .join('\n\n');
 
-    const prompt = `Create a podcast script as a conversation between exactly two speakers:
-- Hope: curious, asks sharp follow-up questions.
-- Corey: knowledgeable, explains clearly with examples.
+    const prompt = `
+        You are a professional podcast script writer and subject-matter expert.
 
-Rules:
-- Write at least ${minLines} lines (turns), alternating naturally between Hope and Corey.
-- Keep each line 1-3 sentences.
-- Stay grounded in the provided note content.
-- Cover ALL SOURCE sections below. No source should be ignored.
-- Mention source-specific ideas across the script, not just in one line.
-- Use speaker names exactly as "Hope" and "Corey".
+        I will provide a study note. Transform it into a highly engaging, insightful, and educational podcast-style conversation.
 
-Return ONLY JSON: {"script":[{"speaker":"Hope","text":"..."},{"speaker":"Corey","text":"..."}]}
 
-SOURCE SNAPSHOT:
-${sourceDigest}`;
+        Characters:
+
+        Hope (female): intelligent, curious, and expressive. She does NOT only ask questions — she also explains ideas, shares interpretations, makes connections, gives examples, and occasionally challenges or builds on Corey’s points.
+        Corey (male): expert, deeply knowledgeable, explains clearly, adds structure and depth, refines and expands ideas.
+
+        Instructions:
+
+        Make it a natural back-and-forth conversation (no long monologues)
+        BOTH speakers should contribute meaningfully (not just Q&A)
+        Start with a brief intro to the topic
+        Break down concepts step-by-step
+        Include moments where Hope:
+        explains concepts in her own words
+        attempts answers before Corey confirms or corrects
+        adds relatable examples or analogies
+        reacts thoughtfully (not just “oh I see”)
+        Corey should:
+        deepen explanations
+        correct gently when needed
+        connect ideas and provide clarity
+        Add intuition, analogies, and real-life examples
+        Expand beyond the note where necessary to improve understanding
+        Highlight common mistakes or misconceptions
+        Occasionally summarize key points during the discussion
+        End with a concise recap of key takeaways for students
+
+        Style & Tone:
+
+        Clear, engaging, slightly informal, but intellectually rich
+        Feels like a real podcast conversation between two smart people
+
+        Important Rules:
+
+        Do NOT mention “the note says”
+        Do NOT output anything outside the JSON format
+        Ensure the JSON is valid and properly escaped
+
+        Output Format (STRICT):
+        Return ONLY valid JSON, no markdown, no backticks:
+        {"script":[{"speaker":"Hope","text":"..."},{"speaker":"Corey","text":"..."}]}
+
+        NOTE:
+        ${sourceDigest}`;
+
 
     return { prompt, minLines };
 }
@@ -267,8 +301,8 @@ serve(async (req: Request) => {
         const { prompt, minLines } = buildCoveragePrompt(note);
 
         const raw = await promptGemini(prompt, {
-            temperature: 0.8,
-            maxOutputTokens: 3072,
+            temperature: 1.0,
+            maxOutputTokens: 8192,
             responseMimeType: 'application/json',
         });
 
@@ -286,10 +320,10 @@ serve(async (req: Request) => {
 
         if (normalized.length < minLines) {
             const retryRaw = await promptGemini(
-                `${prompt}\n\nIMPORTANT: Your previous output was too short. Return at least ${minLines} lines in script.`,
+                `${prompt}\n\nIMPORTANT: Your previous output was too short. Return at least ${minLines} lines in script. Make the conversation detailed, natural, and engaging.`,
                 {
-                    temperature: 0.4,
-                    maxOutputTokens: 3072,
+                    temperature: 0.8,
+                    maxOutputTokens: 8192,
                     responseMimeType: 'application/json',
                 },
             );

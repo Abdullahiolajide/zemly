@@ -8,7 +8,8 @@ import {
 } from 'react-icons/io5';
 import { HiOutlineHand } from 'react-icons/hi';
 import type { PodcastLine } from '../lib/aiService';
-import { generatePodcast } from '../lib/aiService';
+import { generatePodcast, generatePodcastAudio } from '../lib/aiService';
+import { getPodcastSession, upsertPodcastScript, uploadPodcastAudio } from '../lib/podcastService';
 
 /* ── Speaker config ── */
 const SPEAKERS = {
@@ -34,20 +35,12 @@ interface PodcastPanelProps {
     getNoteText: () => string;
 }
 
-/* ── Persistence helpers ── */
-function getPersistenceKey(noteId: number) { return `podcast-${noteId}`; }
-
-function loadSavedScript(noteId: number): PodcastLine[] | null {
-    try {
-        const raw = localStorage.getItem(getPersistenceKey(noteId));
-        if (!raw) return null;
-        return JSON.parse(raw) as PodcastLine[];
-    } catch { return null; }
-}
-
-function saveScript(noteId: number, script: PodcastLine[]) {
-    try { localStorage.setItem(getPersistenceKey(noteId), JSON.stringify(script)); }
-    catch { /* ignore quota errors */ }
+async function fetchAudioBlob(audioUrl: string): Promise<Blob> {
+    const res = await fetch(audioUrl);
+    if (!res.ok) {
+        throw new Error('Saved podcast audio could not be loaded.');
+    }
+    return await res.blob();
 }
 
 /* ── Format time helper ── */
@@ -94,33 +87,97 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const [script, setScript] = useState<PodcastLine[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [generationPhase, setGenerationPhase] = useState<'script' | 'audio'>('script');
 
     /* ── Player state ── */
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentLineIdx, setCurrentLineIdx] = useState(0);
     const [progress, setProgress] = useState(0);
+    const [duration, setDuration] = useState(0);
+    const [currentTime, setCurrentTime] = useState(0);
     const [volume, setVolume] = useState(0.75);
     const [isMuted, setIsMuted] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
     const [showRaiseHand, setShowRaiseHand] = useState(false);
+    const [hasAudio, setHasAudio] = useState(false);
 
     const transcriptRef = useRef<HTMLDivElement>(null);
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const audioUrlRef = useRef<string | null>(null);
 
-    /* Duration estimate: ~3s per line at 1x speed */
     const normalizedScript = useMemo(() => normalizePodcastScript(script), [script]);
-    const LINE_DURATION = 3;
-    const totalDuration = normalizedScript.length * LINE_DURATION;
 
-    /* ── Load saved script ── */
+    /* ── Line timing estimation ── */
+    const lineTimes = useMemo(() => {
+        if (normalizedScript.length === 0 || duration === 0) return [];
+        // Estimate each line's time proportionally by character count
+        const totalChars = normalizedScript.reduce((sum, l) => sum + l.text.length, 0);
+        if (totalChars === 0) return normalizedScript.map(() => ({ start: 0, end: 0 }));
+
+        let elapsed = 0;
+        return normalizedScript.map((line) => {
+            const lineDuration = (line.text.length / totalChars) * duration;
+            const start = elapsed;
+            elapsed += lineDuration;
+            return { start, end: elapsed };
+        });
+    }, [normalizedScript, duration]);
+
+    /* ── Cleanup audio URL on unmount ── */
     useEffect(() => {
-        const saved = loadSavedScript(noteId);
-        if (saved && saved.length > 0) {
-            setScript(normalizePodcastScript(saved));
-            setView('player');
-        } else {
-            setView('generate');
-        }
+        return () => {
+            if (audioUrlRef.current) {
+                URL.revokeObjectURL(audioUrlRef.current);
+                audioUrlRef.current = null;
+            }
+        };
+    }, []);
+
+    /* ── Load saved script & audio ── */
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            setView('loading');
+            setError(null);
+            setHasAudio(false);
+            setScript([]);
+
+            try {
+                const saved = await getPodcastSession(noteId);
+                if (cancelled) return;
+
+                if (saved && saved.script.length > 0) {
+                    const normalized = normalizePodcastScript(saved.script);
+                    setScript(normalized);
+
+                    if (saved.audioUrl) {
+                        try {
+                            const savedAudio = await fetchAudioBlob(saved.audioUrl);
+                            if (cancelled) return;
+                            setupAudioElement(savedAudio);
+                            setHasAudio(true);
+                        } catch (audioErr) {
+                            console.warn('Failed to load saved podcast audio:', audioErr);
+                        }
+                    }
+
+                    setView('player');
+                    return;
+                }
+
+                setView('generate');
+            } catch (err) {
+                console.error('Failed to load podcast session:', err);
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : 'Failed to load podcast data');
+                setView('generate');
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
     }, [noteId]);
 
     /* ── Auto-scroll transcript ── */
@@ -132,18 +189,79 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         }
     }, [currentLineIdx]);
 
-    /* ── Simulated playback ── */
+    /* ── Setup audio element from blob ── */
+    const setupAudioElement = useCallback((blob: Blob) => {
+        // Revoke previous URL
+        if (audioUrlRef.current) {
+            URL.revokeObjectURL(audioUrlRef.current);
+        }
+
+        const url = URL.createObjectURL(blob);
+        audioUrlRef.current = url;
+
+        const audio = new Audio(url);
+        audio.preload = 'metadata';
+
+        audio.addEventListener('loadedmetadata', () => {
+            setDuration(audio.duration);
+        });
+
+        audio.addEventListener('timeupdate', () => {
+            if (audio.duration > 0) {
+                setCurrentTime(audio.currentTime);
+                setProgress((audio.currentTime / audio.duration) * 100);
+            }
+        });
+
+        audio.addEventListener('ended', () => {
+            setIsPlaying(false);
+            setProgress(100);
+        });
+
+        audio.volume = volume;
+        audioRef.current = audio;
+    }, [volume]);
+
+    /* ── Sync volume and mute with audio element ── */
     useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = isMuted ? 0 : volume;
+        }
+    }, [volume, isMuted]);
+
+    /* ── Sync playback speed with audio element ── */
+    useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.playbackRate = playbackSpeed;
+        }
+    }, [playbackSpeed]);
+
+    /* ── Update current line based on audio time ── */
+    useEffect(() => {
+        if (!hasAudio || lineTimes.length === 0) return;
+        const lineIdx = lineTimes.findIndex((lt) => currentTime >= lt.start && currentTime < lt.end);
+        if (lineIdx >= 0 && lineIdx !== currentLineIdx) {
+            setCurrentLineIdx(lineIdx);
+        }
+    }, [currentTime, lineTimes, hasAudio, currentLineIdx]);
+
+    /* ── Simulated playback fallback (no audio) ── */
+    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const LINE_DURATION = 3;
+    const simulatedDuration = normalizedScript.length * LINE_DURATION;
+
+    useEffect(() => {
+        if (hasAudio) return; // Real audio handles its own playback
+
         if (isPlaying && normalizedScript.length > 0) {
             const tickMs = 100 / playbackSpeed;
             intervalRef.current = setInterval(() => {
                 setProgress(prev => {
-                    const next = prev + (0.1 / totalDuration) * 100;
+                    const next = prev + (0.1 / simulatedDuration) * 100;
                     if (next >= 100) {
                         setIsPlaying(false);
                         return 100;
                     }
-                    /* Update current line based on progress */
                     const lineIdx = Math.min(
                         Math.floor((next / 100) * normalizedScript.length),
                         normalizedScript.length - 1
@@ -157,7 +275,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         return () => {
             if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [isPlaying, playbackSpeed, normalizedScript.length, totalDuration]);
+    }, [isPlaying, playbackSpeed, normalizedScript.length, simulatedDuration, hasAudio]);
 
     /* ── Generate podcast ── */
     const handleGenerate = useCallback(async () => {
@@ -167,12 +285,27 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             return;
         }
         setIsGenerating(true);
+        setGenerationPhase('script');
         setError(null);
         try {
+            // Phase 1: Generate script
             const generated: PodcastLine[] = await generatePodcast(text);
             const normalized = normalizePodcastScript(generated);
             setScript(normalized);
-            saveScript(noteId, normalized);
+            await upsertPodcastScript(noteId, normalized);
+
+            // Phase 2: Generate audio
+            setGenerationPhase('audio');
+            try {
+                const audioBlob = await generatePodcastAudio(normalized);
+                setupAudioElement(audioBlob);
+                await uploadPodcastAudio(noteId, audioBlob);
+                setHasAudio(true);
+            } catch (audioErr) {
+                console.warn('Audio generation failed, falling back to transcript-only mode:', audioErr);
+                // Don't block — the player still works without audio (simulated mode)
+            }
+
             setView('player');
         } catch (err) {
             console.error('Podcast generation failed:', err);
@@ -180,29 +313,54 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         } finally {
             setIsGenerating(false);
         }
-    }, [getNoteText, noteId]);
+    }, [getNoteText, noteId, setupAudioElement]);
 
     /* ── Player controls ── */
     const togglePlay = () => {
-        if (progress >= 100) {
-            setProgress(0);
-            setCurrentLineIdx(0);
+        if (hasAudio && audioRef.current) {
+            if (audioRef.current.ended || progress >= 100) {
+                audioRef.current.currentTime = 0;
+                setProgress(0);
+                setCurrentLineIdx(0);
+            }
+            if (isPlaying) {
+                audioRef.current.pause();
+            } else {
+                audioRef.current.play();
+            }
+            setIsPlaying(!isPlaying);
+        } else {
+            // Simulated fallback
+            if (progress >= 100) {
+                setProgress(0);
+                setCurrentLineIdx(0);
+            }
+            setIsPlaying(prev => !prev);
         }
-        setIsPlaying(prev => !prev);
     };
 
     const skipForward = () => {
         if (normalizedScript.length === 0) return;
         const nextLine = Math.min(currentLineIdx + 1, normalizedScript.length - 1);
         setCurrentLineIdx(nextLine);
-        setProgress(normalizedScript.length > 0 ? (nextLine / normalizedScript.length) * 100 : 0);
+
+        if (hasAudio && audioRef.current && lineTimes[nextLine]) {
+            audioRef.current.currentTime = lineTimes[nextLine].start;
+        } else {
+            setProgress(normalizedScript.length > 0 ? (nextLine / normalizedScript.length) * 100 : 0);
+        }
     };
 
     const skipBackward = () => {
         if (normalizedScript.length === 0) return;
         const prevLine = Math.max(currentLineIdx - 1, 0);
         setCurrentLineIdx(prevLine);
-        setProgress(normalizedScript.length > 0 ? (prevLine / normalizedScript.length) * 100 : 0);
+
+        if (hasAudio && audioRef.current && lineTimes[prevLine]) {
+            audioRef.current.currentTime = lineTimes[prevLine].start;
+        } else {
+            setProgress(normalizedScript.length > 0 ? (prevLine / normalizedScript.length) * 100 : 0);
+        }
     };
 
     const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -211,8 +369,16 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         const x = e.clientX - rect.left;
         const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
         setProgress(pct);
-        const lineIdx = Math.min(Math.floor((pct / 100) * normalizedScript.length), normalizedScript.length - 1);
-        setCurrentLineIdx(lineIdx);
+
+        if (hasAudio && audioRef.current) {
+            audioRef.current.currentTime = (pct / 100) * audioRef.current.duration;
+        } else {
+            const lineIdx = Math.min(
+                Math.floor((pct / 100) * normalizedScript.length),
+                normalizedScript.length - 1
+            );
+            setCurrentLineIdx(lineIdx);
+        }
     };
 
     const cycleSpeed = () => {
@@ -221,8 +387,19 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         setPlaybackSpeed(speeds[(idx + 1) % speeds.length]);
     };
 
-    const currentTime = (progress / 100) * totalDuration;
-    const remainingTime = totalDuration - currentTime;
+    const handleDownload = () => {
+        if (!hasAudio || !audioUrlRef.current) return;
+        const a = document.createElement('a');
+        a.href = audioUrlRef.current;
+        a.download = `${noteTitle || 'podcast'}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
+    const displayCurrentTime = hasAudio ? currentTime : (progress / 100) * simulatedDuration;
+    const displayDuration = hasAudio ? duration : simulatedDuration;
+    const remainingTime = displayDuration - displayCurrentTime;
 
     const getSpeakerConfig = (speakerName: string) => {
         return speakerName.toLowerCase().includes('corey') ? SPEAKERS.Corey : SPEAKERS.Hope;
@@ -270,7 +447,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                         <>
                             <div className="h-5 w-5 animate-spin rounded-full border-2"
                                 style={{ borderColor: 'rgba(0,0,0,0.1)', borderTopColor: 'var(--text-on-brand)' }} />
-                            <span>Generating Podcast...</span>
+                            <span>
+                                {generationPhase === 'script'
+                                    ? 'Generating Script...'
+                                    : '🔊 Generating Audio...'}
+                            </span>
                         </>
                     ) : (
                         <>
@@ -281,8 +462,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 </button>
 
                 <p className="mt-4 text-center text-[12px] text-zinc-600">
-                    Audio playback will be available when a Text-to-Speech API is connected.
-                    <br />For now, enjoy the full interactive transcript experience!
+                    AI will generate a script and then synthesize audio with natural voices.
                 </p>
             </div>
         );
@@ -340,7 +520,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             </p>
                             <p className="mt-1 text-[13px] text-zinc-400">
                                 <span className="mr-1">⏱</span>
-                                {formatTime(totalDuration)} • {normalizedScript.length} exchanges
+                                {formatTime(displayDuration)} • {normalizedScript.length} exchanges
+                                {hasAudio && <span className="ml-2 text-emerald-400">♫ Audio</span>}
                             </p>
                         </div>
                         {/* Raise Hand */}
@@ -385,7 +566,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                         />
                     </div>
                     <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>{formatTime(currentTime)}</span>
+                        <span>{formatTime(displayCurrentTime)}</span>
                         <span>-{formatTime(remainingTime)}</span>
                     </div>
                     </div>
@@ -454,8 +635,10 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             {playbackSpeed}x
                         </button>
                         <button
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
-                            title="Download (Coming soon)"
+                            onClick={handleDownload}
+                            disabled={!hasAudio}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={hasAudio ? 'Download audio' : 'Audio not available'}
                         >
                             <BsDownload className="h-4 w-4" />
                         </button>
@@ -495,7 +678,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                     }}
                                     onClick={() => {
                                         setCurrentLineIdx(idx);
-                                        setProgress(normalizedScript.length > 0 ? (idx / normalizedScript.length) * 100 : 0);
+                                        if (hasAudio && audioRef.current && lineTimes[idx]) {
+                                            audioRef.current.currentTime = lineTimes[idx].start;
+                                        } else {
+                                            setProgress(normalizedScript.length > 0 ? (idx / normalizedScript.length) * 100 : 0);
+                                        }
                                     }}
                                 >
                                     {/* Avatar */}
@@ -574,7 +761,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                     }}
                                 >
                                     <p className="text-[13px] italic text-zinc-400">
-                                        Great question! This feature will be interactive when TTS is connected — you'll be able to ask clarifying questions mid-podcast.
+                                        Great question! This feature will be interactive soon — you'll be able to ask clarifying questions mid-podcast.
                                     </p>
                                 </div>
                             </div>
@@ -591,4 +778,3 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 };
 
 export default PodcastPanel;
-
