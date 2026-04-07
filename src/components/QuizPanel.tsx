@@ -302,18 +302,38 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
             {/* Status badges */}
             <div className="mb-6 flex flex-shrink-0 flex-wrap items-center justify-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400">
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0 }}
+                >
                     <span className="h-2 w-2 rounded-full bg-red-400" />{unfamiliarCount} Unfamiliar
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400">
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.08 }}
+                >
                     <span className="h-2 w-2 rounded-full bg-amber-400" />{learningCount} Learning
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400">
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.16 }}
+                >
                     <span className="h-2 w-2 rounded-full bg-blue-400" />{newCount} New
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400">
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.24 }}
+                >
                     <span className="h-2 w-2 rounded-full bg-green-400" />{masteredCount} Mastered
-                </span>
+                </motion.span>
             </div>
 
             {/* Question area */}

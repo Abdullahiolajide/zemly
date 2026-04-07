@@ -130,8 +130,29 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 URL.revokeObjectURL(audioUrlRef.current);
                 audioUrlRef.current = null;
             }
+            // Stop audio on unmount
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+            setIsPlaying(false);
         };
     }, []);
+
+    /* ── Stop audio when tab loses focus ── */
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden && isPlaying && audioRef.current) {
+                audioRef.current.pause();
+                setIsPlaying(false);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [isPlaying]);
 
     /* ── Load saved script & audio ── */
     useEffect(() => {
@@ -191,6 +212,13 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
     /* ── Setup audio element from blob ── */
     const setupAudioElement = useCallback((blob: Blob) => {
+        // Stop and clean up previous audio
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current = null;
+        }
+
         // Revoke previous URL
         if (audioUrlRef.current) {
             URL.revokeObjectURL(audioUrlRef.current);
@@ -471,13 +499,16 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     /* ── Player View ── */
     return (
         <div className="flex h-full flex-col">
-            {/* ── Top: Podcast Player Header ── */}
-            <div
+            {/* ── Top: Podcast Player Header ── (slides down from top) */}
+            <motion.div
                 className="shrink-0 px-6 py-4"
                 style={{
                     background: 'transparent',
                     borderBottom: 'none',
                 }}
+                initial={{ opacity: 0, y: -40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
             >
                 {/* Cover card */}
                 <div
@@ -645,10 +676,16 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                     </div>
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
-            {/* ── Transcript ── */}
-            <div ref={transcriptRef} className="flex-1 overflow-y-auto px-6 py-4">
+            {/* ── Transcript ── (slides up from bottom) */}
+            <motion.div
+                ref={transcriptRef}
+                className="flex-1 overflow-y-auto px-6 py-4"
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: 'easeOut', delay: 0.15 }}
+            >
                 {/* Messages */}
                 <div
                     className="mx-auto max-w-5xl space-y-4 rounded-2xl p-4"
@@ -771,7 +808,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
                 {/* Spacer */}
                 <div className="h-6" />
-            </div>
+            </motion.div>
 
         </div>
     );

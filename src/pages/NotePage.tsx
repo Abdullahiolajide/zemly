@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -663,33 +664,56 @@ const NotePage: React.FC = () => {
                     )}
 
                     {/* ── Flashcards Section ── */}
-                    {activeSection === 'Flashcards' && id && (
-                        <div className="flex-1 overflow-y-auto">
+                    {id && (
+                        <motion.div
+                            className="flex-1 overflow-y-auto"
+                            style={{ display: activeSection === 'Flashcards' ? 'flex' : 'none', flexDirection: 'column' }}
+                            initial={activeSection === 'Flashcards' ? { opacity: 0 } : false}
+                            animate={activeSection === 'Flashcards' ? { opacity: 1 } : { opacity: 0 }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                        >
                             <FlashcardsPanel
                                 noteId={Number(id)}
                                 getNoteText={getStudyText}
                             />
-                        </div>
+                        </motion.div>
                     )}
 
                     {/* ── Quiz Section ── */}
-                    {activeSection === 'Quiz' && id && (
-                        <div className="flex-1 overflow-y-auto">
+                    {id && (
+                        <motion.div
+                            className="flex-1 overflow-y-auto"
+                            style={{ display: activeSection === 'Quiz' ? 'flex' : 'none', flexDirection: 'column' }}
+                            initial={activeSection === 'Quiz' ? { opacity: 0, x: 40 } : false}
+                            animate={activeSection === 'Quiz' ? { opacity: 1, x: 0 } : { opacity: 0, x: -40 }}
+                            transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                        >
                             <QuizPanel
                                 noteId={Number(id)}
                                 getNoteText={getStudyText}
                             />
-                        </div>
+                        </motion.div>
                     )}
 
                     {/* ── Podcast Section ── */}
-                    {activeSection === 'Podcast' && id && (
-                        <div className="flex-1 overflow-hidden">
-                            <PodcastPanel
-                                noteId={Number(id)}
-                                noteTitle={note.title}
-                                getNoteText={getStudyText}
-                            />
+                    {id && (
+                        <div
+                            className="flex-1 overflow-hidden flex flex-col"
+                            style={{ display: activeSection === 'Podcast' ? 'flex' : 'none' }}
+                        >
+                            {/* Top section - slides down */}
+                            <motion.div
+                                className="h-full w-full flex flex-col"
+                                initial={activeSection === 'Podcast' ? { opacity: 0, y: -40 } : false}
+                                animate={activeSection === 'Podcast' ? { opacity: 1, y: 0 } : { opacity: 0, y: -40 }}
+                                transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
+                            >
+                                <PodcastPanel
+                                    noteId={Number(id)}
+                                    noteTitle={note.title}
+                                    getNoteText={getStudyText}
+                                />
+                            </motion.div>
                         </div>
                     )}
                 </div>

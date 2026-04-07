@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { TbCards } from 'react-icons/tb';
 import { FiChevronLeft, FiChevronRight, FiTrash2, FiEdit2, FiCheck, FiX } from 'react-icons/fi';
 import { BsPlay } from 'react-icons/bs';
@@ -75,10 +76,38 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
 
             {/* Status Badges */}
             <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400">{unfamiliarCount} Unfamiliar</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400">{newCount} New</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400">{learningCount} Learning</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400">{masteredCount} Mastered</span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0 }}
+                >
+                    {unfamiliarCount} Unfamiliar
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.08 }}
+                >
+                    {newCount} New
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.16 }}
+                >
+                    {learningCount} Learning
+                </motion.span>
+                <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.3, delay: 0.24 }}
+                >
+                    {masteredCount} Mastered
+                </motion.span>
             </div>
 
             {/* Card Preview */}
