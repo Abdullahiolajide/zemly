@@ -241,17 +241,17 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
                     {/* Breakdown */}
                     <div className="mb-8 space-y-2">
-                        {masteredCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{masteredCount}</span><span className="rounded-full bg-green-500/15 px-3 py-0.5 text-[12px] font-semibold text-green-400">Mastered</span></div>}
-                        {learningCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{learningCount}</span><span className="rounded-full bg-amber-500/15 px-3 py-0.5 text-[12px] font-semibold text-amber-400">Learning</span></div>}
-                        {unfamiliarCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{unfamiliarCount}</span><span className="rounded-full bg-red-500/15 px-3 py-0.5 text-[12px] font-semibold text-red-400">Unfamiliar</span></div>}
-                        {newCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{newCount}</span><span className="rounded-full bg-blue-500/15 px-3 py-0.5 text-[12px] font-semibold text-blue-400">New</span></div>}
+                        {masteredCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{masteredCount}</span><span className="rounded-full bg-green-500/15 px-3 py-0.5 text-[13px] font-bold text-green-400">Mastered</span></div>}
+                        {learningCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{learningCount}</span><span className="rounded-full bg-amber-500/15 px-3 py-0.5 text-[13px] font-bold text-amber-400">Learning</span></div>}
+                        {unfamiliarCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{unfamiliarCount}</span><span className="rounded-full bg-red-500/15 px-3 py-0.5 text-[13px] font-bold text-red-400">Unfamiliar</span></div>}
+                        {newCount > 0 && <div className="flex items-center gap-3"><span className="w-8 text-right text-[14px] font-bold text-zinc-300">{newCount}</span><span className="rounded-full bg-blue-500/15 px-3 py-0.5 text-[13px] font-bold text-blue-400">New</span></div>}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-3">
                         <button
                             onClick={handleReset}
-                            className="rounded-xl px-5 py-2.5 text-[13px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
+                            className="rounded-xl px-5 py-2.5 text-[14px] font-semibold text-zinc-400 transition-all hover:text-zinc-200"
                             style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
@@ -260,7 +260,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                         </button>
                         <button
                             onClick={() => { setCurrentIndex(0); setAnswersMap({}); setExplanationsMap({}); setLoadingExplanation(false); setView('quiz'); }}
-                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[13px] font-bold"
+                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[14px] font-bold"
                         >
                             Continue learning →
                         </button>
@@ -302,32 +302,32 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
             {/* Status badges */}
             <div className="mb-6 flex flex-shrink-0 flex-wrap items-center justify-center gap-3">
-                <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400"
+                    <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3.5 py-1.5 text-[13px] font-bold text-red-400"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0 }}
                 >
                     <span className="h-2 w-2 rounded-full bg-red-400" />{unfamiliarCount} Unfamiliar
                 </motion.span>
-                <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400"
+                    <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3.5 py-1.5 text-[13px] font-bold text-amber-400"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.08 }}
                 >
                     <span className="h-2 w-2 rounded-full bg-amber-400" />{learningCount} Learning
                 </motion.span>
-                <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400"
+                    <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3.5 py-1.5 text-[13px] font-bold text-blue-400"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.16 }}
                 >
                     <span className="h-2 w-2 rounded-full bg-blue-400" />{newCount} New
                 </motion.span>
-                <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400"
+                    <motion.span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3.5 py-1.5 text-[13px] font-bold text-green-400"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.24 }}
@@ -349,7 +349,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                             className="flex h-full flex-col overflow-y-auto"
                         >
                             <div className="mb-6 mt-4 flex min-h-[80px] items-center justify-center">
-                                <p className="text-center text-[16px] font-bold leading-relaxed text-zinc-100">
+                                <p className="text-center text-[18px] font-bold leading-relaxed text-zinc-100">
                                     {currentQ.question}
                                 </p>
                             </div>
@@ -375,7 +375,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                             transition={{ duration: 0.35, delay: 0.1 + i * 0.07, ease: [0.25, 0.1, 0.25, 1] }}
                                             onClick={() => handleSelect(i)}
                                             disabled={answered}
-                                            className="flex min-h-[72px] items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors"
+                                            className="flex min-h-[72px] items-start gap-3 rounded-xl border-2 p-4 text-left transition-colors cursor-pointer"
                                             style={{ borderColor, background: bg, opacity }}
                                         >
                                             <span className="flex-shrink-0">
@@ -399,7 +399,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                                     </span>
                                                 )}
                                             </span>
-                                            <span className={`pt-0.5 text-[15px] leading-relaxed ${answered && isCorrect ? 'font-medium text-green-300' : answered && isSelected && !isCorrect ? 'text-red-300' : answered ? 'text-zinc-500' : 'text-zinc-300'}`}>
+                                            <span className={`pt-0.5 text-[15px] font-medium leading-relaxed ${answered && (isCorrect || isSelected) ? 'text-zinc-200' : answered ? 'text-zinc-500' : 'text-zinc-200'}`}>
                                                 {option}
                                             </span>
                                         </motion.button>
@@ -417,10 +417,11 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                 >
                                     {explanation && (
                                         <div
-                                            className="mb-4 rounded-xl p-4"
-                                            style={{ border: '1px solid var(--brand-emerald)', background: 'var(--bg-glass-hover)' }}
+                                            className="mb-4 rounded-xl p-5"
+                                            style={{ border: '1px solid var(--brand-emerald)', background: 'rgba(0,200,150,0.04)' }}
                                         >
-                                            <p className="text-[13px] leading-relaxed text-zinc-300">{explanation}</p>
+                                            <p className="mb-2 text-[14px] font-bold text-zinc-100">Here's an explanation of the correct answer</p>
+                                            <p className="text-[14px] leading-relaxed text-zinc-300">{explanation}</p>
                                         </div>
                                     )}
                                     <div className="flex items-center justify-end gap-3">
@@ -428,16 +429,16 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                             <button
                                                 onClick={handleExplain}
                                                 disabled={loadingExplanation}
-                                                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold transition-all hover:text-zinc-100 disabled:opacity-50"
-                                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                                                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[14px] font-semibold transition-all hover:text-zinc-100 disabled:opacity-50"
+                                                style={{ border: '1px solid var(--border-glass-strong)', background: 'var(--bg-glass-hover)' }}
                                             >
                                                 <MdAutoAwesome className="h-4 w-4" style={{ color: 'var(--brand-emerald)' }} />
-                                                {loadingExplanation ? 'Loading…' : 'Explain Answer'}
+                                                {loadingExplanation ? 'Loading…' : 'Correct Answer Explained'}
                                             </button>
                                         )}
                                         <button
                                             onClick={goNext}
-                                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[13px] font-bold"
+                                            className="btn-emerald flex items-center gap-2 px-6 py-2.5 text-[14px] font-bold"
                                         >
                                             {currentIndex < questions.length - 1 ? 'Next' : 'See Results'}
                                         </button>
@@ -464,7 +465,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 >
                     <FiChevronLeft className="h-7 w-7" strokeWidth={3} />
                 </button>
-                <span className="text-[15px] font-bold text-zinc-400">
+                <span className="text-[16px] font-bold text-zinc-400">
                     <span className="text-zinc-100">{currentIndex + 1}</span>/{questions.length}
                 </span>
                 <button

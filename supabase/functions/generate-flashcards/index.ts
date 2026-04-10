@@ -141,8 +141,9 @@ serve(async (req: Request) => {
         const safeCount = getFlashcardCount(noteContent);
         const note = balanceMultiSourceNote(noteContent, 16000);
 
-        const prompt = `Generate exactly ${safeCount} flashcards from this note. Each has "front" (question/term) and "back" (short answer).
+        const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
+        Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length (not greater than ${safeCount + 5} and not less than ${safeCount - 5}).
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
         ${note}`;
@@ -160,32 +161,8 @@ serve(async (req: Request) => {
             flashcards = await repairFlashcards(raw, safeCount);
         }
 
-        // Retry once if model under-returns. Do not deduplicate in backend.
-        if (flashcards.length < 15) {
-            const retryPrompt = `Generate exactly ${safeCount} flashcards from this note.
-RULES:
-- Exactly ${safeCount} flashcards.
-- Each flashcard has "front" and "back".
-- Return ONLY valid JSON as {"flashcards":[...]} with no markdown.
-
-NOTE:
-${note}`;
-
-            const retryRaw = await promptGemini(retryPrompt, {
-                temperature: 0.4,
-                maxOutputTokens: 6144,
-                responseMimeType: 'application/json',
-            });
-
-            try {
-                flashcards = parseFlashcards(retryRaw);
-            } catch {
-                flashcards = await repairFlashcards(retryRaw, safeCount);
-            }
-        }
-
-        if (flashcards.length < 15) {
-            throw new Error('Flashcard generation returned too few cards. Please try again.');
+        if (flashcards.length === 0) {
+            throw new Error('Flashcard generation returned no cards. Please try again.');
         }
 
         if (flashcards.length > 30) {

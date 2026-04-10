@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     BlankDocumentModal,
     AudioModal,
@@ -6,18 +6,23 @@ import {
     WebsiteLinkModal,
 } from '../components/CreateNoteModals';
 import { IoSearch, IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
-import { BsThreeDotsVertical, BsChevronRight, BsFolder2 } from 'react-icons/bs';
-import { MdLogout, MdAutoAwesome, MdUploadFile } from 'react-icons/md';
+import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft } from 'react-icons/bs';
+import { MdLogout, MdAutoAwesome, MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
 import { BiHome, BiBookBookmark } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
 import { RiMoonLine } from 'react-icons/ri';
-import { FiTrash2 } from 'react-icons/fi';
+import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
 import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote } from '../lib/notesService';
 import { uploadDocumentToStorage, extractDocumentFromStorage, extractFromLink, inferAudioMimeType } from '../lib/aiService';
+import {
+    getFolders, createFolder, renameFolder, deleteFolder,
+    addNoteToFolder, removeNoteFromFolder, moveNoteToFolder, getNoteFolder,
+} from '../lib/foldersService';
 import type { Note } from '../types';
+import type { Folder } from '../lib/foldersService';
 import ThemeModal from '../components/ThemeModal';
 
 /* ── Sidebar nav items ── */
@@ -74,22 +79,23 @@ function timeAgo(dateStr: string): string {
 }
 
 /* ── Helper: get note type icon and label ── */
-function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string }>, label: string } {
+function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string }>, label: string, bg: string, color: string } {
     switch (sourceType) {
         case 'document':
-            return { icon: MdUploadFile, label: 'Document' };
+            return { icon: MdUploadFile, label: 'Document', bg: 'rgba(79, 156, 249, 0.12)', color: '#4F9CF9' };
         case 'audio':
-            return { icon: IoMicOutline, label: 'Audio' };
+            return { icon: IoMicOutline, label: 'Audio', bg: 'rgba(245, 166, 35, 0.12)', color: '#F5A623' };
         case 'link':
-            return { icon: IoLinkOutline, label: 'Link' };
+            return { icon: IoLinkOutline, label: 'Link', bg: 'rgba(200, 100, 100, 0.12)', color: '#E07070' };
         case 'blank':
-            return { icon: IoDocumentTextOutline, label: 'Document' };
+            return { icon: IoDocumentTextOutline, label: 'Document', bg: 'rgba(0, 200, 150, 0.12)', color: '#00C896' };
         default:
-            return { icon: IoDocumentTextOutline, label: 'Document' };
+            return { icon: IoDocumentTextOutline, label: 'Document', bg: 'rgba(0, 200, 150, 0.12)', color: '#00C896' };
     }
 }
 
 type ModalType = 'blank' | 'audio' | 'document' | 'website' | null;
+type DashboardTab = 'notes' | 'folders';
 
 const modalKeyMap: Record<string, ModalType> = {
     'Blank document': 'blank',
@@ -109,6 +115,27 @@ const DashboardPage: React.FC = () => {
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
 
+    /* ── Tab state ── */
+    const [activeTab, setActiveTab] = useState<DashboardTab>('notes');
+
+    /* ── Folder state ── */
+    const [folders, setFolders] = useState<Folder[]>([]);
+    const [openFolderName, setOpenFolderName] = useState<string | null>(null);
+    const [showNewFolderInput, setShowNewFolderInput] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null);
+    const [moveNoteId, setMoveNoteId] = useState<number | null>(null);
+    const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<string | null>(null);
+    const newFolderInputRef = useRef<HTMLInputElement>(null);
+    const renameInputRef = useRef<HTMLInputElement>(null);
+
+    /* ── Reload folders ── */
+    const reloadFolders = useCallback(() => {
+        if (user?.id) setFolders(getFolders(user.id));
+    }, [user?.id]);
+
     /* ── Fetch user notes ── */
     const fetchNotes = useCallback(async () => {
         try {
@@ -126,19 +153,40 @@ const DashboardPage: React.FC = () => {
         fetchNotes();
     }, [fetchNotes]);
 
+    useEffect(() => {
+        reloadFolders();
+    }, [reloadFolders]);
+
+    /* ── Focus new folder input ── */
+    useEffect(() => {
+        if (showNewFolderInput && newFolderInputRef.current) {
+            newFolderInputRef.current.focus();
+        }
+    }, [showNewFolderInput]);
+
+    /* ── Focus rename input ── */
+    useEffect(() => {
+        if (renamingFolder && renameInputRef.current) {
+            renameInputRef.current.focus();
+            renameInputRef.current.select();
+        }
+    }, [renamingFolder]);
+
     /* ── Close menu on click outside ── */
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
-            if (!target.closest('[aria-label="Note options"]') && !target.closest('.relative')) {
+            if (!target.closest('[data-menu-trigger]') && !target.closest('[data-menu-dropdown]')) {
                 setMenuOpenId(null);
+                setFolderMenuOpen(null);
+                setMoveNoteId(null);
             }
         };
-        if (menuOpenId !== null) {
+        if (menuOpenId !== null || folderMenuOpen !== null || moveNoteId !== null) {
             document.addEventListener('click', handleClickOutside);
             return () => document.removeEventListener('click', handleClickOutside);
         }
-    }, [menuOpenId]);
+    }, [menuOpenId, folderMenuOpen, moveNoteId]);
 
     /* ── Create blank note → navigate ── */
     const handleCreateBlankNote = async (title: string) => {
@@ -270,12 +318,274 @@ const DashboardPage: React.FC = () => {
     const handleDeleteNote = async (noteId: number) => {
         try {
             await deleteNote(noteId);
+            // Also remove from any folder
+            if (user?.id) {
+                const folder = getNoteFolder(user.id, noteId);
+                if (folder) removeNoteFromFolder(user.id, folder, noteId);
+                reloadFolders();
+            }
             setNotes((prev) => prev.filter((n) => n.id !== noteId));
             setDeleteConfirmId(null);
             setMenuOpenId(null);
         } catch (err) {
             console.error('Failed to delete note:', err);
         }
+    };
+
+    /* ── Folder handlers ── */
+    const handleCreateFolder = () => {
+        if (!user?.id || !newFolderName.trim()) return;
+        try {
+            createFolder(user.id, newFolderName.trim());
+            reloadFolders();
+            setNewFolderName('');
+            setShowNewFolderInput(false);
+        } catch (err) {
+            console.error('Failed to create folder:', err);
+        }
+    };
+
+    const handleRenameFolder = () => {
+        if (!user?.id || !renamingFolder || !renameValue.trim()) return;
+        try {
+            renameFolder(user.id, renamingFolder, renameValue.trim());
+            if (openFolderName === renamingFolder) setOpenFolderName(renameValue.trim());
+            reloadFolders();
+            setRenamingFolder(null);
+            setRenameValue('');
+        } catch (err) {
+            console.error('Failed to rename folder:', err);
+        }
+    };
+
+    const handleDeleteFolder = (folderName: string) => {
+        if (!user?.id) return;
+        deleteFolder(user.id, folderName);
+        if (openFolderName === folderName) setOpenFolderName(null);
+        reloadFolders();
+        setDeleteFolderConfirm(null);
+        setFolderMenuOpen(null);
+    };
+
+    const handleMoveNote = (noteId: number, targetFolder: string | null) => {
+        if (!user?.id) return;
+        moveNoteToFolder(user.id, noteId, targetFolder);
+        reloadFolders();
+        setMoveNoteId(null);
+        setMenuOpenId(null);
+    };
+
+    const handleAddToFolder = (noteId: number, folderName: string) => {
+        if (!user?.id) return;
+        addNoteToFolder(user.id, folderName, noteId);
+        reloadFolders();
+        setMoveNoteId(null);
+        setMenuOpenId(null);
+    };
+
+    /* ── Derived data ── */
+    const userId = user?.id || '';
+
+    // Notes in the currently-open folder
+    const openFolder = folders.find((f) => f.name === openFolderName) || null;
+    const folderNoteIds = new Set(openFolder?.noteIds || []);
+    const folderNotes = openFolder ? notes.filter((n) => folderNoteIds.has(n.id)) : [];
+
+    // Notes not in any folder (unfiled)
+    const allFolderedNoteIds = new Set(folders.flatMap((f) => f.noteIds));
+    const unfiledNotes = notes.filter((n) => !allFolderedNoteIds.has(n.id));
+
+    /* ── Note row renderer ── */
+    const renderNoteRow = (note: Note, inFolder: boolean) => {
+        const { icon: TypeIcon, label: typeLabel, bg: typeBg, color: typeColor } = getNoteTypeInfo(note.source_type);
+        const lastUpdated = note.updated_at || note.created_at;
+        const currentFolder = userId ? getNoteFolder(userId, note.id) : null;
+
+        return (
+            <div key={note.id}>
+                <div
+                    onClick={() => navigate(`/notes/${note.id}`)}
+                    className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150"
+                    onMouseEnter={e => {
+                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)';
+                        (e.currentTarget as HTMLElement).style.borderRadius = '12px';
+                    }}
+                    onMouseLeave={e => {
+                        (e.currentTarget as HTMLElement).style.background = '';
+                    }}
+                >
+                    {/* Note Icon */}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background: typeBg }}>
+                        <TypeIcon className="h-5 w-5" style={{ color: typeColor }} />
+                    </div>
+
+                    {/* Note Info */}
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-zinc-200">
+                            {note.title}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
+                            <div className="flex items-center gap-1">
+                                <TypeIcon className="h-3.5 w-3.5" />
+                                <span>{typeLabel}</span>
+                            </div>
+                            <span>•</span>
+                            <span>Updated {timeAgo(lastUpdated)}</span>
+                            {currentFolder && !inFolder && (
+                                <>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1">
+                                        <BsFolder2 className="h-3 w-3" />
+                                        {currentFolder}
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Options Menu */}
+                    <div className="relative">
+                        <button
+                            data-menu-trigger
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenId(menuOpenId === note.id ? null : note.id);
+                                setMoveNoteId(null);
+                            }}
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:text-zinc-300 group-hover:opacity-100"
+                            style={{ background: 'transparent' }}
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                            aria-label="Note options"
+                        >
+                            <BsThreeDotsVertical className="h-4 w-4" />
+                        </button>
+
+                        {/* Dropdown Menu */}
+                        {menuOpenId === note.id && (
+                            <div
+                                data-menu-dropdown
+                                className="absolute right-0 top-full mt-1 z-50 w-52 rounded-xl shadow-xl overflow-hidden"
+                                style={{
+                                    background: 'var(--bg-main)',
+                                    border: '1px solid var(--border-glass-strong)',
+                                    backdropFilter: 'blur(16px)',
+                                    boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                                }}
+                            >
+                                {/* Move to folder */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setMoveNoteId(moveNoteId === note.id ? null : note.id); }}
+                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-zinc-300 transition-colors"
+                                    style={{ background: 'transparent' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                    <MdDriveFileMoveOutline className="h-4 w-4" />
+                                    {inFolder ? 'Move / Remove' : 'Move to Folder'}
+                                </button>
+
+                                {/* Folder picker sub-menu */}
+                                {moveNoteId === note.id && (
+                                    <div
+                                        className="border-t px-2 py-2"
+                                        style={{ borderColor: 'var(--border-glass)' }}
+                                    >
+                                        {folders.map((f) => (
+                                            <button
+                                                key={f.name}
+                                                onClick={(e) => { e.stopPropagation(); handleAddToFolder(note.id, f.name); }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium text-zinc-400 transition-colors"
+                                                style={{ background: currentFolder === f.name ? 'rgba(0,200,150,0.08)' : 'transparent' }}
+                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = currentFolder === f.name ? 'rgba(0,200,150,0.08)' : 'transparent'; }}
+                                            >
+                                                <BsFolder2 className="h-3.5 w-3.5" />
+                                                {f.name}
+                                                {currentFolder === f.name && <span className="ml-auto text-[10px]" style={{ color: 'var(--brand-emerald)' }}>✓</span>}
+                                            </button>
+                                        ))}
+                                        {inFolder && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleMoveNote(note.id, null); }}
+                                                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium text-amber-400 transition-colors"
+                                                style={{ background: 'transparent' }}
+                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(245,158,11,0.06)'; }}
+                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                            >
+                                                <BsArrowLeft className="h-3.5 w-3.5" />
+                                                Remove from folder
+                                            </button>
+                                        )}
+                                        {folders.length === 0 && (
+                                            <p className="px-3 py-2 text-[11px] text-zinc-600">No folders yet</p>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Delete */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeleteConfirmId(note.id);
+                                        setMenuOpenId(null);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-400 transition-colors"
+                                    style={{ background: 'transparent' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.06)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                    <FiTrash2 className="h-4 w-4" />
+                                    Delete
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Delete Confirmation Modal */}
+                {deleteConfirmId === note.id && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
+                        <div
+                            className="w-full max-w-sm rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
+                            style={{
+                                background: 'var(--bg-main)',
+                                border: '1px solid var(--border-glass-strong)',
+                                backdropFilter: 'blur(20px)',
+                                boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+                            }}
+                        >
+                            <h3
+                                className="text-lg font-bold text-zinc-100"
+                                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                            >
+                                Delete note?
+                            </h3>
+                            <p className="mt-2 text-sm text-zinc-500">
+                                This will permanently delete &ldquo;{note.title}&rdquo; and all its related data. This action cannot be undone.
+                            </p>
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200"
+                                    style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteNote(note.id)}
+                                    className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                                >
+                                    Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -479,7 +789,7 @@ const DashboardPage: React.FC = () => {
                         ))}
                     </div>
 
-                    {/* ── Tabs + New Folder ── */}
+                    {/* ── Tabs: My Notes / Folders ── */}
                     <div className="mb-6 flex items-center justify-between">
                         <div
                             className="flex items-center gap-1 rounded-lg border p-1"
@@ -489,187 +799,332 @@ const DashboardPage: React.FC = () => {
                             }}
                         >
                             <button
-                                className="rounded-md px-4 py-1.5 text-[13px] font-medium text-zinc-100 shadow-sm"
-                                style={{ background: 'var(--border-glass-strong)' }}
+                                onClick={() => { setActiveTab('notes'); setOpenFolderName(null); }}
+                                className="rounded-md px-4 py-1.5 text-[13px] font-semibold transition-colors"
+                                style={{
+                                    background: activeTab === 'notes' ? 'var(--border-glass-strong)' : 'transparent',
+                                    color: activeTab === 'notes' ? 'var(--podcast-bubble-text-active, #e4e4e7)' : 'var(--text-sidebar)',
+                                }}
                             >
                                 My Notes
+                            </button>
+                            <button
+                                onClick={() => { setActiveTab('folders'); setOpenFolderName(null); }}
+                                className="rounded-md px-4 py-1.5 text-[13px] font-semibold transition-colors"
+                                style={{
+                                    background: activeTab === 'folders' ? 'var(--border-glass-strong)' : 'transparent',
+                                    color: activeTab === 'folders' ? 'var(--podcast-bubble-text-active, #e4e4e7)' : 'var(--text-sidebar)',
+                                }}
+                            >
+                                Folders
                             </button>
                         </div>
 
                         <button
-                            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium text-zinc-500 transition-all duration-150 hover:text-zinc-300"
+                            onClick={() => { setActiveTab('folders'); setShowNewFolderInput(true); }}
+                            className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-all duration-150"
                             style={{
-                                border: '1px solid var(--border-glass)',
-                                background: 'var(--bg-glass-hover)',
+                                border: '1px solid rgba(0,200,150,0.25)',
+                                background: 'rgba(0,200,150,0.06)',
+                                color: 'var(--brand-emerald)',
                             }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
+                            onMouseEnter={e => {
+                                (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.12)';
+                                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.4)';
+                            }}
+                            onMouseLeave={e => {
+                                (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.06)';
+                                (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.25)';
+                            }}
                         >
-                            <BsFolder2 className="h-4 w-4" />
+                            <BsFolderPlus className="h-4 w-4" />
                             New Folder
                         </button>
                     </div>
 
-                    {/* ── Notes List ── */}
-                    <div>
-                        {/* Section Header */}
-                        <p className="mb-3 text-[12px] font-medium tracking-wide" style={{ color: '#00C896' }}>
-                            {notes.length > 0 ? 'Your Notes' : 'Earlier'}
-                        </p>
+                    {/* ══════════ MY NOTES TAB ══════════ */}
+                    {activeTab === 'notes' && (
+                        <div>
+                            <p className="mb-3 text-[12px] font-medium tracking-wide" style={{ color: '#00C896' }}>
+                                {notes.length > 0 ? 'Your Notes' : 'Earlier'}
+                            </p>
 
-                        {/* Notes */}
-                        {notesLoading ? (
+                            {notesLoading ? (
                                 <div className="flex items-center justify-center py-20">
-                                <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }} />
-                            </div>
-                        ) : notes.length > 0 ? (
-                            <div className="flex flex-col gap-1">
-                                {notes.map((note) => {
-                                    const { icon: TypeIcon, label: typeLabel } = getNoteTypeInfo(note.source_type);
-                                    const lastUpdated = note.updated_at || note.created_at;
-                                    return (
-                                        <div key={note.id}>
-                                            <div
-                                                onClick={() => navigate(`/notes/${note.id}`)}
-                                                className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150"
-                                                onMouseEnter={e => {
-                                                    (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)';
-                                                    (e.currentTarget as HTMLElement).style.borderRadius = '12px';
-                                                }}
-                                                onMouseLeave={e => {
-                                                    (e.currentTarget as HTMLElement).style.background = '';
-                                                }}
-                                            >
-                                                {/* Folder Icon */}
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
-                                                    <BsFolder2 className="h-5 w-5 text-amber-500" />
-                                                </div>
-
-                                                {/* Note Info */}
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-semibold text-zinc-200">
-                                                        {note.title}
-                                                    </p>
-                                                    <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
-                                                        <div className="flex items-center gap-1">
-                                                            <TypeIcon className="h-3.5 w-3.5" />
-                                                            <span>{typeLabel}</span>
-                                                        </div>
-                                                        <span>•</span>
-                                                        <span>Updated {timeAgo(lastUpdated)}</span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Options Menu */}
-                                                <div className="relative">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setMenuOpenId(menuOpenId === note.id ? null : note.id);
-                                                        }}
-                                                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:text-zinc-300 group-hover:opacity-100"
-                                                        style={{ background: 'transparent' }}
-                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
-                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                                                        aria-label="Note options"
-                                                    >
-                                                        <BsThreeDotsVertical className="h-4 w-4" />
-                                                    </button>
-
-                                                    {/* Dropdown Menu */}
-                                                    {menuOpenId === note.id && (
-                                                        <div
-                                                            className="absolute right-0 top-full mt-1 z-50 w-40 rounded-xl shadow-xl"
-                                                            style={{
-                                                                background: 'var(--bg-main)',
-                                                                border: '1px solid var(--border-glass-strong)',
-                                                                backdropFilter: 'blur(16px)',
-                                                                boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-                                                            }}
-                                                        >
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setDeleteConfirmId(note.id);
-                                                                    setMenuOpenId(null);
-                                                                }}
-                                                                className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-400 transition-colors hover:bg-red-500/10"
-                                                            >
-                                                                <FiTrash2 className="h-4 w-4" />
-                                                                Delete
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Delete Confirmation Modal */}
-                                            {deleteConfirmId === note.id && (
-                                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
-                                                    <div
-                                                        className="w-full max-w-sm rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
-                                                        style={{
-                                                            background: 'var(--bg-main)',
-                                                            border: '1px solid var(--border-glass-strong)',
-                                                            backdropFilter: 'blur(20px)',
-                                                            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
-                                                        }}
-                                                    >
-                                                        <h3
-                                                            className="text-lg font-bold text-zinc-100"
-                                                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                                                        >
-                                                            Delete note?
-                                                        </h3>
-                                                        <p className="mt-2 text-sm text-zinc-500">
-                                                            This will permanently delete &ldquo;{note.title}&rdquo; and all its related data. This action cannot be undone.
-                                                        </p>
-                                                        <div className="mt-6 flex gap-3">
-                                                            <button
-                                                                onClick={() => setDeleteConfirmId(null)}
-                                                                className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200"
-                                                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
-                                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
-                                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDeleteNote(note.id)}
-                                                                className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-24">
-                                <div
-                                    className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
-                                    style={{
-                                        background: 'rgba(0,200,150,0.06)',
-                                        border: '1px solid rgba(0,200,150,0.15)',
-                                    }}
-                                >
-                                    <IoDocumentTextOutline className="h-7 w-7" style={{ color: '#00C896', opacity: 0.7 }} />
+                                    <div className="h-8 w-8 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(0,200,150,0.2)', borderTopColor: '#00C896' }} />
                                 </div>
-                                <p className="text-sm font-semibold text-zinc-400">
-                                    No notes yet
-                                </p>
-                                <p className="mt-1.5 text-[12px] text-zinc-600">
-                                    Create your first note using the cards above
-                                </p>
+                            ) : notes.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                    {notes.map((note) => renderNoteRow(note, false))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-24">
+                                    <div
+                                        className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
+                                        style={{
+                                            background: 'rgba(0,200,150,0.06)',
+                                            border: '1px solid rgba(0,200,150,0.15)',
+                                        }}
+                                    >
+                                        <IoDocumentTextOutline className="h-7 w-7" style={{ color: '#00C896', opacity: 0.7 }} />
+                                    </div>
+                                    <p className="text-sm font-semibold text-zinc-400">
+                                        No notes yet
+                                    </p>
+                                    <p className="mt-1.5 text-[12px] text-zinc-600">
+                                        Create your first note using the cards above
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ══════════ FOLDERS TAB ══════════ */}
+                    {activeTab === 'folders' && !openFolderName && (
+                        <div>
+                            {/* New folder input */}
+                            {showNewFolderInput && (
+                                <div
+                                    className="mb-4 flex items-center gap-3 rounded-xl px-4 py-3"
+                                    style={{ border: '1px solid var(--border-glass-strong)', background: 'var(--bg-glass-hover)' }}
+                                >
+                                    <BsFolder2 className="h-5 w-5 shrink-0" style={{ color: 'var(--brand-emerald)' }} />
+                                    <input
+                                        ref={newFolderInputRef}
+                                        type="text"
+                                        value={newFolderName}
+                                        onChange={(e) => setNewFolderName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') { setShowNewFolderInput(false); setNewFolderName(''); } }}
+                                        placeholder="Folder name…"
+                                        className="min-w-0 flex-1 bg-transparent text-[14px] font-medium text-zinc-200 outline-none placeholder:text-zinc-600"
+                                    />
+                                    <button
+                                        onClick={handleCreateFolder}
+                                        disabled={!newFolderName.trim()}
+                                        className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors disabled:opacity-40"
+                                        style={{ background: 'var(--brand-emerald)', color: 'var(--text-on-brand)' }}
+                                    >
+                                        Create
+                                    </button>
+                                    <button
+                                        onClick={() => { setShowNewFolderInput(false); setNewFolderName(''); }}
+                                        className="text-[12px] font-medium text-zinc-500 hover:text-zinc-300"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Folder list */}
+                            {folders.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                    {folders.map((folder) => {
+                                        const noteCount = folder.noteIds.filter((id) => notes.some((n) => n.id === id)).length;
+
+                                        return (
+                                            <div key={folder.name} className="relative">
+                                                {renamingFolder === folder.name ? (
+                                                    <div
+                                                        className="flex items-center gap-3 rounded-xl px-4 py-3.5"
+                                                        style={{ border: '1px solid var(--border-glass-strong)', background: 'var(--bg-glass-hover)' }}
+                                                    >
+                                                        <BsFolder2 className="h-5 w-5 shrink-0 text-amber-500" />
+                                                        <input
+                                                            ref={renameInputRef}
+                                                            type="text"
+                                                            value={renameValue}
+                                                            onChange={(e) => setRenameValue(e.target.value)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') handleRenameFolder(); if (e.key === 'Escape') setRenamingFolder(null); }}
+                                                            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-zinc-200 outline-none"
+                                                        />
+                                                        <button onClick={handleRenameFolder} className="text-[12px] font-semibold" style={{ color: 'var(--brand-emerald)' }}>Save</button>
+                                                        <button onClick={() => setRenamingFolder(null)} className="text-[12px] font-medium text-zinc-500">Cancel</button>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150"
+                                                        onClick={() => setOpenFolderName(folder.name)}
+                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = ''; }}
+                                                    >
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                                                            <BsFolder2 className="h-5 w-5 text-amber-500" />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-sm font-semibold text-zinc-200">{folder.name}</p>
+                                                            <p className="mt-0.5 text-[12px] text-zinc-500">
+                                                                {noteCount} note{noteCount !== 1 ? 's' : ''} • Created {timeAgo(folder.createdAt)}
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Folder options */}
+                                                        <div className="relative">
+                                                            <button
+                                                                data-menu-trigger
+                                                                onClick={(e) => { e.stopPropagation(); setFolderMenuOpen(folderMenuOpen === folder.name ? null : folder.name); }}
+                                                                className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all hover:text-zinc-300 group-hover:opacity-100"
+                                                                style={{ background: 'transparent' }}
+                                                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                                            >
+                                                                <BsThreeDotsVertical className="h-4 w-4" />
+                                                            </button>
+
+                                                            {folderMenuOpen === folder.name && (
+                                                                <div
+                                                                    data-menu-dropdown
+                                                                    className="absolute right-0 top-full mt-1 z-50 w-44 overflow-hidden rounded-xl shadow-xl"
+                                                                    style={{
+                                                                        background: 'var(--bg-main)',
+                                                                        border: '1px solid var(--border-glass-strong)',
+                                                                        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+                                                                    }}
+                                                                >
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setRenameValue(folder.name);
+                                                                            setRenamingFolder(folder.name);
+                                                                            setFolderMenuOpen(null);
+                                                                        }}
+                                                                        className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-zinc-300 transition-colors"
+                                                                        style={{ background: 'transparent' }}
+                                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                                                    >
+                                                                        <FiEdit3 className="h-4 w-4" />
+                                                                        Rename
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setDeleteFolderConfirm(folder.name);
+                                                                            setFolderMenuOpen(null);
+                                                                        }}
+                                                                        className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-400 transition-colors"
+                                                                        style={{ background: 'transparent' }}
+                                                                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.06)'; }}
+                                                                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                                                    >
+                                                                        <FiTrash2 className="h-4 w-4" />
+                                                                        Delete Folder
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <BsChevronRight className="h-3.5 w-3.5 text-zinc-600 transition-transform group-hover:translate-x-0.5" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : !showNewFolderInput && (
+                                <div className="flex flex-col items-center justify-center py-24">
+                                    <div
+                                        className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
+                                        style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}
+                                    >
+                                        <BsFolder2 className="h-7 w-7" style={{ color: '#F5A623', opacity: 0.7 }} />
+                                    </div>
+                                    <p className="text-sm font-semibold text-zinc-400">No folders yet</p>
+                                    <p className="mt-1.5 text-[12px] text-zinc-600">
+                                        Create a folder to organize your notes
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* ══════════ FOLDER DETAIL VIEW ══════════ */}
+                    {activeTab === 'folders' && openFolderName && (
+                        <div>
+                            {/* Back button + folder name */}
+                            <div className="mb-4 flex items-center gap-3">
+                                <button
+                                    onClick={() => setOpenFolderName(null)}
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-200"
+                                    style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
+                                >
+                                    <BsArrowLeft className="h-4 w-4" />
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <BsFolder2 className="h-5 w-5 text-amber-500" />
+                                    <h2
+                                        className="text-lg font-bold text-zinc-100"
+                                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                                    >
+                                        {openFolderName}
+                                    </h2>
+                                    <span className="ml-2 rounded-full px-2.5 py-0.5 text-[11px] font-medium text-zinc-500" style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}>
+                                        {folderNotes.length} note{folderNotes.length !== 1 ? 's' : ''}
+                                    </span>
+                                </div>
                             </div>
-                        )}
-                    </div>
+
+                            {folderNotes.length > 0 ? (
+                                <div className="flex flex-col gap-1">
+                                    {folderNotes.map((note) => renderNoteRow(note, true))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-24">
+                                    <div
+                                        className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl"
+                                        style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.15)' }}
+                                    >
+                                        <BsFolder2 className="h-7 w-7" style={{ color: '#F5A623', opacity: 0.7 }} />
+                                    </div>
+                                    <p className="text-sm font-semibold text-zinc-400">This folder is empty</p>
+                                    <p className="mt-1.5 text-[12px] text-zinc-600">
+                                        Move notes here from the "My Notes" tab
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* ─── Delete Folder Confirmation Modal ─── */}
+            {deleteFolderConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
+                    <div
+                        className="w-full max-w-sm rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
+                        style={{
+                            background: 'var(--bg-main)',
+                            border: '1px solid var(--border-glass-strong)',
+                            backdropFilter: 'blur(20px)',
+                            boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
+                        }}
+                    >
+                        <h3
+                            className="text-lg font-bold text-zinc-100"
+                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                        >
+                            Delete folder?
+                        </h3>
+                        <p className="mt-2 text-sm text-zinc-500">
+                            This will delete the folder &ldquo;{deleteFolderConfirm}&rdquo;. Your notes will not be deleted — they'll just become unfiled.
+                        </p>
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                onClick={() => setDeleteFolderConfirm(null)}
+                                className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200"
+                                style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleDeleteFolder(deleteFolderConfirm)}
+                                className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                            >
+                                Delete Folder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* ─── MODALS ─── */}
             <BlankDocumentModal

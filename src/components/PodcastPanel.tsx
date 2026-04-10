@@ -820,8 +820,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             <div
                                 className="mx-auto max-w-5xl rounded-[26px] px-5 py-4"
                                 style={{
-                                    background: 'radial-gradient(120% 150% at 8% 10%, rgba(16,185,129,0.14) 0%, rgba(5,150,105,0.1) 38%, rgba(17,18,25,0.94) 100%)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'var(--podcast-card-bg)',
+                                    border: '1px solid var(--podcast-card-border)',
                                     backdropFilter: 'blur(12px)',
                                 }}
                             >
@@ -831,7 +831,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                             className="absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
                                             style={{
                                                 background: SPEAKERS.Hope.avatarBg,
-                                                border: '2px solid rgba(12,12,18,0.95)',
+                                                border: '2px solid var(--podcast-avatar-ring)',
                                             }}
                                         >
                                             {SPEAKERS.Hope.name[0]}
@@ -840,7 +840,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                             className="absolute bottom-0 left-6 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
                                             style={{
                                                 background: SPEAKERS.Corey.avatarBg,
-                                                border: '2px solid rgba(12,12,18,0.95)',
+                                                border: '2px solid var(--podcast-avatar-ring)',
                                             }}
                                         >
                                             {SPEAKERS.Corey.name[0]}
@@ -878,7 +878,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                 <div className="mt-3">
                                     <div
                                         className="group relative h-1.5 cursor-pointer rounded-full"
-                                        style={{ background: 'rgba(255,255,255,0.08)' }}
+                                        style={{ background: 'var(--podcast-progress-track)' }}
                                         onClick={handleProgressClick}
                                     >
                                         <div
@@ -924,14 +924,17 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                             value={isMuted ? 0 : volume}
                                             onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
                                             className="podcast-volume-slider h-1 w-16 appearance-none rounded-full"
-                                            style={{ background: `linear-gradient(to right, #a1a1aa ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.1) ${(isMuted ? 0 : volume) * 100}%)` }}
+                                            style={{ background: `linear-gradient(to right, #a1a1aa ${(isMuted ? 0 : volume) * 100}%, var(--podcast-volume-track-inactive) ${(isMuted ? 0 : volume) * 100}%)` }}
                                         />
                                     </div>
 
                                     <div className="flex items-center gap-3">
                                         <button
                                             onClick={skipBackward}
-                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
+                                            style={{ background: 'transparent' }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                         >
                                             <IoPlaySkipBackSharp className="h-5 w-5" />
                                         </button>
@@ -950,7 +953,10 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                         </button>
                                         <button
                                             onClick={skipForward}
-                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-zinc-200"
+                                            style={{ background: 'transparent' }}
+                                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                         >
                                             <IoPlaySkipForwardSharp className="h-5 w-5" />
                                         </button>
@@ -987,8 +993,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                             <div
                                 className="mx-auto max-w-5xl space-y-4 rounded-2xl p-4"
                                 style={{
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                    background: 'linear-gradient(180deg, rgba(16,17,22,0.88), rgba(10,10,14,0.92))',
+                                    border: '1px solid var(--podcast-transcript-border)',
+                                    background: 'var(--podcast-transcript-bg)',
                                 }}
                             >
                                 <AnimatePresence initial={false}>
@@ -1039,7 +1045,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                                         style={{
                                                             background: isActive
                                                                 ? `rgba(${isRight ? '245,166,35' : '224,112,112'},0.1)`
-                                                                : 'rgba(255,255,255,0.04)',
+                                                                : 'var(--podcast-bubble-bg)',
                                                             border: isActive
                                                                 ? `1px solid ${speaker.color}40`
                                                                 : '1px solid var(--border-glass)',
@@ -1052,8 +1058,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                                         }}
                                                     >
                                                         <p
-                                                            className={`text-[14px] leading-relaxed ${isActive ? 'text-zinc-200' : 'text-zinc-400'}`}
-                                                            style={{ transition: 'color 0.3s ease' }}
+                                                            className={`text-[14px] leading-relaxed`}
+                                                            style={{ transition: 'color 0.3s ease', color: isActive ? 'var(--podcast-bubble-text-active)' : 'var(--podcast-bubble-text)' }}
                                                         >
                                                             {line.text}
                                                         </p>
@@ -1080,8 +1086,8 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                         <div
                             className="mx-auto flex h-full w-full max-w-5xl flex-col rounded-[28px] px-5 py-5"
                             style={{
-                                background: 'radial-gradient(120% 140% at 50% 0%, rgba(79,156,249,0.16) 0%, rgba(17,18,25,0.95) 55%, rgba(10,10,14,0.96) 100%)',
-                                border: '1px solid rgba(255,255,255,0.12)',
+                                background: 'var(--podcast-raise-bg)',
+                                border: '1px solid var(--podcast-raise-border)',
                                 backdropFilter: 'blur(12px)',
                             }}
                         >
@@ -1107,13 +1113,13 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                 <button
                                     onClick={endRaiseHandFlow}
                                     className="rounded-full px-4 py-2 text-[13px] font-semibold text-zinc-200 transition-colors"
-                                    style={{ border: '1px solid var(--border-glass)', background: 'rgba(255,255,255,0.04)' }}
+                                    style={{ border: '1px solid var(--border-glass)', background: 'var(--podcast-bubble-bg)' }}
                                 >
                                     Back to podcast
                                 </button>
                             </div>
 
-                            <div ref={raiseHandChatRef} className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto rounded-[24px] border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
+                            <div ref={raiseHandChatRef} className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto rounded-[24px] p-4" style={{ border: '1px solid var(--podcast-transcript-border)', background: 'var(--podcast-bubble-bg)' }}>
                                 {raiseHandError && (
                                     <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[13px] text-red-300">
                                         {raiseHandError}
@@ -1170,7 +1176,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
                                 {raiseHandTurns.length === 0 && !raiseHandQuestion && (
                                     <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center text-center">
-                                        <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 ${raiseHandStatus === 'listening' ? 'animate-pulse bg-[#4F9CF9]/20' : 'bg-white/5'}`}>
+                                        <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${raiseHandStatus === 'listening' ? 'animate-pulse bg-[#4F9CF9]/20' : ''}`} style={{ border: '1px solid var(--border-glass)', background: raiseHandStatus === 'listening' ? undefined : 'var(--podcast-bubble-bg)' }}>
                                             <span className="text-[22px]">🎤</span>
                                         </div>
                                         <p className="text-[15px] font-semibold text-zinc-100">{raiseHandStatus === 'intro' ? 'Please wait...' : 'Tap back to cancel or wait for the greeting.'}</p>

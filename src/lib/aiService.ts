@@ -449,8 +449,17 @@ export async function generateQuizExplanation(
     correctIndex: number,
     noteContent: string,
 ): Promise<string> {
-    const { data, error } = await supabase.functions.invoke('chat', {
-        body: {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
             noteContent,
             messages: [
                 {
@@ -464,11 +473,49 @@ Correct answer: ${options[correctIndex]}
 Explain why "${options[correctIndex]}" is correct.`,
                 },
             ],
-        },
+        }),
     });
 
-    if (error) throw new Error(await extractErrorMessage(error, 'Failed to generate explanation'));
-    return data.reply;
+    if (!res.ok) {
+        let errMsg = 'Failed to generate explanation';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = body.error;
+        } catch { /* ignore */ }
+        throw new Error(errMsg);
+    }
+
+    // Parse SSE stream and collect all text chunks
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            if (line.startsWith('event: ')) continue;
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+                const parsed = JSON.parse(jsonStr);
+                if (parsed.text) fullText += parsed.text;
+            } catch { /* skip unparseable */ }
+        }
+    }
+
+    if (!fullText.trim()) throw new Error('Failed to generate explanation');
+    return fullText.trim();
 }
 
 /**

@@ -48,10 +48,10 @@ import ThemeModal from '../components/ThemeModal';
 /* ── Note-page sidebar nav items ── */
 const noteSidebarLinks = [
     { icon: IoDocumentTextOutline, label: 'Document', slug: '' },
-    { icon: BsChatDots,           label: 'Chat Bot',   slug: 'chat' },
-    { icon: BsMic,                label: 'Podcast',    slug: 'podcast' },
-    { icon: TbCards,              label: 'Flashcards', slug: 'flashcards' },
     { icon: PiExam,               label: 'Quiz',       slug: 'quiz' },
+    { icon: TbCards,              label: 'Flashcards', slug: 'flashcards' },
+    { icon: BsMic,                label: 'Podcast',    slug: 'podcast' },
+    { icon: BsChatDots,           label: 'Chat Bot',   slug: 'chat' },
 ];
 
 type SidebarSection = 'Document' | 'Chat Bot' | 'Podcast' | 'Flashcards' | 'Quiz';
@@ -318,16 +318,16 @@ const NotePage: React.FC = () => {
                                     <button
                                         key={link.label}
                                         onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
-                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors duration-150"
+                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold transition-colors duration-150"
                                         style={{
                                             background: isActive ? 'rgba(0,200,150,0.1)' : 'transparent',
-                                            color: isActive ? '#00C896' : '#a1a1aa',
+                                            color: isActive ? 'var(--brand-emerald)' : 'var(--text-sidebar)',
                                             border: isActive ? '1px solid rgba(0,200,150,0.18)' : '1px solid transparent',
                                         }}
-                                        onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; } }}
-                                        onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#a1a1aa'; } }}
+                                        onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)'; } }}
+                                        onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)'; } }}
                                     >
-                                        <link.icon className="h-[18px] w-[18px] shrink-0" />
+                                        <link.icon className="h-[20px] w-[20px] shrink-0" />
                                         <span>{link.label}</span>
                                     </button>
                                 );
@@ -335,7 +335,7 @@ const NotePage: React.FC = () => {
                         </div>
 
                         {/* Upgrade Button */}
-                        <button className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 py-2.5 text-[13px] font-semibold">
+                        <button className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 py-3 text-[14px] font-bold">
                             <MdAutoAwesome className="h-4 w-4" />
                             Upgrade to Premium
                         </button>
@@ -345,9 +345,9 @@ const NotePage: React.FC = () => {
                     <div className="px-3 py-3" style={{ borderTop: glassBorder }}>
                         <button
                             onClick={() => setThemeModalOpen(true)}
-                            className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-zinc-400 transition-colors"
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = '#e4e4e7'; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#a1a1aa'; }}
+                            className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold text-zinc-400 transition-colors"
+                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)'; }}
+                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)'; }}
                         >
                             <RiMoonLine className="h-[18px] w-[18px]" />
                             <span>Theme</span>
@@ -361,7 +361,7 @@ const NotePage: React.FC = () => {
                                 {user?.email?.charAt(0).toUpperCase() || 'U'}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-[13px] font-medium text-zinc-300">
+                                <p className="truncate text-[13px] font-semibold text-zinc-300">
                                     {user?.email || 'user@zemly.app'}
                                 </p>
                             </div>
@@ -385,7 +385,7 @@ const NotePage: React.FC = () => {
                                 <HiOutlineChevronDoubleRight className="h-4 w-4" />
                             </button>
                             <h1
-                                className="max-w-md truncate text-base font-semibold text-zinc-100"
+                                className="max-w-md truncate text-lg font-bold text-zinc-100"
                                 style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
                             >
                                 {note.title}

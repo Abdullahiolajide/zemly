@@ -27,6 +27,20 @@
     --bg-glass-hover: rgba(255, 255, 255, 0.04);
     --brand-emerald: #00C896;
     --text-on-brand: #0D0F12;
+    --text-sidebar: #71717a;
+    --text-sidebar-hover: #e4e4e7;
+    --podcast-card-bg: radial-gradient(120% 150% at 8% 10%, rgba(16,185,129,0.14) 0%, rgba(5,150,105,0.1) 38%, rgba(17,18,25,0.94) 100%);
+    --podcast-card-border: rgba(255,255,255,0.12);
+    --podcast-avatar-ring: rgba(12,12,18,0.95);
+    --podcast-transcript-bg: linear-gradient(180deg, rgba(16,17,22,0.88), rgba(10,10,14,0.92));
+    --podcast-transcript-border: rgba(255,255,255,0.08);
+    --podcast-bubble-bg: rgba(255,255,255,0.04);
+    --podcast-bubble-text: #a1a1aa;
+    --podcast-bubble-text-active: #e4e4e7;
+    --podcast-raise-bg: radial-gradient(120% 140% at 50% 0%, rgba(79,156,249,0.16) 0%, rgba(17,18,25,0.95) 55%, rgba(10,10,14,0.96) 100%);
+    --podcast-raise-border: rgba(255,255,255,0.12);
+    --podcast-progress-track: rgba(255,255,255,0.08);
+    --podcast-volume-track-inactive: rgba(255,255,255,0.1);
   }
 
   html.dark body {
@@ -51,13 +65,27 @@
 
   /* ── Light mode base ── */
   html.light {
-    --bg-main: #F5F4F0;
-    --bg-sidebar: rgba(255, 255, 255, 0.45);
-    --border-glass: rgba(0, 0, 0, 0.06);
-    --border-glass-strong: rgba(0, 0, 0, 0.12);
+    --bg-main: #FFFFFF;
+    --bg-sidebar: #F7F6F3;
+    --border-glass: rgba(0, 0, 0, 0.08);
+    --border-glass-strong: rgba(0, 0, 0, 0.14);
     --bg-glass-hover: rgba(0, 0, 0, 0.03);
     --brand-emerald: #00A87A;
     --text-on-brand: #FFFFFF;
+    --text-sidebar: #5A5A56;
+    --text-sidebar-hover: #1A1A18;
+    --podcast-card-bg: linear-gradient(135deg, rgba(0,168,122,0.06) 0%, rgba(255,255,255,0.95) 40%, #FFFFFF 100%);
+    --podcast-card-border: rgba(0,0,0,0.1);
+    --podcast-avatar-ring: #FFFFFF;
+    --podcast-transcript-bg: #F9F9F7;
+    --podcast-transcript-border: rgba(0,0,0,0.08);
+    --podcast-bubble-bg: rgba(0,0,0,0.03);
+    --podcast-bubble-text: #3A3A36;
+    --podcast-bubble-text-active: #1A1A18;
+    --podcast-raise-bg: linear-gradient(135deg, rgba(79,156,249,0.08) 0%, #FFFFFF 50%, #F9F9F7 100%);
+    --podcast-raise-border: rgba(0,0,0,0.1);
+    --podcast-progress-track: rgba(0,0,0,0.08);
+    --podcast-volume-track-inactive: rgba(0,0,0,0.1);
   }
 
   html.light body {
@@ -233,7 +261,7 @@ html.light .bg-zinc-900\/70,
 html.light .bg-zinc-900\/60,
 html.light .bg-zinc-900\/50,
 html.light .bg-zinc-900\/40 {
-  background-color: #F5F4F0 !important;
+  background-color: #FFFFFF !important;
   color: #1A1A18 !important;
 }
 
@@ -333,6 +361,16 @@ html.light kbd {
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: #5A5A56 !important;
 }
+
+/* ── Status badge colours (light mode) ── */
+html.light .text-red-400    { color: #dc2626 !important; }
+html.light .text-amber-400  { color: #d97706 !important; }
+html.light .text-blue-400   { color: #2563eb !important; }
+html.light .text-green-400  { color: #16a34a !important; }
+html.light .bg-red-400      { background-color: #dc2626 !important; }
+html.light .bg-amber-400    { background-color: #d97706 !important; }
+html.light .bg-blue-400     { background-color: #2563eb !important; }
+html.light .bg-green-400    { background-color: #16a34a !important; }
 
 /* ══════════════════════════════════════════════════════
    EMERALD ACCENT OVERRIDES (replaces indigo/purple)

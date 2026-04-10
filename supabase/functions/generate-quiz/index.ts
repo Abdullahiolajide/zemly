@@ -43,9 +43,8 @@ serve(async (req: Request) => {
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
-    - Generate exactly ${safeCount} questions.
-    - Keep difficulty and coverage proportional to the note depth.
-    - If the note contains multiple SOURCE blocks, sample questions across all sources, not just the first one.
+- Handle content coverage: If the note has multiple SOURCE blocks, sample questions across all sources.
+- Meaningful depth: Decide the number of high-quality questions you can generate depending on the note length (not greater than ${safeCount + 5} and not less than ${safeCount - 5}).
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
 - Return ONLY valid JSON, no markdown fences.
@@ -62,27 +61,8 @@ ${note}`;
 
         let questions = parseQuestions(raw);
 
-        // Retry once if model under-returns. Do not filter or deduplicate; keep raw output order.
-        if (questions.length < 15) {
-            const retryPrompt = `Generate exactly ${safeCount} multiple-choice questions from the note.
-RULES:
-- Exactly ${safeCount} questions.
-- Each question has exactly 4 options.
-- correctIndex is 0-based.
-- Return ONLY valid JSON as {"questions":[...]} with no markdown.
-
-NOTE:
-${note}`;
-
-            const retryRaw = await promptGemini(retryPrompt, {
-                temperature: 0.4,
-                maxOutputTokens: 8192,
-            });
-            questions = parseQuestions(retryRaw);
-        }
-
-        if (questions.length < 15) {
-            throw new Error('Quiz generation returned too few questions. Please try again.');
+        if (questions.length === 0) {
+            throw new Error('Quiz generation returned no questions. Please try again.');
         }
 
         // Safety cap at 30
