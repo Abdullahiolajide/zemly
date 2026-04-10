@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { startRecognition, warmupSpeechRecognition } from '../lib/speechService';
+import type { RecognitionHandle } from '../lib/speechService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BsMic, BsDownload } from 'react-icons/bs';
 import {
@@ -8,7 +10,7 @@ import {
 } from 'react-icons/io5';
 import { HiOutlineHand } from 'react-icons/hi';
 import type { PodcastLine } from '../lib/aiService';
-import { generatePodcast, generatePodcastAudio } from '../lib/aiService';
+import { generatePodcast, generatePodcastAudio, generateRaiseHandResponseStreaming } from '../lib/aiService';
 import { getPodcastSession, upsertPodcastScript, uploadPodcastAudio } from '../lib/podcastService';
 
 /* ── Speaker config ── */
@@ -28,6 +30,10 @@ const SPEAKERS = {
 };
 
 type PodcastView = 'loading' | 'generate' | 'player';
+type PodcastMode = 'player' | 'raise-hand-greeting' | 'raise-hand-listening' | 'raise-hand-processing' | 'raise-hand-answering';
+type RaiseHandTurn = { question: string; answer: string };
+
+
 
 interface PodcastPanelProps {
     noteId: number;
@@ -82,6 +88,8 @@ function normalizePodcastScript(script: PodcastLine[]): PodcastLine[] {
     });
 }
 
+const RAISE_HAND_GREETING_AUDIO_URL = import.meta.env.VITE_PODCAST_RAISE_HAND_GREETING_AUDIO_URL?.trim();
+
 const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteText }) => {
     const [view, setView] = useState<PodcastView>('loading');
     const [script, setScript] = useState<PodcastLine[]>([]);
@@ -98,12 +106,22 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const [volume, setVolume] = useState(0.75);
     const [isMuted, setIsMuted] = useState(false);
     const [playbackSpeed, setPlaybackSpeed] = useState(1);
-    const [showRaiseHand, setShowRaiseHand] = useState(false);
     const [hasAudio, setHasAudio] = useState(false);
+    const [mode, setMode] = useState<PodcastMode>('player');
+    const [raiseHandQuestion, setRaiseHandQuestion] = useState('');
+    const [raiseHandError, setRaiseHandError] = useState<string | null>(null);
+    const [raiseHandStatus, setRaiseHandStatus] = useState<'idle' | 'intro' | 'listening' | 'processing' | 'answering'>('idle');
+    const [raiseHandTurns, setRaiseHandTurns] = useState<RaiseHandTurn[]>([]);
 
     const transcriptRef = useRef<HTMLDivElement>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const audioUrlRef = useRef<string | null>(null);
+    const transientAudioRef = useRef<HTMLAudioElement | null>(null);
+    const recognitionHandleRef = useRef<RecognitionHandle | null>(null);
+    const questionBufferRef = useRef('');
+    const raiseHandActiveRef = useRef(false);
+    const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const raiseHandChatRef = useRef<HTMLDivElement>(null);
 
     const normalizedScript = useMemo(() => normalizePodcastScript(script), [script]);
 
@@ -123,6 +141,268 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         });
     }, [normalizedScript, duration]);
 
+    const pauseMainPlayer = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
+        setIsPlaying(false);
+    }, []);
+
+    const clearTransientAudio = useCallback(() => {
+        if (transientAudioRef.current) {
+            transientAudioRef.current.pause();
+            transientAudioRef.current.src = '';
+            transientAudioRef.current = null;
+        }
+    }, []);
+
+    const clearSilenceTimer = useCallback(() => {
+        if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+        }
+    }, []);
+
+    const playTransientAudio = useCallback(async (source: string | Blob): Promise<void> => {
+        clearTransientAudio();
+
+        const isBlob = source instanceof Blob;
+        const objectUrl = isBlob ? URL.createObjectURL(source) : null;
+        const audio = new Audio(isBlob ? objectUrl || '' : source);
+        transientAudioRef.current = audio;
+
+        await new Promise<void>((resolve) => {
+            const finish = () => {
+                if (objectUrl) URL.revokeObjectURL(objectUrl);
+                if (transientAudioRef.current === audio) transientAudioRef.current = null;
+                resolve();
+            };
+
+            audio.onended = finish;
+            audio.onerror = finish;
+            audio.play().catch(finish);
+        });
+    }, [clearTransientAudio]);
+
+    const endRaiseHandFlow = useCallback(() => {
+        raiseHandActiveRef.current = false;
+        recognitionHandleRef.current?.stop();
+        recognitionHandleRef.current = null;
+        clearSilenceTimer();
+        clearTransientAudio();
+        questionBufferRef.current = '';
+        setRaiseHandQuestion('');
+        setRaiseHandError(null);
+        setRaiseHandStatus('idle');
+        setMode('player');
+    }, [clearSilenceTimer, clearTransientAudio]);
+
+    const startListeningForQuestion = useCallback(async () => {
+        if (!raiseHandActiveRef.current) return;
+
+        questionBufferRef.current = '';
+        setRaiseHandError(null);
+        setRaiseHandStatus('listening');
+        setMode('raise-hand-listening');
+
+        try {
+            const handle = await startRecognition({
+                onInterim: (text: string) => {
+                    if (!raiseHandActiveRef.current) return;
+                    questionBufferRef.current = text;
+                    setRaiseHandQuestion(text);
+
+                    // Reset silence timer — submit after 1.2s of silence
+                    clearSilenceTimer();
+                    silenceTimerRef.current = setTimeout(() => {
+                        if (!raiseHandActiveRef.current) return;
+                        recognitionHandleRef.current?.stop();
+                    }, 1200);
+                },
+                onRecognized: (text: string) => {
+                    if (!raiseHandActiveRef.current) return;
+                    questionBufferRef.current = text;
+                    setRaiseHandQuestion(text);
+
+                    // Reset silence timer on final result too
+                    clearSilenceTimer();
+                    silenceTimerRef.current = setTimeout(() => {
+                        if (!raiseHandActiveRef.current) return;
+                        recognitionHandleRef.current?.stop();
+                    }, 1200);
+                },
+                onError: (error: string) => {
+                    if (!raiseHandActiveRef.current) return;
+                    const msg = error.toLowerCase();
+                    if (msg.includes('microphone') || msg.includes('permission') || msg.includes('denied')) {
+                        setRaiseHandError('Microphone permission is blocked. Please allow mic access.');
+                        return;
+                    }
+                    // Transient errors — retry silently
+                    setRaiseHandError(null);
+                    setTimeout(() => {
+                        if (raiseHandActiveRef.current) void startListeningForQuestion();
+                    }, 500);
+                },
+                onEnd: () => {
+                    clearSilenceTimer();
+                    recognitionHandleRef.current = null;
+                    if (!raiseHandActiveRef.current) return;
+
+                    const question = questionBufferRef.current.trim();
+                    if (question) {
+                        void submitRaiseHandQuestion(question);
+                    } else {
+                        // No speech detected — restart listening
+                        setTimeout(() => {
+                            if (raiseHandActiveRef.current) void startListeningForQuestion();
+                        }, 250);
+                    }
+                },
+            });
+
+            recognitionHandleRef.current = handle;
+        } catch (err) {
+            console.error('Speech recognition start failed:', err);
+            recognitionHandleRef.current = null;
+            clearSilenceTimer();
+            setRaiseHandError('Unable to start microphone input.');
+            setMode('player');
+            raiseHandActiveRef.current = false;
+        }
+    }, [clearSilenceTimer, setMode]);
+
+    const submitRaiseHandQuestion = useCallback(async (question: string) => {
+        const trimmedQuestion = question.trim();
+        if (!trimmedQuestion) {
+            if (raiseHandActiveRef.current) startListeningForQuestion();
+            return;
+        }
+
+        setRaiseHandQuestion('');
+        setRaiseHandStatus('processing');
+        setMode('raise-hand-processing');
+        setRaiseHandTurns((prev) => [...prev, { question: trimmedQuestion, answer: '' }]);
+
+        // Audio queue for streamed TTS chunks — plays them sequentially
+        const audioQueue: Blob[] = [];
+        let isPlayingAudio = false;
+        let streamFinished = false;
+        let firstChunkPlayed = false;
+
+        const playNextChunk = async (): Promise<void> => {
+            if (isPlayingAudio || !raiseHandActiveRef.current) return;
+            const blob = audioQueue.shift();
+            if (!blob) {
+                // Queue empty — if stream is done, resume listening
+                if (streamFinished && raiseHandActiveRef.current) {
+                    setRaiseHandQuestion('');
+                    startListeningForQuestion();
+                }
+                return;
+            }
+            isPlayingAudio = true;
+            if (!firstChunkPlayed) {
+                firstChunkPlayed = true;
+                setRaiseHandStatus('answering');
+                setMode('raise-hand-answering');
+            }
+            try {
+                await playTransientAudio(blob);
+            } catch { /* ignore playback errors */ }
+            isPlayingAudio = false;
+            if (raiseHandActiveRef.current) {
+                void playNextChunk();
+            }
+        };
+
+        try {
+            const noteText = getNoteText().slice(0, 12000);
+            await generateRaiseHandResponseStreaming(
+                noteText,
+                trimmedQuestion,
+                {
+                    onTextChunk: (text: string) => {
+                        setRaiseHandTurns((prev) => {
+                            const updated = [...prev];
+                            for (let i = updated.length - 1; i >= 0; i -= 1) {
+                                if (updated[i].question === trimmedQuestion) {
+                                    const cur = updated[i].answer;
+                                    updated[i] = { ...updated[i], answer: cur ? cur + ' ' + text : text };
+                                    break;
+                                }
+                            }
+                            return updated;
+                        });
+                    },
+                    onAudioChunk: (blob: Blob) => {
+                        audioQueue.push(blob);
+                        void playNextChunk();
+                    },
+                    onDone: (fullReply: string) => {
+                        // Replace accumulated text with the authoritative full reply
+                        setRaiseHandTurns((prev) => {
+                            const updated = [...prev];
+                            for (let i = updated.length - 1; i >= 0; i -= 1) {
+                                if (updated[i].question === trimmedQuestion) {
+                                    updated[i] = { ...updated[i], answer: fullReply };
+                                    break;
+                                }
+                            }
+                            return updated;
+                        });
+                        streamFinished = true;
+                        // If all audio already played, resume listening immediately
+                        if (!isPlayingAudio && audioQueue.length === 0 && raiseHandActiveRef.current) {
+                            setRaiseHandQuestion('');
+                            startListeningForQuestion();
+                        }
+                    },
+                },
+                {
+                    noteTitle,
+                    podcastScript: normalizedScript,
+                    currentLineIndex: currentLineIdx,
+                    conversationHistory: raiseHandTurns.filter((turn) => turn.answer.trim().length > 0),
+                },
+            );
+        } catch (err) {
+            console.error('Raise hand response failed:', err);
+            setRaiseHandError(err instanceof Error ? err.message : 'Failed to answer your question');
+            if (raiseHandActiveRef.current) {
+                setRaiseHandStatus('idle');
+                setMode('raise-hand-listening');
+                setTimeout(() => {
+                    if (raiseHandActiveRef.current) startListeningForQuestion();
+                }, 550);
+            }
+        }
+    }, [currentLineIdx, getNoteText, normalizedScript, noteTitle, playTransientAudio, raiseHandTurns, startListeningForQuestion]);
+
+    const beginRaiseHandFlow = useCallback(async () => {
+        raiseHandActiveRef.current = true;
+        pauseMainPlayer();
+        setRaiseHandError(null);
+        setRaiseHandQuestion('');
+        setRaiseHandTurns([]);
+        questionBufferRef.current = '';
+
+        // Pre-load Azure Speech SDK + token while greeting plays
+        void warmupSpeechRecognition();
+
+        if (RAISE_HAND_GREETING_AUDIO_URL) {
+            setRaiseHandStatus('intro');
+            setMode('raise-hand-greeting');
+            try {
+                await playTransientAudio(RAISE_HAND_GREETING_AUDIO_URL);
+            } catch (err) {
+                console.warn('Greeting audio failed, falling back to mic input:', err);
+            }
+        }
+
+        void startListeningForQuestion();
+    }, [pauseMainPlayer, playTransientAudio, startListeningForQuestion]);
+
     /* ── Cleanup audio URL on unmount ── */
     useEffect(() => {
         return () => {
@@ -130,21 +410,28 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 URL.revokeObjectURL(audioUrlRef.current);
                 audioUrlRef.current = null;
             }
-            // Stop audio on unmount
+            recognitionHandleRef.current?.stop();
+            recognitionHandleRef.current = null;
+            clearSilenceTimer();
+            clearTransientAudio();
             if (audioRef.current) {
                 audioRef.current.pause();
                 audioRef.current = null;
             }
             setIsPlaying(false);
         };
-    }, []);
+    }, [clearSilenceTimer, clearTransientAudio]);
 
     /* ── Stop audio when tab loses focus ── */
     useEffect(() => {
         const handleVisibilityChange = () => {
-            if (document.hidden && isPlaying && audioRef.current) {
-                audioRef.current.pause();
+            if (document.hidden) {
+                audioRef.current?.pause();
                 setIsPlaying(false);
+                recognitionHandleRef.current?.stop();
+                recognitionHandleRef.current = null;
+                clearSilenceTimer();
+                clearTransientAudio();
             }
         };
 
@@ -152,7 +439,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [isPlaying]);
+    }, [clearSilenceTimer, clearTransientAudio]);
 
     /* ── Load saved script & audio ── */
     useEffect(() => {
@@ -209,6 +496,17 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }, [currentLineIdx]);
+
+    /* ── Auto-scroll raise-hand chat ── */
+    useEffect(() => {
+        if (!raiseHandChatRef.current) return;
+        requestAnimationFrame(() => {
+            raiseHandChatRef.current?.scrollTo({
+                top: raiseHandChatRef.current.scrollHeight,
+                behavior: 'smooth',
+            });
+        });
+    }, [raiseHandTurns, raiseHandStatus, raiseHandQuestion]);
 
     /* ── Setup audio element from blob ── */
     const setupAudioElement = useCallback((blob: Blob) => {
@@ -499,317 +797,435 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     /* ── Player View ── */
     return (
         <div className="flex h-full flex-col">
-            {/* ── Top: Podcast Player Header ── (slides down from top) */}
-            <motion.div
-                className="shrink-0 px-6 py-4"
-                style={{
-                    background: 'transparent',
-                    borderBottom: 'none',
-                }}
-                initial={{ opacity: 0, y: -40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
-            >
-                {/* Cover card */}
-                <div
-                    className="mx-auto max-w-5xl rounded-[26px] px-5 py-4"
-                    style={{
-                        background: 'radial-gradient(120% 150% at 8% 10%, rgba(16,185,129,0.14) 0%, rgba(5,150,105,0.1) 38%, rgba(17,18,25,0.94) 100%)',
-                        border: '1px solid rgba(255,255,255,0.12)',
-                        backdropFilter: 'blur(12px)',
-                    }}
-                >
-                    <div className="flex items-start gap-4">
-                        {/* Dual speaker avatar stack */}
-                        <div className="relative mt-1 h-14 w-16 shrink-0">
-                            <div
-                                className="absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                                style={{
-                                    background: SPEAKERS.Hope.avatarBg,
-                                    border: '2px solid rgba(12,12,18,0.95)',
-                                }}
-                            >
-                                {SPEAKERS.Hope.name[0]}
-                            </div>
-                            <div
-                                className="absolute bottom-0 left-6 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
-                                style={{
-                                    background: SPEAKERS.Corey.avatarBg,
-                                    border: '2px solid rgba(12,12,18,0.95)',
-                                }}
-                            >
-                                {SPEAKERS.Corey.name[0]}
-                            </div>
-                        </div>
-
-                        <div className="min-w-0 flex-1 pt-0.5">
-                            <p
-                                className="truncate text-base font-bold leading-tight text-zinc-100 md:text-base"
-                                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                            >
-                                {noteTitle || 'Study Session'}
-                            </p>
-                            <p className="mt-1 text-[13px] text-zinc-400">
-                                <span className="mr-1">⏱</span>
-                                {formatTime(displayDuration)} • {normalizedScript.length} exchanges
-                                {hasAudio && <span className="ml-2 text-emerald-400">♫ Audio</span>}
-                            </p>
-                        </div>
-                        {/* Raise Hand */}
-                        <button
-                            onClick={() => setShowRaiseHand(prev => !prev)}
-                            className="mt-1 flex items-center gap-1.5 rounded-2xl px-4 py-2 text-[14px] font-semibold transition-all"
-                            style={{
-                                background: showRaiseHand ? 'rgba(43,119,232,0.26)' : 'rgba(33,89,170,0.2)',
-                                border: '1px solid rgba(79,156,249,0.45)',
-                                color: '#5EA9FF',
-                            }}
-                        >
-                            <HiOutlineHand className="h-4 w-4" />
-                            Raise Hand
-                        </button>
-                    </div>
-
-                    {/* ── Progress Bar ── */}
-                    <div className="mt-3">
-                    <div
-                        className="group relative h-1.5 cursor-pointer rounded-full"
-                        style={{ background: 'rgba(255,255,255,0.08)' }}
-                        onClick={handleProgressClick}
+            <AnimatePresence mode="wait" initial={false}>
+                {mode === 'player' ? (
+                    <motion.div
+                        key="player-mode"
+                        className="flex h-full flex-col"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -12 }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
                     >
-                        <div
-                            className="absolute inset-y-0 left-0 rounded-full transition-all duration-100"
+                        <motion.div
+                            className="shrink-0 px-6 py-4"
                             style={{
-                                width: `${progress}%`,
-                                background: 'linear-gradient(90deg, #8B3A62, #E07070)',
-                                boxShadow: '0 0 8px rgba(224,112,112,0.4)',
+                                background: 'transparent',
+                                borderBottom: 'none',
                             }}
-                        />
-                        {/* Thumb */}
-                        <div
-                            className="absolute top-1/2 -translate-y-1/2 h-3 w-3 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
-                            style={{
-                                left: `${progress}%`,
-                                transform: `translateX(-50%) translateY(-50%)`,
-                                background: '#E07070',
-                                boxShadow: '0 0 6px rgba(224,112,112,0.6)',
-                            }}
-                        />
-                    </div>
-                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>{formatTime(displayCurrentTime)}</span>
-                        <span>-{formatTime(remainingTime)}</span>
-                    </div>
-                    </div>
-
-                    {/* ── Controls ── */}
-                    <div className="mt-2 flex items-center justify-between">
-                    {/* Volume */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setIsMuted(!isMuted)}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
+                            initial={{ opacity: 0, y: -40 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
                         >
-                            {isMuted || volume === 0
-                                ? <IoVolumeMuteOutline className="h-4 w-4" />
-                                : <IoVolumeHighOutline className="h-4 w-4" />
-                            }
-                        </button>
-                        <input
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            value={isMuted ? 0 : volume}
-                            onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
-                            className="podcast-volume-slider h-1 w-16 appearance-none rounded-full"
-                            style={{ background: `linear-gradient(to right, #a1a1aa ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.1) ${(isMuted ? 0 : volume) * 100}%)` }}
-                        />
-                    </div>
-
-                    {/* Playback */}
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={skipBackward}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
-                        >
-                            <IoPlaySkipBackSharp className="h-5 w-5" />
-                        </button>
-                        <button
-                            onClick={togglePlay}
-                            className="flex h-14 w-14 items-center justify-center rounded-full transition-all hover:scale-105"
-                            style={{
-                                background: '#ffffff',
-                                boxShadow: '0 6px 22px rgba(255,255,255,0.2)',
-                            }}
-                        >
-                            {isPlaying
-                                ? <IoPauseSharp className="h-7 w-7 text-zinc-900" />
-                                : <IoPlaySharp className="ml-0.5 h-7 w-7 text-zinc-900" />
-                            }
-                        </button>
-                        <button
-                            onClick={skipForward}
-                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
-                        >
-                            <IoPlaySkipForwardSharp className="h-5 w-5" />
-                        </button>
-                    </div>
-
-                    {/* Speed + Download */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={cycleSpeed}
-                            className="rounded-md px-2 py-1 text-[12px] font-bold text-zinc-500 transition-colors hover:text-zinc-300"
-                            style={{ border: '1px solid var(--border-glass)' }}
-                        >
-                            {playbackSpeed}x
-                        </button>
-                        <button
-                            onClick={handleDownload}
-                            disabled={!hasAudio}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title={hasAudio ? 'Download audio' : 'Audio not available'}
-                        >
-                            <BsDownload className="h-4 w-4" />
-                        </button>
-                    </div>
-                    </div>
-                </div>
-            </motion.div>
-
-            {/* ── Transcript ── (slides up from bottom) */}
-            <motion.div
-                ref={transcriptRef}
-                className="flex-1 overflow-y-auto px-6 py-4"
-                initial={{ opacity: 0, y: 40 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4, ease: 'easeOut', delay: 0.15 }}
-            >
-                {/* Messages */}
-                <div
-                    className="mx-auto max-w-5xl space-y-4 rounded-2xl p-4"
-                    style={{
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        background: 'linear-gradient(180deg, rgba(16,17,22,0.88), rgba(10,10,14,0.92))',
-                    }}
-                >
-                    <AnimatePresence initial={false}>
-                        {normalizedScript.map((line, idx) => {
-                            const speaker = getSpeakerConfig(line.speaker);
-                            const isRight = speaker.align === 'right';
-                            const isActive = idx === currentLineIdx && isPlaying;
-                            const isPast = idx < currentLineIdx;
-
-                            return (
-                                <motion.div
-                                    key={idx}
-                                    data-line-idx={idx}
-                                    initial={{ opacity: 0, y: 16 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.3, delay: Math.min(idx * 0.03, 0.5) }}
-                                    className={`flex gap-3 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
-                                    style={{
-                                        opacity: isPast ? 0.5 : 1,
-                                        transition: 'opacity 0.3s ease',
-                                    }}
-                                    onClick={() => {
-                                        setCurrentLineIdx(idx);
-                                        if (hasAudio && audioRef.current && lineTimes[idx]) {
-                                            audioRef.current.currentTime = lineTimes[idx].start;
-                                        } else {
-                                            setProgress(normalizedScript.length > 0 ? (idx / normalizedScript.length) * 100 : 0);
-                                        }
-                                    }}
-                                >
-                                    {/* Avatar */}
-                                    <div
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
-                                        style={{
-                                            background: speaker.avatarBg,
-                                            boxShadow: isActive ? `0 0 16px ${speaker.color}50` : 'none',
-                                            transition: 'box-shadow 0.3s ease',
-                                        }}
-                                    >
-                                        {speaker.name[0]}
-                                    </div>
-
-                                    {/* Bubble */}
-                                    <div className={`max-w-[85%] ${isRight ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                                        <span
-                                            className="text-[11px] font-semibold"
-                                            style={{ color: speaker.color }}
-                                        >
-                                            {speaker.name}
-                                        </span>
+                            <div
+                                className="mx-auto max-w-5xl rounded-[26px] px-5 py-4"
+                                style={{
+                                    background: 'radial-gradient(120% 150% at 8% 10%, rgba(16,185,129,0.14) 0%, rgba(5,150,105,0.1) 38%, rgba(17,18,25,0.94) 100%)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    backdropFilter: 'blur(12px)',
+                                }}
+                            >
+                                <div className="flex items-start gap-4">
+                                    <div className="relative mt-1 h-14 w-16 shrink-0">
                                         <div
-                                            className="cursor-pointer rounded-2xl px-4 py-3 transition-all"
+                                            className="absolute left-0 top-0 z-10 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
                                             style={{
-                                                background: isActive
-                                                    ? `rgba(${isRight ? '245,166,35' : '224,112,112'},0.1)`
-                                                    : 'rgba(255,255,255,0.04)',
-                                                border: isActive
-                                                    ? `1px solid ${speaker.color}40`
-                                                    : '1px solid var(--border-glass)',
-                                                borderRadius: isRight
-                                                    ? '16px 4px 16px 16px'
-                                                    : '4px 16px 16px 16px',
-                                                boxShadow: isActive
-                                                    ? `0 0 20px ${speaker.color}15`
-                                                    : 'none',
+                                                background: SPEAKERS.Hope.avatarBg,
+                                                border: '2px solid rgba(12,12,18,0.95)',
                                             }}
                                         >
-                                            <p className={`text-[14px] leading-relaxed ${isActive ? 'text-zinc-200' : 'text-zinc-400'}`}
-                                                style={{ transition: 'color 0.3s ease' }}
-                                            >
-                                                {line.text}
-                                            </p>
+                                            {SPEAKERS.Hope.name[0]}
+                                        </div>
+                                        <div
+                                            className="absolute bottom-0 left-6 flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-bold text-white"
+                                            style={{
+                                                background: SPEAKERS.Corey.avatarBg,
+                                                border: '2px solid rgba(12,12,18,0.95)',
+                                            }}
+                                        >
+                                            {SPEAKERS.Corey.name[0]}
                                         </div>
                                     </div>
-                                </motion.div>
-                            );
-                        })}
-                    </AnimatePresence>
-                </div>
 
-                {/* "Raise Hand" prompt */}
-                <AnimatePresence>
-                    {showRaiseHand && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 16 }}
-                            className="mt-6 flex items-start gap-3"
-                        >
-                            <div
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold"
-                                style={{ background: 'linear-gradient(135deg, #4F9CF9, #3B82F6)', color: 'white' }}
-                            >
-                                👋
-                            </div>
-                            <div className="flex flex-col gap-1">
-                                <span className="text-[11px] font-semibold text-blue-400">You</span>
-                                <div
-                                    className="rounded-2xl px-4 py-3"
-                                    style={{
-                                        background: 'rgba(79,156,249,0.08)',
-                                        border: '1px solid rgba(79,156,249,0.2)',
-                                        borderRadius: '4px 16px 16px 16px',
-                                    }}
-                                >
-                                    <p className="text-[13px] italic text-zinc-400">
-                                        Great question! This feature will be interactive soon — you'll be able to ask clarifying questions mid-podcast.
-                                    </p>
+                                    <div className="min-w-0 flex-1 pt-0.5">
+                                        <p
+                                            className="truncate text-base font-bold leading-tight text-zinc-100 md:text-base"
+                                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+                                        >
+                                            {noteTitle || 'Study Session'}
+                                        </p>
+                                        <p className="mt-1 text-[13px] text-zinc-400">
+                                            <span className="mr-1">⏱</span>
+                                            {formatTime(displayDuration)} • {normalizedScript.length} exchanges
+                                            {hasAudio && <span className="ml-2 text-emerald-400">♫ Audio</span>}
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={beginRaiseHandFlow}
+                                        className="mt-1 flex items-center gap-1.5 rounded-2xl px-4 py-2 text-[14px] font-semibold transition-all"
+                                        style={{
+                                            background: 'rgba(33,89,170,0.2)',
+                                            border: '1px solid rgba(79,156,249,0.45)',
+                                            color: '#5EA9FF',
+                                        }}
+                                    >
+                                        <HiOutlineHand className="h-4 w-4" />
+                                        Raise Hand
+                                    </button>
+                                </div>
+
+                                <div className="mt-3">
+                                    <div
+                                        className="group relative h-1.5 cursor-pointer rounded-full"
+                                        style={{ background: 'rgba(255,255,255,0.08)' }}
+                                        onClick={handleProgressClick}
+                                    >
+                                        <div
+                                            className="absolute inset-y-0 left-0 rounded-full transition-all duration-100"
+                                            style={{
+                                                width: `${progress}%`,
+                                                background: 'linear-gradient(90deg, #8B3A62, #E07070)',
+                                                boxShadow: '0 0 8px rgba(224,112,112,0.4)',
+                                            }}
+                                        />
+                                        <div
+                                            className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+                                            style={{
+                                                left: `${progress}%`,
+                                                transform: `translateX(-50%) translateY(-50%)`,
+                                                background: '#E07070',
+                                                boxShadow: '0 0 6px rgba(224,112,112,0.6)',
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="mt-1.5 flex items-center justify-between text-[11px] text-zinc-500">
+                                        <span>{formatTime(displayCurrentTime)}</span>
+                                        <span>-{formatTime(remainingTime)}</span>
+                                    </div>
+                                </div>
+
+                                <div className="mt-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setIsMuted(!isMuted)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
+                                        >
+                                            {isMuted || volume === 0
+                                                ? <IoVolumeMuteOutline className="h-4 w-4" />
+                                                : <IoVolumeHighOutline className="h-4 w-4" />
+                                            }
+                                        </button>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.01}
+                                            value={isMuted ? 0 : volume}
+                                            onChange={e => { setVolume(parseFloat(e.target.value)); setIsMuted(false); }}
+                                            className="podcast-volume-slider h-1 w-16 appearance-none rounded-full"
+                                            style={{ background: `linear-gradient(to right, #a1a1aa ${(isMuted ? 0 : volume) * 100}%, rgba(255,255,255,0.1) ${(isMuted ? 0 : volume) * 100}%)` }}
+                                        />
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={skipBackward}
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
+                                        >
+                                            <IoPlaySkipBackSharp className="h-5 w-5" />
+                                        </button>
+                                        <button
+                                            onClick={togglePlay}
+                                            className="flex h-14 w-14 items-center justify-center rounded-full transition-all hover:scale-105"
+                                            style={{
+                                                background: '#ffffff',
+                                                boxShadow: '0 6px 22px rgba(255,255,255,0.2)',
+                                            }}
+                                        >
+                                            {isPlaying
+                                                ? <IoPauseSharp className="h-7 w-7 text-zinc-900" />
+                                                : <IoPlaySharp className="ml-0.5 h-7 w-7 text-zinc-900" />
+                                            }
+                                        </button>
+                                        <button
+                                            onClick={skipForward}
+                                            className="flex h-10 w-10 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
+                                        >
+                                            <IoPlaySkipForwardSharp className="h-5 w-5" />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={cycleSpeed}
+                                            className="rounded-md px-2 py-1 text-[12px] font-bold text-zinc-500 transition-colors hover:text-zinc-300"
+                                            style={{ border: '1px solid var(--border-glass)' }}
+                                        >
+                                            {playbackSpeed}x
+                                        </button>
+                                        <button
+                                            onClick={handleDownload}
+                                            disabled={!hasAudio}
+                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
+                                            title={hasAudio ? 'Download audio' : 'Audio not available'}
+                                        >
+                                            <BsDownload className="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
-                    )}
-                </AnimatePresence>
 
-                {/* Spacer */}
-                <div className="h-6" />
-            </motion.div>
+                        <motion.div
+                            ref={transcriptRef}
+                            className="flex-1 overflow-y-auto px-6 py-4"
+                            initial={{ opacity: 0, y: 40 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4, ease: 'easeOut', delay: 0.15 }}
+                        >
+                            <div
+                                className="mx-auto max-w-5xl space-y-4 rounded-2xl p-4"
+                                style={{
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    background: 'linear-gradient(180deg, rgba(16,17,22,0.88), rgba(10,10,14,0.92))',
+                                }}
+                            >
+                                <AnimatePresence initial={false}>
+                                    {normalizedScript.map((line, idx) => {
+                                        const speaker = getSpeakerConfig(line.speaker);
+                                        const isRight = speaker.align === 'right';
+                                        const isActive = idx === currentLineIdx && isPlaying;
+                                        const isPast = idx < currentLineIdx;
 
+                                        return (
+                                            <motion.div
+                                                key={idx}
+                                                data-line-idx={idx}
+                                                initial={{ opacity: 0, y: 16 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ duration: 0.3, delay: Math.min(idx * 0.03, 0.5) }}
+                                                className={`flex gap-3 ${isRight ? 'flex-row-reverse' : 'flex-row'}`}
+                                                style={{
+                                                    opacity: isPast ? 0.5 : 1,
+                                                    transition: 'opacity 0.3s ease',
+                                                }}
+                                                onClick={() => {
+                                                    setCurrentLineIdx(idx);
+                                                    if (hasAudio && audioRef.current && lineTimes[idx]) {
+                                                        audioRef.current.currentTime = lineTimes[idx].start;
+                                                    } else {
+                                                        setProgress(normalizedScript.length > 0 ? (idx / normalizedScript.length) * 100 : 0);
+                                                    }
+                                                }}
+                                            >
+                                                <div
+                                                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
+                                                    style={{
+                                                        background: speaker.avatarBg,
+                                                        boxShadow: isActive ? `0 0 16px ${speaker.color}50` : 'none',
+                                                        transition: 'box-shadow 0.3s ease',
+                                                    }}
+                                                >
+                                                    {speaker.name[0]}
+                                                </div>
+
+                                                <div className={`max-w-[85%] ${isRight ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                                                    <span className="text-[11px] font-semibold" style={{ color: speaker.color }}>
+                                                        {speaker.name}
+                                                    </span>
+                                                    <div
+                                                        className="cursor-pointer rounded-2xl px-4 py-3 transition-all"
+                                                        style={{
+                                                            background: isActive
+                                                                ? `rgba(${isRight ? '245,166,35' : '224,112,112'},0.1)`
+                                                                : 'rgba(255,255,255,0.04)',
+                                                            border: isActive
+                                                                ? `1px solid ${speaker.color}40`
+                                                                : '1px solid var(--border-glass)',
+                                                            borderRadius: isRight
+                                                                ? '16px 4px 16px 16px'
+                                                                : '4px 16px 16px 16px',
+                                                            boxShadow: isActive
+                                                                ? `0 0 20px ${speaker.color}15`
+                                                                : 'none',
+                                                        }}
+                                                    >
+                                                        <p
+                                                            className={`text-[14px] leading-relaxed ${isActive ? 'text-zinc-200' : 'text-zinc-400'}`}
+                                                            style={{ transition: 'color 0.3s ease' }}
+                                                        >
+                                                            {line.text}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </AnimatePresence>
+                            </div>
+
+                            <div className="h-6" />
+                        </motion.div>
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        key="raise-hand-mode"
+                        className="flex h-full flex-col px-6 py-4"
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -16 }}
+                        transition={{ duration: 0.28, ease: 'easeOut' }}
+                    >
+                        <div
+                            className="mx-auto flex h-full w-full max-w-5xl flex-col rounded-[28px] px-5 py-5"
+                            style={{
+                                background: 'radial-gradient(120% 140% at 50% 0%, rgba(79,156,249,0.16) 0%, rgba(17,18,25,0.95) 55%, rgba(10,10,14,0.96) 100%)',
+                                border: '1px solid rgba(255,255,255,0.12)',
+                                backdropFilter: 'blur(12px)',
+                            }}
+                        >
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-[18px] font-black text-zinc-950 shadow-[0_0_24px_rgba(255,255,255,0.18)]">
+                                        Z
+                                    </div>
+                                    <div>
+                                        <p className="text-[16px] font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+                                            Raise Hand
+                                        </p>
+                                        <p className="text-[13px] text-zinc-400">
+                                            {raiseHandStatus === 'intro' && 'Playing your greeting...'}
+                                            {raiseHandStatus === 'listening' && 'Listening for your question...'}
+                                            {raiseHandStatus === 'processing' && 'Thinking and preparing an answer...'}
+                                            {raiseHandStatus === 'answering' && 'Speaking the answer now...'}
+                                            {raiseHandStatus === 'idle' && 'Ready when you are.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={endRaiseHandFlow}
+                                    className="rounded-full px-4 py-2 text-[13px] font-semibold text-zinc-200 transition-colors"
+                                    style={{ border: '1px solid var(--border-glass)', background: 'rgba(255,255,255,0.04)' }}
+                                >
+                                    Back to podcast
+                                </button>
+                            </div>
+
+                            <div ref={raiseHandChatRef} className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto rounded-[24px] border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
+                                {raiseHandError && (
+                                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-[13px] text-red-300">
+                                        {raiseHandError}
+                                    </div>
+                                )}
+
+                                {raiseHandTurns.length > 0 && (
+                                    <div className="space-y-3">
+                                        {raiseHandTurns.map((turn, idx) => (
+                                            <div key={`${turn.question}-${idx}`} className="space-y-2">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4F9CF9] text-[12px] font-bold text-white">
+                                                        You
+                                                    </div>
+                                                    <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-[#4F9CF9]/20 bg-[#4F9CF9]/10 px-4 py-3">
+                                                        <p className="text-[11px] font-semibold text-blue-300">Your question</p>
+                                                        <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
+                                                            {turn.question}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                {turn.answer && (
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[12px] font-black text-zinc-950">
+                                                            Z
+                                                        </div>
+                                                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-white/10 bg-white/6 px-4 py-3">
+                                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly</p>
+                                                            <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
+                                                                {turn.answer}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {raiseHandStatus === 'listening' && raiseHandQuestion && raiseHandQuestion !== (raiseHandTurns[raiseHandTurns.length - 1]?.question || '') && (
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4F9CF9] text-[12px] font-bold text-white">
+                                            You
+                                        </div>
+                                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-[#4F9CF9]/20 bg-[#4F9CF9]/10 px-4 py-3">
+                                            <p className="text-[11px] font-semibold text-blue-300">Listening...</p>
+                                            <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
+                                                {raiseHandQuestion}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {raiseHandTurns.length === 0 && !raiseHandQuestion && (
+                                    <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center text-center">
+                                        <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-white/10 ${raiseHandStatus === 'listening' ? 'animate-pulse bg-[#4F9CF9]/20' : 'bg-white/5'}`}>
+                                            <span className="text-[22px]">🎤</span>
+                                        </div>
+                                        <p className="text-[15px] font-semibold text-zinc-100">{raiseHandStatus === 'intro' ? 'Please wait...' : 'Tap back to cancel or wait for the greeting.'}</p>
+                                        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-zinc-500">
+                                            The player will switch into question mode, then return here once the answer is finished.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {raiseHandStatus === 'processing' && (
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[12px] font-black text-zinc-950">
+                                            Z
+                                        </div>
+                                        <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-white/10 bg-white/6 px-4 py-3">
+                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly</p>
+                                            <div className="mt-2 flex items-center gap-[5px]">
+                                                <div className="typing-dot" />
+                                                <div className="typing-dot" />
+                                                <div className="typing-dot" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* ── Listening wave animation ── */}
+                                {mode !== 'player' && (
+                                    <div className="mt-auto flex flex-col items-center gap-2 pt-4 pb-1">
+                                        <div className="flex items-end justify-center gap-[3px]">
+                                            {[0, 1, 2, 3, 4].map((i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`raise-hand-wave-bar ${
+                                                        raiseHandStatus !== 'listening'
+                                                            ? 'raise-hand-wave-bar--paused'
+                                                            : ''
+                                                    }`}
+                                                />
+                                            ))}
+                                        </div>
+                                        <p className="text-[11px] font-medium text-zinc-500">
+                                            {raiseHandStatus === 'listening' && 'Listening…'}
+                                            {raiseHandStatus === 'processing' && 'Processing…'}
+                                            {raiseHandStatus === 'answering' && 'Speaking…'}
+                                            {raiseHandStatus === 'intro' && 'Starting…'}
+                                            {raiseHandStatus === 'idle' && 'Waiting…'}
+                                        </p>
+                                    </div>
+                                )}
+
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

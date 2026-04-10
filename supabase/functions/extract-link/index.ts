@@ -262,8 +262,8 @@ async function fetchReadableContent(sourceUrl: string): Promise<string> {
     return text;
 }
 
-function buildPrompt(sourceUrl: string, readableText: string): string {
-    const clipped = readableText.slice(0, 120000);
+function buildPrompt(sourceUrl: string, readableText: string, clipChars = 90000): string {
+    const clipped = readableText.slice(0, clipChars);
 
     return `
 You are an expert study notes generator.
@@ -312,6 +312,26 @@ Standalone high-yield facts worth memorizing.
 `;
 }
 
+function sanitizeGeminiError(message: string): string {
+    const normalized = (message || '').toLowerCase();
+    if (normalized.includes('rate limit') || normalized.includes('429')) {
+        return 'AI rate limit reached. Please wait about 30-60 seconds and try again.';
+    }
+    if (normalized.includes('503') || normalized.includes('unavailable') || normalized.includes('high demand')) {
+        return 'AI service is under high demand right now. Please try again in a few seconds.';
+    }
+    return message || 'Failed to generate notes from this link.';
+}
+
+async function generateNotes(sourceUrl: string, readableText: string): Promise<string> {
+    const raw = await promptGemini(buildPrompt(sourceUrl, readableText, 65000), {
+        temperature: 0.25,
+        maxOutputTokens: 4096,
+    });
+    if (!raw?.trim()) throw new Error('AI returned an empty response.');
+    return raw;
+}
+
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
 
@@ -327,10 +347,7 @@ serve(async (req: Request) => {
         }
 
         const readableText = await fetchReadableContent(sourceUrl);
-        const raw = await promptGemini(buildPrompt(sourceUrl, readableText), {
-            temperature: 0.25,
-            maxOutputTokens: 8192,
-        });
+        const raw = await generateNotes(sourceUrl, readableText);
 
         const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|$)/i);
         const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)$/i);
@@ -366,7 +383,7 @@ serve(async (req: Request) => {
         const error = err as Error;
         console.error('extract-link error:', error);
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal server error' }),
+            JSON.stringify({ error: sanitizeGeminiError(error.message || 'Internal server error') }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
     }

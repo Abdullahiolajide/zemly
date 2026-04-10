@@ -523,3 +523,210 @@ export async function generatePodcastAudio(
     }
     return new Blob([bytes], { type: result.mimeType || 'audio/mpeg' });
 }
+
+export interface RaiseHandResponseResult {
+    reply: string;
+    audioBlob: Blob;
+}
+
+function sanitizeUiErrorMessage(input: unknown, fallback: string): string {
+    const raw = typeof input === 'string' ? input.trim() : '';
+    if (!raw) return fallback;
+
+    const normalized = raw.toLowerCase();
+    if (normalized.includes('503')) {
+        return 'AI service is temporarily unavailable. Please try again in a few seconds.';
+    }
+    if (normalized.includes('429') || normalized.includes('rate limit')) {
+        return 'AI is currently rate-limited. Please wait a bit and try again.';
+    }
+
+    if (raw.includes('{') && raw.includes('}')) {
+        return fallback;
+    }
+
+    return raw;
+}
+
+export async function generateRaiseHandResponse(
+    noteContent: string,
+    question: string,
+    options?: {
+        noteTitle?: string;
+        podcastScript?: PodcastLine[];
+        currentLineIndex?: number;
+        conversationHistory?: Array<{ question: string; answer: string }>;
+    },
+): Promise<RaiseHandResponseResult> {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/raise-hand-response`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+            noteContent,
+            question,
+            noteTitle: options?.noteTitle,
+            podcastScript: options?.podcastScript,
+            currentLineIndex: options?.currentLineIndex,
+            conversationHistory: options?.conversationHistory,
+        }),
+    });
+
+    if (!res.ok) {
+        let errMsg = 'Raise hand response generation failed';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = sanitizeUiErrorMessage(body.error, errMsg);
+            else if (body?.message) errMsg = sanitizeUiErrorMessage(body.message, errMsg);
+        } catch { /* ignore */ }
+        throw new Error(sanitizeUiErrorMessage(errMsg, 'Raise hand response generation failed'));
+    }
+
+    const result = await res.json();
+    const reply = typeof result.reply === 'string' ? result.reply : '';
+    const audioBase64 = typeof result.audio === 'string' ? result.audio : '';
+    const mimeType = typeof result.mimeType === 'string' ? result.mimeType : 'audio/mpeg';
+
+    if (!reply) {
+        throw new Error('Raise hand response did not return a reply');
+    }
+    if (!audioBase64) {
+        throw new Error('Raise hand response did not return audio');
+    }
+
+    const binaryString = atob(audioBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return {
+        reply,
+        audioBlob: new Blob([bytes], { type: mimeType }),
+    };
+}
+
+/* ── Streaming raise-hand response ── */
+
+export interface RaiseHandStreamCallbacks {
+    /** Called for each complete sentence of the reply. */
+    onTextChunk: (text: string) => void;
+    /** Called for each TTS audio chunk (in sentence order). */
+    onAudioChunk: (audioBlob: Blob) => void;
+    /** Called once after all text and audio events are sent. */
+    onDone: (fullReply: string) => void;
+}
+
+/**
+ * Streaming version of generateRaiseHandResponse.
+ *
+ * The edge function streams Gemini text sentence-by-sentence, fires TTS
+ * concurrently for each sentence, and sends audio chunks as SSE events.
+ * This dramatically reduces time-to-first-audio.
+ */
+export async function generateRaiseHandResponseStreaming(
+    noteContent: string,
+    question: string,
+    callbacks: RaiseHandStreamCallbacks,
+    options?: {
+        noteTitle?: string;
+        podcastScript?: PodcastLine[];
+        currentLineIndex?: number;
+        conversationHistory?: Array<{ question: string; answer: string }>;
+    },
+): Promise<void> {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/raise-hand-response`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({
+            noteContent,
+            question,
+            noteTitle: options?.noteTitle,
+            podcastScript: options?.podcastScript,
+            currentLineIndex: options?.currentLineIndex,
+            conversationHistory: options?.conversationHistory,
+        }),
+    });
+
+    if (!res.ok) {
+        let errMsg = 'Raise hand response generation failed';
+        try {
+            const body = await res.json();
+            if (body?.error) errMsg = sanitizeUiErrorMessage(body.error, errMsg);
+            else if (body?.message) errMsg = sanitizeUiErrorMessage(body.message, errMsg);
+        } catch { /* ignore */ }
+        throw new Error(sanitizeUiErrorMessage(errMsg, 'Raise hand response generation failed'));
+    }
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let currentEvent = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim();
+                continue;
+            }
+
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr) continue;
+
+            try {
+                const parsed = JSON.parse(jsonStr);
+
+                if (currentEvent === 'error') {
+                    throw new Error(parsed.error || 'Stream error');
+                }
+
+                if (currentEvent === 'text' && parsed.text) {
+                    callbacks.onTextChunk(parsed.text);
+                }
+
+                if (currentEvent === 'audio' && parsed.audio) {
+                    const binaryString = atob(parsed.audio);
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    callbacks.onAudioChunk(new Blob([bytes], { type: 'audio/mpeg' }));
+                }
+
+                if (currentEvent === 'done') {
+                    callbacks.onDone(parsed.reply || '');
+                }
+            } catch (e) {
+                if (e instanceof SyntaxError) {
+                    // JSON parse error — skip malformed SSE data
+                } else {
+                    throw e;
+                }
+            }
+            currentEvent = '';
+        }
+    }
+}

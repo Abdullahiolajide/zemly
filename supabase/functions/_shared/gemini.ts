@@ -5,7 +5,7 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 //Deno.env.get('GEMINI_MODEL') || 
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash';
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`;
 
 /** Max characters of note content to send — supports up to ~30 pages (~25k tokens) */
@@ -142,7 +142,16 @@ async function fetchWithRetry(url: string, body: Record<string, unknown>): Promi
                 `AI rate limit reached — please wait ~${wait} seconds and try again.`,
             );
         }
-        throw new Error(`Gemini API error (${res?.status}): ${errText}`);
+        if (res?.status === 503) {
+            throw new Error('AI service is temporarily unavailable. Please try again in a few seconds.');
+        }
+
+        // Avoid bubbling raw JSON blobs into UI toasts/modals.
+        if (errText.includes('{') && errText.includes('}')) {
+            throw new Error(`Gemini request failed (${res?.status}). Please try again.`);
+        }
+
+        throw new Error(`Gemini request failed (${res?.status}): ${errText}`);
     }
 
     return res;
