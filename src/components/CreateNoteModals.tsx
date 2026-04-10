@@ -38,10 +38,10 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
                 onClick={(e) => e.stopPropagation()}
                 className="relative z-10 mx-4 w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-[modalSlideUp_250ms_ease-out]"
                 style={{
-                    background: 'rgba(16, 18, 24, 0.97)',
-                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'var(--bg-main)',
+                    border: '1px solid var(--border-glass-strong)',
                     backdropFilter: 'blur(20px)',
-                    boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
+                    boxShadow: '0 24px 64px rgba(0,0,0,0.15)',
                     maxHeight: 'min(92vh, 920px)',
                 }}
             >
@@ -50,7 +50,7 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
                     onClick={onClose}
                     className="absolute right-4 top-4 z-20 flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-all hover:text-zinc-300"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                     aria-label="Close modal"
                 >
@@ -69,10 +69,10 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
    Shared input style helper (applied via onFocus/onBlur)
    ───────────────────────────────────────────── */
 const inputBaseClass =
-    'w-full rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200';
+    'w-full rounded-xl px-4 py-3 text-sm  placeholder-zinc-600 outline-none transition-all duration-200';
 const inputStyle: React.CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-glass-hover)',
+    border: '1px solid var(--border-glass)',
     fontFamily: "'DM Sans', sans-serif",
 };
 const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -80,7 +80,7 @@ const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.12)';
 };
 const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.target.style.borderColor = 'rgba(255,255,255,0.08)';
+    e.target.style.borderColor = 'var(--border-glass)';
     e.target.style.boxShadow = '';
 };
 
@@ -127,7 +127,7 @@ export const BlankDocumentModal: React.FC<BlankDocumentModalProps> = ({
                 </div>
 
                 <h2
-                    className="mb-2 text-center text-xl font-bold text-zinc-100"
+                    className="mb-2 text-center text-xl font-bold "
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.01em' }}
                 >
                     Create blank document
@@ -414,7 +414,7 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                 </div>
 
                 <h2
-                    className="mb-6 text-center text-xl font-bold text-zinc-100"
+                    className="mb-6 text-center text-xl font-bold "
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.01em' }}
                 >
                     Create note from audio
@@ -442,7 +442,7 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                             {isRecordingPaused ? 'Resume' : 'Pause'}
                         </button>
 
-                        <div className="flex-1 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                        <div className="flex-1 rounded-full p-0.5" style={{ background: 'var(--bg-glass-hover)' }}>
                             <div
                                 className="h-2 rounded-full transition-all duration-300"
                                 style={{
@@ -467,9 +467,9 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                 </div>
 
                 <div className="my-5 flex items-center gap-4">
-                    <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                    <div className="h-px flex-1" style={{ background: 'var(--border-glass)' }} />
                     <span className="text-xs font-medium text-zinc-600">Or</span>
-                    <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.06)' }} />
+                    <div className="h-px flex-1" style={{ background: 'var(--border-glass)' }} />
                 </div>
 
                 <div
@@ -479,8 +479,8 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                     onClick={() => !isGenerating && fileInputRef.current?.click()}
                     className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-8 transition-all duration-200 ${isGenerating ? 'pointer-events-none opacity-60' : ''}`}
                     style={{
-                        borderColor: isDragging ? 'rgba(245,166,35,0.5)' : audioItems.length ? 'rgba(245,166,35,0.35)' : 'rgba(255,255,255,0.08)',
-                        background: isDragging ? 'rgba(245,166,35,0.05)' : audioItems.length ? 'rgba(245,166,35,0.04)' : 'rgba(255,255,255,0.02)',
+                        borderColor: isDragging ? 'rgba(245,166,35,0.5)' : audioItems.length ? 'rgba(245,166,35,0.35)' : 'var(--border-glass)',
+                        background: isDragging ? 'rgba(245,166,35,0.05)' : audioItems.length ? 'rgba(245,166,35,0.04)' : 'var(--bg-glass-hover)',
                     }}
                 >
                     <FiUploadCloud className="mb-2 h-6 w-6" style={{ color: isDragging || audioItems.length ? '#F5A623' : '#52525b' }} />
@@ -511,7 +511,7 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                             <div
                                 key={`${item.file.name}-${item.file.lastModified}-${index}`}
                                 className="rounded-xl px-3 py-3"
-                                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                style={{ background: 'var(--bg-glass-hover)', border: '1px solid rgba(255,255,255,0.08)' }}
                             >
                                 <div className="mb-2 flex items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
@@ -522,7 +522,7 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                                         <button
                                             onClick={() => removeAudioFile(index)}
                                             className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-                                            style={{ background: 'rgba(255,255,255,0.04)' }}
+                                            style={{ background: 'var(--bg-glass-hover)' }}
                                         >
                                             Remove
                                         </button>
@@ -860,7 +860,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 </div>
 
                 <h2
-                    className="mb-2 text-center text-xl font-bold text-zinc-100"
+                    className="mb-2 text-center text-xl font-bold "
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.01em' }}
                 >
                     Upload a document
@@ -877,8 +877,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     onClick={() => !isLoading && fileInputRef.current?.click()}
                     className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-all duration-200 ${isLoading ? 'pointer-events-none opacity-60' : ''}`}
                     style={{
-                        borderColor: isDragging ? 'rgba(79,156,249,0.5)' : docFiles.length ? 'rgba(79,156,249,0.35)' : 'rgba(255,255,255,0.08)',
-                        background: isDragging ? 'rgba(79,156,249,0.05)' : docFiles.length ? 'rgba(79,156,249,0.04)' : 'rgba(255,255,255,0.02)',
+                        borderColor: isDragging ? 'rgba(79,156,249,0.5)' : docFiles.length ? 'rgba(79,156,249,0.35)' : 'var(--border-glass)',
+                        background: isDragging ? 'rgba(79,156,249,0.05)' : docFiles.length ? 'rgba(79,156,249,0.04)' : 'var(--bg-glass-hover)',
                     }}
                 >
                     <FiUploadCloud
@@ -937,7 +937,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                                     key={fileId}
                                     className="rounded-xl px-3 py-3"
                                     style={{
-                                        background: 'rgba(255,255,255,0.03)',
+                                        background: 'var(--bg-glass-hover)',
                                         border: '1px solid rgba(255,255,255,0.08)',
                                     }}
                                 >
@@ -953,14 +953,14 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                                             <button
                                                 onClick={() => removeFile(file)}
                                                 className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-                                                style={{ background: 'rgba(255,255,255,0.04)' }}
+                                                style={{ background: 'var(--bg-glass-hover)' }}
                                             >
                                                 Remove
                                             </button>
                                         )}
                                     </div>
 
-                                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--border-glass)' }}>
                                         <div
                                             className="h-full rounded-full transition-all duration-200"
                                             style={{
@@ -1107,7 +1107,7 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
                 </div>
 
                 <h2
-                    className="mb-6 text-center text-xl font-bold text-zinc-100"
+                    className="mb-6 text-center text-xl font-bold "
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.01em' }}
                 >
                     Create note from source

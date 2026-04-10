@@ -394,7 +394,7 @@ const DashboardPage: React.FC = () => {
     const folderNoteIds = new Set(openFolder?.noteIds || []);
     const folderNotes = openFolder ? notes.filter((n) => folderNoteIds.has(n.id)) : [];
 
-    const allFolderedNoteIds = new Set(folders.flatMap((f) => f.noteIds));
+
 
     /* ── Note row renderer ── */
     const renderNoteRow = (note: Note, inFolder: boolean) => {
