@@ -69,9 +69,9 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
     const allMastered = studyQueue.length === 0 && masteredCount === cards.length && cards.length > 0;
 
     return (
-        <div className="mx-auto flex w-full max-w-2xl flex-col px-8 py-6 lg:px-16">
+        <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-4 sm:px-8 sm:py-6 lg:px-16">
             {/* Top Bar */}
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 sm:mb-6">
                 <button
                     onClick={onBack}
                     className="flex items-center gap-1.5 text-[13px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
@@ -79,19 +79,19 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                     <FiChevronLeft className="h-4 w-4" />
                     Back
                 </button>
-                {/* Status badges */}
-                <div className="flex flex-wrap items-center gap-3">
-                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-red-400">
-                        <span className="h-2 w-2 rounded-full bg-red-400" />{unfamiliarCount} Unfamiliar
+                {/* Status badges — scrollable on mobile */}
+                <div className="note-tab-scroll flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:gap-3">
+                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-red-400 sm:gap-1.5 sm:text-[12px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-400 sm:h-2 sm:w-2" />{unfamiliarCount} Unfamiliar
                     </span>
-                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-blue-400">
-                        <span className="h-2 w-2 rounded-full bg-blue-400" />{newCount} New
+                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-blue-400 sm:gap-1.5 sm:text-[12px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-400 sm:h-2 sm:w-2" />{newCount} New
                     </span>
-                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-amber-400">
-                        <span className="h-2 w-2 rounded-full bg-amber-400" />{learningCount} Learning
+                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-amber-400 sm:gap-1.5 sm:text-[12px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 sm:h-2 sm:w-2" />{learningCount} Learning
                     </span>
-                    <span className="flex items-center gap-1.5 text-[12px] font-semibold text-green-400">
-                        <span className="h-2 w-2 rounded-full bg-green-400" />{masteredCount} Mastered
+                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-semibold text-green-400 sm:gap-1.5 sm:text-[12px]">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-400 sm:h-2 sm:w-2" />{masteredCount} Mastered
                     </span>
                 </div>
             </div>
@@ -115,19 +115,19 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                             <div className={`study-card-inner ${isFlipped ? 'study-card-flipped' : ''}`}>
                             {/* Front */}
                             <div
-                                className="study-card-face study-card-front flex min-h-[280px] items-center justify-center rounded-2xl p-8"
+                                className="study-card-face study-card-front flex min-h-[200px] items-center justify-center rounded-2xl p-6 sm:min-h-[280px] sm:p-8"
                                 style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                             >
-                                <p className="text-center text-lg font-medium leading-relaxed text-zinc-200">
+                                <p className="text-center text-base font-medium leading-relaxed text-zinc-200 sm:text-lg">
                                     {currentCard.front}
                                 </p>
                             </div>
                             {/* Back */}
                             <div
-                                className="study-card-face study-card-back flex min-h-[280px] items-center justify-center rounded-2xl p-8"
+                                className="study-card-face study-card-back flex min-h-[200px] items-center justify-center rounded-2xl p-6 sm:min-h-[280px] sm:p-8"
                                 style={{ border: '1px solid var(--brand-emerald)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                             >
-                                <p className="text-center text-lg font-medium leading-relaxed text-zinc-300">
+                                <p className="text-center text-base font-medium leading-relaxed text-zinc-300 sm:text-lg">
                                     {currentCard.back}
                                 </p>
                             </div>
@@ -138,11 +138,11 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                     <p className="mb-6 text-center text-[12px] text-zinc-600">Click the card to reveal the answer</p>
 
                     {/* Answer Buttons */}
-                    <div className="flex items-center justify-center gap-4">
+                    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-center sm:gap-4">
                         <button
                             onClick={() => handleAnswer(false)}
                             disabled={isAdvancing}
-                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-red-400 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                            className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[13px] font-bold text-red-400 transition-all disabled:cursor-not-allowed disabled:opacity-60 sm:text-[14px]"
                             style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.18)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(239,68,68,0.1)'; }}
@@ -152,7 +152,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
                         <button
                             onClick={() => handleAnswer(true)}
                             disabled={isAdvancing}
-                            className="flex items-center gap-2 rounded-xl px-6 py-3 text-[14px] font-bold text-green-400 transition-all disabled:cursor-not-allowed disabled:opacity-60"
+                            className="flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-[13px] font-bold text-green-400 transition-all disabled:cursor-not-allowed disabled:opacity-60 sm:text-[14px]"
                             style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.18)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(34,197,94,0.1)'; }}

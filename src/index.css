@@ -838,6 +838,26 @@ html.light .podcast-volume-slider::-webkit-slider-thumb:hover {
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
 /* ══════════════════════════════════════════════════════
+   NOTE TAB SCROLL (mobile/tablet horizontal tab strip)
+══════════════════════════════════════════════════════ */
+.note-tab-scroll {
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;   /* IE/Edge */
+}
+
+.note-tab-scroll::-webkit-scrollbar {
+  display: none;               /* Chrome/Safari/Opera */
+}
+
+/* ── Smaller editor headings on mobile ── */
+@media (max-width: 639px) {
+  .tiptap h1 { font-size: 1.5rem; }
+  .tiptap h2 { font-size: 1.2rem; }
+  .tiptap h3 { font-size: 1.05rem; }
+  .tiptap    { font-size: 0.875rem; }
+}
+
+/* ══════════════════════════════════════════════════════
    SCROLLBARS
 ══════════════════════════════════════════════════════ */
 ::-webkit-scrollbar        { width: 5px; height: 5px; }

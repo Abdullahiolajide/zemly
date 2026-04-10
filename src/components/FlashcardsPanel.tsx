@@ -130,17 +130,17 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
 
     /* Generate view (default) */
     return (
-        <div className="mx-auto w-full max-w-4xl px-8 py-12 lg:px-16">
-            <div className="mb-10 text-center">
+        <div className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-8 sm:py-12 lg:px-16">
+            <div className="mb-8 text-center sm:mb-10">
                 <h2
-                    className="mb-3 text-3xl font-bold text-zinc-100"
+                    className="mb-2 text-2xl font-bold text-zinc-100 sm:mb-3 sm:text-3xl"
                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
                 >
                     <span className="flashcards-sparkle mr-1">✨</span>
                     Generate Flashcards
                     <span className="flashcards-sparkle ml-1">✨</span>
                 </h2>
-                <p className="text-[15px] text-zinc-500">One-time generation based on note length (15–30 flashcards)</p>
+                <p className="text-[13px] text-zinc-500 sm:text-[15px]">One-time generation based on note length (15–30 flashcards)</p>
             </div>
 
             {error && (

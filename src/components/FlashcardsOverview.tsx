@@ -59,25 +59,25 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
     const taBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => { e.target.style.borderColor = 'var(--border-glass)'; e.target.style.boxShadow = ''; };
 
     return (
-        <div className="mx-auto w-full max-w-7xl px-8 py-10 lg:px-16">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10 lg:px-16">
             {/* Header */}
-            <div className="mb-8 flex items-center gap-4">
+            <div className="mb-5 flex items-center gap-3 sm:mb-8 sm:gap-4">
                 <div
-                    className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl"
                     style={{ background: 'var(--bg-glass-hover)', border: '1px solid var(--border-glass)' }}
                 >
-                    <TbCards className="h-7 w-7" style={{ color: 'var(--brand-emerald)' }} />
+                    <TbCards className="h-5 w-5 sm:h-7 sm:w-7" style={{ color: 'var(--brand-emerald)' }} />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Flashcards</h2>
-                    <p className="text-[13px] text-zinc-500">{cards.length} Total Flashcards</p>
+                    <h2 className="text-lg font-bold text-zinc-100 sm:text-2xl" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Flashcards</h2>
+                    <p className="text-[12px] text-zinc-500 sm:text-[13px]">{cards.length} Total Flashcards</p>
                 </div>
             </div>
 
-            {/* Status Badges */}
-            <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+            {/* Status Badges — scrollable row on mobile */}
+            <div className="note-tab-scroll mb-4 flex items-center gap-2 overflow-x-auto sm:mb-6 sm:flex-wrap sm:justify-center sm:gap-3">
                 <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-1 text-[12px] font-semibold text-red-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2.5 py-1 text-[11px] font-semibold text-red-400 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0 }}
@@ -85,7 +85,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                     {unfamiliarCount} Unfamiliar
                 </motion.span>
                 <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1 text-[12px] font-semibold text-blue-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-1 text-[11px] font-semibold text-blue-400 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.08 }}
@@ -93,7 +93,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                     {newCount} New
                 </motion.span>
                 <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-[12px] font-semibold text-amber-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-400 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.16 }}
@@ -101,7 +101,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                     {learningCount} Learning
                 </motion.span>
                 <motion.span
-                    className="inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-[12px] font-semibold text-green-400"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2.5 py-1 text-[11px] font-semibold text-green-400 sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[12px]"
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ duration: 0.3, delay: 0.24 }}
@@ -113,10 +113,10 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
             {/* Card Preview */}
             {currentCard && (
                 <div
-                    className="mb-6 mx-auto flex min-h-[240px] max-w-xl items-center justify-center rounded-2xl p-8"
+                    className="mb-4 mx-auto flex min-h-[160px] max-w-xl items-center justify-center rounded-2xl p-5 sm:mb-6 sm:min-h-[240px] sm:p-8"
                     style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)', backdropFilter: 'blur(12px)' }}
                 >
-                    <p className="text-center text-lg font-medium text-zinc-100">{currentCard.front}</p>
+                    <p className="text-center text-base font-medium text-zinc-100 sm:text-lg">{currentCard.front}</p>
                 </div>
             )}
 
@@ -184,7 +184,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                                 <span className={`h-2.5 w-2.5 rounded-full ${group.dot}`} />
                                                 <span className="text-[12px] font-medium text-zinc-500">Editing</span>
                                             </div>
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                                 <div>
                                                     <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Front</label>
                                                     <textarea
@@ -254,12 +254,12 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
                                                 </div>
                                             </div>
                                             <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 lg:px-5">
-                                                <div className="grid grid-cols-2 gap-6 w-full">
-                                                    <div className="flex items-center justify-center text-center">
-                                                        <p className="leading-relaxed text-zinc-200">{card.front}</p>
+                                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 w-full">
+                                                    <div className="flex items-center justify-center text-center pb-3 sm:pb-0" style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                                                        <p className="text-sm leading-relaxed text-zinc-200">{card.front}</p>
                                                     </div>
-                                                    <div className="flex items-center justify-center text-center" style={{ borderLeft: '1px solid var(--border-glass)' }}>
-                                                        <p className="leading-relaxed text-zinc-400">{card.back}</p>
+                                                    <div className="flex items-center justify-center text-center sm:border-l sm:border-l-[var(--border-glass)]"  style={{ borderTop: '1px solid var(--border-glass)' }}>
+                                                        <p className="text-sm leading-relaxed text-zinc-400 pt-3 sm:pt-0">{card.back}</p>
                                                     </div>
                                                 </div>
                                             </div>

@@ -71,7 +71,7 @@ const NotePage: React.FC = () => {
     const pathSlug = location.pathname.split(`/notes/${id}/`)[1] || '';
     const activeSection: SidebarSection = slugToSection[pathSlug] || 'Document';
 
-    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
     const [note, setNote] = useState<Note | null>(null);
     const [loading, setLoading] = useState(true);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -264,18 +264,18 @@ const NotePage: React.FC = () => {
 
     return (
         <>
-            <div className="flex h-screen text-zinc-100" style={{ background: 'var(--bg-main)' }}>
-                {/* Mobile backdrop */}
+            <div className="flex h-screen flex-col text-zinc-100 lg:flex-row" style={{ background: 'var(--bg-main)' }}>
+                {/* Desktop backdrop */}
                 {sidebarOpen && (
                     <div
-                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
                         onClick={() => setSidebarOpen(false)}
                     />
                 )}
 
-                {/* ─── SIDEBAR ─── */}
+                {/* ─── SIDEBAR (desktop only) ─── */}
                 <aside
-                    className={`${sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'} fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
+                    className={`${sidebarOpen ? 'w-56 translate-x-0' : 'w-0 -translate-x-full'} fixed inset-y-0 left-0 z-50 hidden shrink-0 flex-col overflow-hidden transition-all duration-300 lg:flex lg:relative lg:z-auto ${!sidebarOpen ? 'lg:w-0' : ''}`}
                     style={{ borderRight: glassBorder, background: 'var(--bg-sidebar)', backdropFilter: 'blur(16px)' }}
                 >
                     {/* Sidebar Header */}
@@ -318,7 +318,7 @@ const NotePage: React.FC = () => {
                                     <button
                                         key={link.label}
                                         onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
-                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold transition-colors duration-150"
+                                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-semibold transition-colors duration-150"
                                         style={{
                                             background: isActive ? 'rgba(0,200,150,0.1)' : 'transparent',
                                             color: isActive ? 'var(--brand-emerald)' : 'var(--text-sidebar)',
@@ -327,7 +327,7 @@ const NotePage: React.FC = () => {
                                         onMouseEnter={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)'; } }}
                                         onMouseLeave={e => { if (!isActive) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)'; } }}
                                     >
-                                        <link.icon className="h-[20px] w-[20px] shrink-0" />
+                                        <link.icon className="h-[18px] w-[18px] shrink-0" />
                                         <span>{link.label}</span>
                                     </button>
                                 );
@@ -335,7 +335,7 @@ const NotePage: React.FC = () => {
                         </div>
 
                         {/* Upgrade Button */}
-                        <button className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 py-3 text-[14px] font-bold">
+                        <button className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 py-2.5 text-[13px] font-bold">
                             <MdAutoAwesome className="h-4 w-4" />
                             Upgrade to Premium
                         </button>
@@ -345,7 +345,7 @@ const NotePage: React.FC = () => {
                     <div className="px-3 py-3" style={{ borderTop: glassBorder }}>
                         <button
                             onClick={() => setThemeModalOpen(true)}
-                            className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-semibold text-zinc-400 transition-colors"
+                            className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-semibold text-zinc-400 transition-colors"
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)'; }}
                         >
@@ -361,7 +361,7 @@ const NotePage: React.FC = () => {
                                 {user?.email?.charAt(0).toUpperCase() || 'U'}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-[13px] font-semibold text-zinc-300">
+                                <p className="truncate text-[12px] font-semibold text-zinc-300">
                                     {user?.email || 'user@zemly.app'}
                                 </p>
                             </div>
@@ -372,11 +372,12 @@ const NotePage: React.FC = () => {
                 {/* ─── MAIN CONTENT ─── */}
                 <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
                     {/* Top Bar */}
-                    <div className="flex items-center justify-between px-6 py-3" style={{ borderBottom: glassBorder }}>
-                        <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3" style={{ borderBottom: glassBorder }}>
+                        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+                            {/* Sidebar toggle – desktop only */}
                             <button
                                 onClick={() => setSidebarOpen(true)}
-                                className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-100 ${sidebarOpen ? 'md:hidden' : ''}`}
+                                className={`hidden lg:flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:text-zinc-100 ${sidebarOpen ? 'lg:hidden' : ''}`}
                                 style={{ background: 'transparent' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -386,7 +387,7 @@ const NotePage: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => navigate('/dashboard')}
-                                className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:text-zinc-100"
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-400 transition-colors hover:text-zinc-100"
                                 style={{ background: 'transparent' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -398,15 +399,15 @@ const NotePage: React.FC = () => {
                                 </svg>
                             </button>
                             <h1
-                                className="max-w-md truncate text-lg font-bold text-zinc-100"
+                                className="min-w-0 flex-1 truncate text-[14px] font-bold text-zinc-100 sm:text-base lg:max-w-md lg:flex-none lg:text-lg"
                                 style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
                             >
                                 {note.title}
                             </h1>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            <span className={`text-xs font-medium ${saveStatus === 'saved' ? 'text-zinc-600' : saveStatus === 'saving' ? 'text-amber-400' : 'text-red-400'}`}>
+                        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                            <span className={`hidden text-xs font-medium sm:block ${saveStatus === 'saved' ? 'text-zinc-600' : saveStatus === 'saving' ? 'text-amber-400' : 'text-red-400'}`}>
                                 {saveStatus === 'saved' ? '' : saveStatus === 'saving' ? 'Saving…' : 'Error saving'}
                             </span>
                             {[
@@ -414,7 +415,7 @@ const NotePage: React.FC = () => {
                             ].map(({ icon: Icon, title, onClick }, i) => (
                                 <button
                                     key={i} onClick={onClick} title={title}
-                                    className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
+                                    className="hidden h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 sm:flex"
                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                                 >
@@ -437,6 +438,16 @@ const NotePage: React.FC = () => {
                                 )}
                             </button>
                             <button
+                                onClick={() => setThemeModalOpen(true)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 lg:hidden"
+                                style={{ background: 'transparent' }}
+                                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                title="Theme"
+                            >
+                                <RiMoonLine className="h-4 w-4" />
+                            </button>
+                            <button
                                 className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
                                 style={{ background: 'transparent' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
@@ -447,11 +458,37 @@ const NotePage: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* ─── MOBILE / TABLET HORIZONTAL TAB SCROLL BAR ─── */}
+                    <div
+                        className="note-tab-scroll flex shrink-0 items-center gap-1 overflow-x-auto px-3 py-2 lg:hidden"
+                        style={{ borderBottom: glassBorder }}
+                    >
+                        {noteSidebarLinks.map((link) => {
+                            const isActive = activeSection === link.label;
+                            return (
+                                <button
+                                    key={link.label}
+                                    onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
+                                    className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150"
+                                    style={{
+                                        background: isActive ? 'rgba(0,200,150,0.1)' : 'transparent',
+                                        color: isActive ? 'var(--brand-emerald)' : 'var(--text-sidebar)',
+                                        border: isActive ? '1px solid rgba(0,200,150,0.18)' : '1px solid transparent',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    <link.icon className="h-[14px] w-[14px] shrink-0" />
+                                    <span>{link.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
                     {/* ── Document Section ── */}
                     {activeSection === 'Document' && (
                         <div className="relative flex flex-1 overflow-hidden">
                             {/* Editor Column */}
-                            <div className="flex-1 overflow-y-auto px-8 py-6 lg:px-16">
+                            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6 lg:px-16">
                                 {/* Toolbar */}
                                 {editor && (() => {
                                     const rawFontSize = editor.getAttributes('textStyle')?.fontSize as string | undefined;
@@ -520,7 +557,7 @@ const NotePage: React.FC = () => {
 
                             {/* ── Right Side Panel (AI Chat) ── */}
                             <div
-                                className={`chat-side-panel hidden shrink-0 overflow-hidden md:flex md:flex-col ${chatPanelOpen ? 'w-[380px] opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
+                                className={`chat-side-panel hidden shrink-0 overflow-hidden lg:flex lg:flex-col ${chatPanelOpen ? 'w-[340px] xl:w-[380px] opacity-100' : 'w-0 opacity-0 pointer-events-none'}`}
                                 style={{
                                     borderLeft: glassBorder,
                                     transition: 'width 280ms ease, opacity 220ms ease',
@@ -588,7 +625,7 @@ const NotePage: React.FC = () => {
                             {!chatPanelOpen && (
                                 <button
                                     onClick={() => setChatPanelOpen(true)}
-                                    className="absolute right-0 top-1/2 z-30 hidden h-12 w-28 -translate-y-1/2 items-center justify-center gap-2 rounded-l-full rounded-r-none text-[12px] font-semibold text-zinc-200 transition-colors md:flex"
+                                    className="absolute right-0 top-1/2 z-30 hidden h-12 w-28 -translate-y-1/2 items-center justify-center gap-2 rounded-l-full rounded-r-none text-[12px] font-semibold text-zinc-200 transition-colors lg:flex"
                                     style={{
                                         background: 'rgba(255,255,255,0.06)',
                                         border: '1px solid var(--border-glass)',
@@ -615,9 +652,9 @@ const NotePage: React.FC = () => {
                     {/* ── Chat Bot Section ── */}
                     {activeSection === 'Chat Bot' && (
                         note?.source_type === 'document' && note.source_url ? (
-                            <div className="flex flex-1 overflow-hidden">
-                                {/* PDF Viewer */}
-                                <div className="flex-1 flex flex-col overflow-hidden" style={{ borderRight: glassBorder }}>
+                            <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+                                {/* PDF Viewer – hidden on mobile, shown on lg+ */}
+                                <div className="hidden flex-1 flex-col overflow-hidden lg:flex" style={{ borderRight: glassBorder }}>
                                     <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: glassBorder }}>
                                         <span className="text-[12px] font-medium text-zinc-500">Original Document</span>
                                         {note.file_name && <span className="text-[12px] text-zinc-600">— {note.file_name}</span>}
@@ -641,7 +678,7 @@ const NotePage: React.FC = () => {
                                     )}
                                 </div>
                                 {/* Chat panel */}
-                                <div className="flex w-[380px] shrink-0 flex-col">
+                                <div className="flex flex-1 flex-col lg:w-[380px] lg:flex-none lg:shrink-0">
                                     <div
                                         className="flex items-center justify-between px-4 py-3"
                                         style={{ borderBottom: glassBorder, background: 'rgba(255,255,255,0.02)' }}

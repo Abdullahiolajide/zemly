@@ -105,7 +105,7 @@ const modalKeyMap: Record<string, ModalType> = {
 };
 
 const DashboardPage: React.FC = () => {
-    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
+    const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
     const [openModal, setOpenModal] = useState<ModalType>(null);
     const [notes, setNotes] = useState<Note[]>([]);
     const [notesLoading, setNotesLoading] = useState(true);
@@ -514,7 +514,7 @@ const DashboardPage: React.FC = () => {
                                 setMenuOpenId(menuOpenId === note.id ? null : note.id);
                                 setMoveNoteId(null);
                             }}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all duration-150 hover:text-zinc-300 group-hover:opacity-100"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-zinc-600 opacity-100 md:opacity-0 transition-all duration-150 hover:text-zinc-300 md:group-hover:opacity-100"
                             style={{ background: 'transparent' }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -673,7 +673,7 @@ const DashboardPage: React.FC = () => {
             {/* ─── MOBILE BACKDROP ─── */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm md:hidden"
+                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
@@ -681,8 +681,8 @@ const DashboardPage: React.FC = () => {
             {/* ─── SIDEBAR ─── */}
             <aside
                 className={`${
-                    sidebarOpen ? 'w-60 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
-                } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden transition-all duration-300 md:relative md:z-auto ${!sidebarOpen ? 'md:w-0' : ''}`}
+                    sidebarOpen ? 'w-60 translate-x-0' : 'w-0 -translate-x-full'
+                } fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col overflow-hidden transition-all duration-300 lg:relative lg:z-auto ${!sidebarOpen ? 'lg:w-0' : ''}`}
                 style={{
                     borderRight: '1px solid var(--border-glass)',
                     background: 'var(--bg-sidebar)',
@@ -782,25 +782,25 @@ const DashboardPage: React.FC = () => {
             {/* ─── MAIN CONTENT ─── */}
             <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" style={{ background: 'var(--bg-main)' }}>
                 {/* Main scrollable area */}
-                <div className="mx-auto w-full max-w-7xl px-8 py-8 lg:px-12">
-                    {/* Top row: Collapse toggle (when sidebar hidden) + Title + Search */}
-                    <div className="mb-8 flex items-start justify-between">
-                        <div className="flex items-center gap-4">
+                <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+                    {/* Top row */}
+                    <div className="mb-6 flex flex-wrap items-start justify-between gap-3 sm:mb-8">
+                        <div className="flex items-center gap-3">
                             <button
                                 onClick={() => setSidebarOpen(true)}
-                                className={`flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 ${sidebarOpen ? 'md:hidden' : ''}`}
+                                className={`flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 ${sidebarOpen ? 'lg:hidden' : ''}`}
                                 aria-label="Expand sidebar"
                             >
                                 <HiOutlineChevronDoubleRight className="h-4 w-4" />
                             </button>
                             <div>
                                 <h1
-                                    className="text-2xl font-bold tracking-tight text-zinc-100"
+                                    className="text-xl font-bold tracking-tight text-zinc-100 sm:text-2xl"
                                     style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
                                 >
                                     Dashboard
                                 </h1>
-                                <p className="mt-1 text-sm text-zinc-500">
+                                <p className="mt-0.5 text-xs text-zinc-500 sm:mt-1 sm:text-sm">
                                     Create new notes
                                 </p>
                             </div>
@@ -808,7 +808,7 @@ const DashboardPage: React.FC = () => {
 
                         {/* Search */}
                         <button
-                            className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm text-zinc-500 transition-all hover:text-zinc-400"
+                            className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs text-zinc-500 transition-all hover:text-zinc-400 sm:px-4 sm:text-sm"
                             style={{
                                 borderColor: 'var(--border-glass)',
                                 background: 'var(--bg-glass-hover)',
@@ -817,14 +817,14 @@ const DashboardPage: React.FC = () => {
                         >
                             <IoSearch className="h-4 w-4" />
                             <span>Search</span>
-                            <kbd className="ml-3 rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                            <kbd className="ml-2 hidden rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 sm:inline sm:ml-3">
                                 ⌘K
                             </kbd>
                         </button>
                     </div>
 
                     {/* ── Quick Action Cards ── */}
-                    <div className="mb-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         {quickActions.map((action, i) => (
                             <button
                                 key={action.title}
@@ -1042,7 +1042,7 @@ const DashboardPage: React.FC = () => {
                                                             <button
                                                                 data-menu-trigger
                                                                 onClick={(e) => { e.stopPropagation(); setFolderMenuOpen(folderMenuOpen === folder.name ? null : folder.name); }}
-                                                                className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 opacity-0 transition-all hover:text-zinc-300 group-hover:opacity-100"
+                                                                className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 opacity-100 md:opacity-0 transition-all hover:text-zinc-300 md:group-hover:opacity-100"
                                                                 style={{ background: 'transparent' }}
                                                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
