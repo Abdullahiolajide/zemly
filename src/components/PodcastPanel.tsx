@@ -110,7 +110,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const [mode, setMode] = useState<PodcastMode>('player');
     const [raiseHandQuestion, setRaiseHandQuestion] = useState('');
     const [raiseHandError, setRaiseHandError] = useState<string | null>(null);
-    const [raiseHandStatus, setRaiseHandStatus] = useState<'idle' | 'intro' | 'listening' | 'processing' | 'answering'>('idle');
+    const [raiseHandStatus, setRaiseHandStatus] = useState<'idle' | 'intro' | 'connecting' | 'listening' | 'processing' | 'answering'>('idle');
     const [raiseHandTurns, setRaiseHandTurns] = useState<RaiseHandTurn[]>([]);
 
     const transcriptRef = useRef<HTMLDivElement>(null);
@@ -121,6 +121,10 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const questionBufferRef = useRef('');
     const raiseHandActiveRef = useRef(false);
     const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const watchdogFiredRef = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const submittingRef = useRef(false);
     const raiseHandChatRef = useRef<HTMLDivElement>(null);
 
     const normalizedScript = useMemo(() => normalizePodcastScript(script), [script]);
@@ -163,6 +167,13 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         }
     }, []);
 
+    const clearWatchdog = useCallback(() => {
+        if (watchdogTimerRef.current) {
+            clearTimeout(watchdogTimerRef.current);
+            watchdogTimerRef.current = null;
+        }
+    }, []);
+
     const playTransientAudio = useCallback(async (source: string | Blob): Promise<void> => {
         clearTransientAudio();
 
@@ -186,53 +197,77 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
     const endRaiseHandFlow = useCallback(() => {
         raiseHandActiveRef.current = false;
+        submittingRef.current = false;
         recognitionHandleRef.current?.stop();
         recognitionHandleRef.current = null;
         clearSilenceTimer();
+        clearWatchdog();
         clearTransientAudio();
+        // Abort any in-flight streaming request
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
         questionBufferRef.current = '';
         setRaiseHandQuestion('');
         setRaiseHandError(null);
         setRaiseHandStatus('idle');
         setMode('player');
-    }, [clearSilenceTimer, clearTransientAudio]);
+    }, [clearSilenceTimer, clearWatchdog, clearTransientAudio]);
 
     const startListeningForQuestion = useCallback(async () => {
         if (!raiseHandActiveRef.current) return;
 
         questionBufferRef.current = '';
         setRaiseHandError(null);
-        setRaiseHandStatus('listening');
+        setRaiseHandStatus('connecting');
         setMode('raise-hand-listening');
 
         try {
             const handle = await startRecognition({
                 onInterim: (text: string) => {
                     if (!raiseHandActiveRef.current) return;
+                    clearWatchdog(); // got speech input, cancel idle watchdog
                     questionBufferRef.current = text;
                     setRaiseHandQuestion(text);
 
-                    // Reset silence timer — submit after 1.2s of silence
+                    // Reset silence timer — auto-submit after 2.5s of silence
                     clearSilenceTimer();
                     silenceTimerRef.current = setTimeout(() => {
-                        if (!raiseHandActiveRef.current) return;
-                        recognitionHandleRef.current?.stop();
-                    }, 1200);
+                        if (!raiseHandActiveRef.current || submittingRef.current) return;
+                        const q = questionBufferRef.current.trim();
+                        if (q) {
+                            submittingRef.current = true;
+                            clearSilenceTimer();
+                            clearWatchdog();
+                            recognitionHandleRef.current?.stop();
+                            recognitionHandleRef.current = null;
+                            void submitRaiseHandQuestion(q);
+                        }
+                    }, 2500);
                 },
                 onRecognized: (text: string) => {
                     if (!raiseHandActiveRef.current) return;
+                    clearWatchdog(); // got speech input, cancel idle watchdog
                     questionBufferRef.current = text;
                     setRaiseHandQuestion(text);
 
                     // Reset silence timer on final result too
                     clearSilenceTimer();
                     silenceTimerRef.current = setTimeout(() => {
-                        if (!raiseHandActiveRef.current) return;
-                        recognitionHandleRef.current?.stop();
-                    }, 1200);
+                        if (!raiseHandActiveRef.current || submittingRef.current) return;
+                        const q = questionBufferRef.current.trim();
+                        if (q) {
+                            submittingRef.current = true;
+                            clearSilenceTimer();
+                            clearWatchdog();
+                            recognitionHandleRef.current?.stop();
+                            recognitionHandleRef.current = null;
+                            void submitRaiseHandQuestion(q);
+                        }
+                    }, 2500);
                 },
                 onError: (error: string) => {
                     if (!raiseHandActiveRef.current) return;
+                    clearWatchdog();
                     const msg = error.toLowerCase();
                     if (msg.includes('microphone') || msg.includes('permission') || msg.includes('denied')) {
                         setRaiseHandError('Microphone permission is blocked. Please allow mic access.');
@@ -246,31 +281,38 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 },
                 onEnd: () => {
                     clearSilenceTimer();
+                    clearWatchdog();
                     recognitionHandleRef.current = null;
-                    if (!raiseHandActiveRef.current) return;
-
-                    const question = questionBufferRef.current.trim();
-                    if (question) {
-                        void submitRaiseHandQuestion(question);
-                    } else {
-                        // No speech detected — restart listening
-                        setTimeout(() => {
-                            if (raiseHandActiveRef.current) void startListeningForQuestion();
-                        }, 250);
-                    }
+                    // onEnd fires after we call stop() — no action needed here
+                    // because we already submitted or ended the flow before calling stop()
                 },
             });
 
             recognitionHandleRef.current = handle;
+
+            // Mic is now live — switch from "connecting" to "listening"
+            setRaiseHandStatus('listening');
+
+            // Start a watchdog: if no speech after 15s, close raise hand entirely
+            clearWatchdog();
+            watchdogFiredRef.current = false;
+            watchdogTimerRef.current = setTimeout(() => {
+                if (!raiseHandActiveRef.current) return;
+                if (questionBufferRef.current.trim()) return; // user spoke, ignore
+                console.warn('Raise hand watchdog: no input for 15s, closing raise hand');
+                watchdogFiredRef.current = true;
+                endRaiseHandFlow();
+            }, 15000);
+
         } catch (err) {
             console.error('Speech recognition start failed:', err);
             recognitionHandleRef.current = null;
             clearSilenceTimer();
-            setRaiseHandError('Unable to start microphone input.');
-            setMode('player');
-            raiseHandActiveRef.current = false;
+            clearWatchdog();
+            setRaiseHandError('Unable to start microphone input. Please try again.');
+            setRaiseHandStatus('idle');
         }
-    }, [clearSilenceTimer, setMode]);
+    }, [clearSilenceTimer, clearWatchdog, setMode]);
 
     const submitRaiseHandQuestion = useCallback(async (question: string) => {
         const trimmedQuestion = question.trim();
@@ -283,6 +325,10 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         setRaiseHandStatus('processing');
         setMode('raise-hand-processing');
         setRaiseHandTurns((prev) => [...prev, { question: trimmedQuestion, answer: '' }]);
+
+        // Create an AbortController for this request so we can cancel on exit
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
         // Audio queue for streamed TTS chunks — plays them sequentially
         const audioQueue: Blob[] = [];
@@ -364,9 +410,12 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                     podcastScript: normalizedScript,
                     currentLineIndex: currentLineIdx,
                     conversationHistory: raiseHandTurns.filter((turn) => turn.answer.trim().length > 0),
+                    signal: controller.signal,
                 },
             );
         } catch (err) {
+            // Ignore abort errors — they're expected when user exits
+            if (err instanceof DOMException && err.name === 'AbortError') return;
             console.error('Raise hand response failed:', err);
             setRaiseHandError(err instanceof Error ? err.message : 'Failed to answer your question');
             if (raiseHandActiveRef.current) {
@@ -375,6 +424,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 setTimeout(() => {
                     if (raiseHandActiveRef.current) startListeningForQuestion();
                 }, 550);
+            }
+        } finally {
+            submittingRef.current = false;
+            if (abortControllerRef.current === controller) {
+                abortControllerRef.current = null;
             }
         }
     }, [currentLineIdx, getNoteText, normalizedScript, noteTitle, playTransientAudio, raiseHandTurns, startListeningForQuestion]);
@@ -413,6 +467,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             recognitionHandleRef.current?.stop();
             recognitionHandleRef.current = null;
             clearSilenceTimer();
+            clearWatchdog();
             clearTransientAudio();
             if (audioRef.current) {
                 audioRef.current.pause();
@@ -420,7 +475,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             }
             setIsPlaying(false);
         };
-    }, [clearSilenceTimer, clearTransientAudio]);
+    }, [clearSilenceTimer, clearWatchdog, clearTransientAudio]);
 
     /* ── Stop audio when tab loses focus ── */
     useEffect(() => {
@@ -431,6 +486,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 recognitionHandleRef.current?.stop();
                 recognitionHandleRef.current = null;
                 clearSilenceTimer();
+                clearWatchdog();
                 clearTransientAudio();
             }
         };
@@ -439,7 +495,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         return () => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [clearSilenceTimer, clearTransientAudio]);
+    }, [clearSilenceTimer, clearWatchdog, clearTransientAudio]);
 
     /* ── Load saved script & audio ── */
     useEffect(() => {
@@ -1102,6 +1158,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                         </p>
                                         <p className="text-[13px] text-zinc-400">
                                             {raiseHandStatus === 'intro' && 'Playing your greeting...'}
+                                            {raiseHandStatus === 'connecting' && 'Starting microphone...'}
                                             {raiseHandStatus === 'listening' && 'Listening for your question...'}
                                             {raiseHandStatus === 'processing' && 'Thinking and preparing an answer...'}
                                             {raiseHandStatus === 'answering' && 'Speaking the answer now...'}
@@ -1160,7 +1217,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                     </div>
                                 )}
 
-                                {raiseHandStatus === 'listening' && raiseHandQuestion && raiseHandQuestion !== (raiseHandTurns[raiseHandTurns.length - 1]?.question || '') && (
+                                {(raiseHandStatus === 'listening' || raiseHandStatus === 'connecting') && raiseHandQuestion && raiseHandQuestion !== (raiseHandTurns[raiseHandTurns.length - 1]?.question || '') && (
                                     <div className="flex items-start gap-3">
                                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4F9CF9] text-[12px] font-bold text-white">
                                             You
@@ -1176,13 +1233,37 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
 
                                 {raiseHandTurns.length === 0 && !raiseHandQuestion && (
                                     <div className="flex min-h-[180px] flex-1 flex-col items-center justify-center text-center">
-                                        <div className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${raiseHandStatus === 'listening' ? 'animate-pulse bg-[#4F9CF9]/20' : ''}`} style={{ border: '1px solid var(--border-glass)', background: raiseHandStatus === 'listening' ? undefined : 'var(--podcast-bubble-bg)' }}>
-                                            <span className="text-[22px]">🎤</span>
-                                        </div>
-                                        <p className="text-[15px] font-semibold text-zinc-100">{raiseHandStatus === 'intro' ? 'Please wait...' : 'Tap back to cancel or wait for the greeting.'}</p>
-                                        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-zinc-500">
-                                            The player will switch into question mode, then return here once the answer is finished.
-                                        </p>
+                                        {raiseHandStatus === 'connecting' ? (
+                                            <>
+                                                <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full" style={{ border: '1px solid var(--border-glass)', background: 'rgba(79,156,249,0.08)' }}>
+                                                    <div className="h-8 w-8 animate-spin rounded-full border-[3px]" style={{ borderColor: 'rgba(79,156,249,0.15)', borderTopColor: '#4F9CF9' }} />
+                                                </div>
+                                                <p className="text-[16px] font-bold text-zinc-100">Starting microphone…</p>
+                                                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-zinc-500">
+                                                    Connecting to speech service. Hold on a moment.
+                                                </p>
+                                            </>
+                                        ) : raiseHandStatus === 'listening' ? (
+                                            <>
+                                                <div className="mb-4 flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-[#4F9CF9]/20" style={{ border: '1px solid rgba(79,156,249,0.3)' }}>
+                                                    <span className="text-[22px]">🎤</span>
+                                                </div>
+                                                <p className="text-[15px] font-semibold text-zinc-100">Listening for your question…</p>
+                                                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-zinc-500">
+                                                    Speak clearly. The mic will auto-submit after a short pause.
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ border: '1px solid var(--border-glass)', background: 'var(--podcast-bubble-bg)' }}>
+                                                    <span className="text-[22px]">🎤</span>
+                                                </div>
+                                                <p className="text-[15px] font-semibold text-zinc-100">{raiseHandStatus === 'intro' ? 'Please wait...' : 'Tap back to cancel or wait for the greeting.'}</p>
+                                                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-zinc-500">
+                                                    The player will switch into question mode, then return here once the answer is finished.
+                                                </p>
+                                            </>
+                                        )}
                                     </div>
                                 )}
 
@@ -1203,29 +1284,28 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                 )}
 
                                 {/* ── Listening wave animation ── */}
-                                {mode !== 'player' && (
-                                    <div className="mt-auto flex flex-col items-center gap-2 pt-4 pb-1">
-                                        <div className="flex items-end justify-center gap-[3px]">
-                                            {[0, 1, 2, 3, 4].map((i) => (
-                                                <div
-                                                    key={i}
-                                                    className={`raise-hand-wave-bar ${
-                                                        raiseHandStatus !== 'listening'
-                                                            ? 'raise-hand-wave-bar--paused'
-                                                            : ''
-                                                    }`}
-                                                />
-                                            ))}
-                                        </div>
-                                        <p className="text-[11px] font-medium text-zinc-500">
-                                            {raiseHandStatus === 'listening' && 'Listening…'}
-                                            {raiseHandStatus === 'processing' && 'Processing…'}
-                                            {raiseHandStatus === 'answering' && 'Speaking…'}
-                                            {raiseHandStatus === 'intro' && 'Starting…'}
-                                            {raiseHandStatus === 'idle' && 'Waiting…'}
-                                        </p>
+                                <div className="mt-auto flex flex-col items-center gap-2 pt-4 pb-1">
+                                    <div className="flex items-end justify-center gap-[3px]">
+                                        {[0, 1, 2, 3, 4].map((i) => (
+                                            <div
+                                                key={i}
+                                                className={`raise-hand-wave-bar ${
+                                                    raiseHandStatus !== 'listening'
+                                                        ? 'raise-hand-wave-bar--paused'
+                                                        : ''
+                                                }`}
+                                            />
+                                        ))}
                                     </div>
-                                )}
+                                    <p className="text-[11px] font-medium text-zinc-500">
+                                        {raiseHandStatus === 'connecting' && 'Starting microphone…'}
+                                        {raiseHandStatus === 'listening' && 'Listening…'}
+                                        {raiseHandStatus === 'processing' && 'Processing…'}
+                                        {raiseHandStatus === 'answering' && 'Speaking…'}
+                                        {raiseHandStatus === 'intro' && 'Starting…'}
+                                        {raiseHandStatus === 'idle' && 'Waiting…'}
+                                    </p>
+                                </div>
 
                             </div>
                         </div>

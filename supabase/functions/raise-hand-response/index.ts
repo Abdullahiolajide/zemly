@@ -182,8 +182,9 @@ Rules:
     - Answer the user's question directly in the first sentence.
     - Do NOT start with greetings such as "Hey" or "Hello".
     - Sound like a voice assistant, not an essay.
+    - give a very shot response to affirmations ex (OK, thank you, i understand, got it, thats right etc)
 - Keep answers conversational and complete.
-- Default to 4-6 short sentences.
+- Default to 3-5 short sentences(could be shorter at your own will depending on the question asked).
 - If the user asks for an overview, summary, explanation, or "give me the idea", give 6-10 short sentences.
 - Include key points and one concrete example when relevant.
     - Ground your answer in the current podcast topic first.
@@ -200,11 +201,11 @@ Rules:
     RECENT VOICE HISTORY:
     ${history || '(none)'}
 
-NOTE CONTEXT:
-${context || '(none)'}
+    NOTE CONTEXT:
+    ${context || '(none)'}
 
-QUESTION:
-${question.trim()}`;
+    QUESTION:
+    ${question.trim()}`;
 
     // ── Create SSE response stream ──
     const textEncoder = new TextEncoder();

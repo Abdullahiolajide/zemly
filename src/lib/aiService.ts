@@ -686,6 +686,7 @@ export async function generateRaiseHandResponseStreaming(
         podcastScript?: PodcastLine[];
         currentLineIndex?: number;
         conversationHistory?: Array<{ question: string; answer: string }>;
+        signal?: AbortSignal;
     },
 ): Promise<void> {
     const { data: session } = await supabase.auth.getSession();
@@ -706,6 +707,7 @@ export async function generateRaiseHandResponseStreaming(
             currentLineIndex: options?.currentLineIndex,
             conversationHistory: options?.conversationHistory,
         }),
+        signal: options?.signal,
     });
 
     if (!res.ok) {

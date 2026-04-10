@@ -15,7 +15,7 @@ import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate } from 'react-router-dom';
-import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote } from '../lib/notesService';
+import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote, updateNote } from '../lib/notesService';
 import { uploadDocumentToStorage, extractDocumentFromStorage, extractFromLink, inferAudioMimeType } from '../lib/aiService';
 import {
     getFolders, createFolder, renameFolder, deleteFolder,
@@ -35,6 +35,13 @@ const navLinks = [
 /* ── Quick-action cards ── */
 const quickActions = [
     {
+        icon: MdUploadFile,
+        iconBg: 'rgba(79, 156, 249, 0.12)',
+        iconColor: '#4F9CF9',
+        title: 'Document upload',
+        subtitle: 'Any PDF, DOC, PPT, etc',
+    },
+    {
         icon: IoDocumentTextOutline,
         iconBg: 'rgba(0, 200, 150, 0.12)',
         iconColor: '#00C896',
@@ -47,13 +54,6 @@ const quickActions = [
         iconColor: '#F5A623',
         title: 'Record or upload audio',
         subtitle: 'Upload an audio file',
-    },
-    {
-        icon: MdUploadFile,
-        iconBg: 'rgba(79, 156, 249, 0.12)',
-        iconColor: '#4F9CF9',
-        title: 'Document upload',
-        subtitle: 'Any PDF, DOC, PPT, etc',
     },
     {
         icon: IoLinkOutline,
@@ -79,7 +79,7 @@ function timeAgo(dateStr: string): string {
 }
 
 /* ── Helper: get note type icon and label ── */
-function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string }>, label: string, bg: string, color: string } {
+function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string; style?: React.CSSProperties; color?: string }>, label: string, bg: string, color: string } {
     switch (sourceType) {
         case 'document':
             return { icon: MdUploadFile, label: 'Document', bg: 'rgba(79, 156, 249, 0.12)', color: '#4F9CF9' };
@@ -128,8 +128,11 @@ const DashboardPage: React.FC = () => {
     const [folderMenuOpen, setFolderMenuOpen] = useState<string | null>(null);
     const [moveNoteId, setMoveNoteId] = useState<number | null>(null);
     const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<string | null>(null);
+    const [renamingNoteId, setRenamingNoteId] = useState<number | null>(null);
+    const [renameNoteValue, setRenameNoteValue] = useState('');
     const newFolderInputRef = useRef<HTMLInputElement>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
+    const renameNoteInputRef = useRef<HTMLInputElement>(null);
 
     /* ── Reload folders ── */
     const reloadFolders = useCallback(() => {
@@ -391,9 +394,7 @@ const DashboardPage: React.FC = () => {
     const folderNoteIds = new Set(openFolder?.noteIds || []);
     const folderNotes = openFolder ? notes.filter((n) => folderNoteIds.has(n.id)) : [];
 
-    // Notes not in any folder (unfiled)
     const allFolderedNoteIds = new Set(folders.flatMap((f) => f.noteIds));
-    const unfiledNotes = notes.filter((n) => !allFolderedNoteIds.has(n.id));
 
     /* ── Note row renderer ── */
     const renderNoteRow = (note: Note, inFolder: boolean) => {
@@ -419,11 +420,72 @@ const DashboardPage: React.FC = () => {
                         <TypeIcon className="h-5 w-5" style={{ color: typeColor }} />
                     </div>
 
-                    {/* Note Info */}
+                    {/* Note Title (or inline rename input) */}
                     <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-zinc-200">
-                            {note.title}
-                        </p>
+                        {renamingNoteId === note.id ? (
+                            <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex flex-col gap-2"
+                            >
+                                <input
+                                    ref={renameNoteInputRef}
+                                    type="text"
+                                    value={renameNoteValue}
+                                    onChange={(e) => setRenameNoteValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Escape') setRenamingNoteId(null);
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const trimmed = renameNoteValue.trim();
+                                            if (trimmed && trimmed !== note.title) {
+                                                updateNote(note.id, { title: trimmed })
+                                                    .then(() => setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, title: trimmed } : n)))
+                                                    .catch((err) => console.error('Failed to rename note:', err));
+                                            }
+                                            setRenamingNoteId(null);
+                                        }
+                                    }}
+                                    className="w-full rounded-md border px-2 py-1 text-sm font-semibold outline-none"
+                                    style={{
+                                        background: 'var(--bg-glass-hover)',
+                                        borderColor: 'var(--brand-emerald)',
+                                        color: 'var(--text-sidebar)',
+                                    }}
+                                    autoFocus
+                                />
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={async () => {
+                                            const trimmed = renameNoteValue.trim();
+                                            if (trimmed && trimmed !== note.title) {
+                                                try {
+                                                    await updateNote(note.id, { title: trimmed });
+                                                    setNotes((prev) => prev.map((n) => n.id === note.id ? { ...n, title: trimmed } : n));
+                                                } catch (err) {
+                                                    console.error('Failed to rename note:', err);
+                                                }
+                                            }
+                                            setRenamingNoteId(null);
+                                        }}
+                                        className="rounded-md px-3 py-1 text-[12px] font-semibold text-white transition-colors"
+                                        style={{ background: 'var(--brand-emerald)' }}
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        onClick={() => setRenamingNoteId(null)}
+                                        className="rounded-md px-3 py-1 text-[12px] font-medium text-zinc-400 transition-colors hover:text-zinc-200"
+                                        style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-sm font-semibold text-zinc-200">
+                                {note.title}
+                            </p>
+                        )}
                         <div className="mt-0.5 flex items-center gap-3 text-[12px] text-zinc-500">
                             <div className="flex items-center gap-1">
                                 <TypeIcon className="h-3.5 w-3.5" />
@@ -522,6 +584,24 @@ const DashboardPage: React.FC = () => {
                                         )}
                                     </div>
                                 )}
+
+                                {/* Rename */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRenamingNoteId(note.id);
+                                        setRenameNoteValue(note.title);
+                                        setMenuOpenId(null);
+                                        setTimeout(() => renameNoteInputRef.current?.focus(), 50);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-zinc-300 transition-colors"
+                                    style={{ background: 'transparent' }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                >
+                                    <FiEdit3 className="h-4 w-4" />
+                                    Rename
+                                </button>
 
                                 {/* Delete */}
                                 <button
