@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MdAutoAwesome } from 'react-icons/md';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabaseClient';
 import Logo from '../components/Logo';
