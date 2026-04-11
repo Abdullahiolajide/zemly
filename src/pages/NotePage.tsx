@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import Logo from '../components/Logo';
 import { motion } from 'framer-motion';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -281,21 +282,10 @@ const NotePage: React.FC = () => {
                     {/* Sidebar Header */}
                     <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: glassBorder }}>
                         <div
-                            className="flex cursor-pointer items-center gap-2.5"
+                            className="flex cursor-pointer items-center group"
                             onClick={() => navigate('/dashboard')}
                         >
-                            <div
-                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                                style={{ background: 'linear-gradient(135deg, #00C896, #00A87A)', boxShadow: '0 4px 12px rgba(0,200,150,0.25)' }}
-                            >
-                                <MdAutoAwesome className="h-4 w-4 text-white" />
-                            </div>
-                            <span
-                                className="text-base font-bold tracking-tight text-zinc-100"
-                                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                            >
-                                Zemly
-                            </span>
+                            <Logo className="h-8 transition-transform duration-200 group-hover:scale-[1.02]" />
                         </div>
                         <button
                             onClick={() => setSidebarOpen(false)}
@@ -362,7 +352,7 @@ const NotePage: React.FC = () => {
                             </div>
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-[12px] font-semibold text-zinc-300">
-                                    {user?.email || 'user@zemly.app'}
+                                    {user?.email || 'user@zemly.me'}
                                 </p>
                             </div>
                         </div>

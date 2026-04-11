@@ -249,7 +249,7 @@ Rules:
             const geminiRes = await streamGemini(
                 [{ role: 'user', parts: [{ text: prompt }] }],
                 {
-                    systemInstruction: 'You are Zemly Voice Mode: quick, grounded, conversational, and context-aware to the ongoing podcast.',
+                    systemInstruction: 'You are Zemly AI Voice Mode: quick, grounded, conversational, and context-aware to the ongoing podcast.',
                     temperature: 0.3,
                     maxOutputTokens: 350,
                 },

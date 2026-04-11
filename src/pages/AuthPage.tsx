@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MdAutoAwesome } from 'react-icons/md';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabaseClient';
+import Logo from '../components/Logo';
 
 const AuthPage: React.FC = () => {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -117,10 +118,9 @@ const AuthPage: React.FC = () => {
                 <div className="mb-10 flex flex-col items-center text-center">
                     <Link
                         to="/"
-                        className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl transition-transform duration-200 hover:scale-105"
-                        style={{ background: '#00C896', boxShadow: '0 0 24px rgba(0,200,150,0.3)' }}
+                        className="mb-6 flex items-center justify-center transition-transform duration-200 hover:scale-[1.02]"
                     >
-                        <MdAutoAwesome className="h-7 w-7" style={{ color: '#0D0F12' }} />
+                        <Logo className="h-12" />
                     </Link>
                     <h1
                         className="text-3xl font-extrabold tracking-tight text-zinc-100 sm:text-4xl"
@@ -207,7 +207,7 @@ const AuthPage: React.FC = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@example.com"
+                                placeholder="you@zemly.me"
                                 required
                                 className="w-full rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200"
                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -289,6 +289,17 @@ const AuthPage: React.FC = () => {
                         >
                             {isSignUp ? 'Sign in' : 'Sign up'}
                         </button>
+                    </p>
+
+                    <p className="mt-6 text-center text-xs text-zinc-500">
+                        By continuing, you agree to Zemly AI's{' '}
+                        <Link to="/terms" className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300 transition-colors">
+                            Terms of Service
+                        </Link>{' '}
+                        and{' '}
+                        <Link to="/privacy" className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300 transition-colors">
+                            Privacy Policy
+                        </Link>.
                     </p>
                 </div>
 

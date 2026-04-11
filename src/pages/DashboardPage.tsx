@@ -14,7 +14,8 @@ import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-i
 import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import Logo from '../components/Logo';
 import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote, updateNote } from '../lib/notesService';
 import { uploadDocumentToStorage, extractDocumentFromStorage, extractFromLink, inferAudioMimeType } from '../lib/aiService';
 import {
@@ -691,20 +692,9 @@ const DashboardPage: React.FC = () => {
             >
                 {/* Sidebar Header */}
                 <div className="flex items-center justify-between px-5 py-4">
-                    <div className="flex items-center gap-2.5">
-                        <div
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                            style={{ background: '#00C896' }}
-                        >
-                            <MdAutoAwesome className="h-4 w-4" style={{ color: '#0D0F12' }} />
-                        </div>
-                        <span
-                            className="text-base font-bold tracking-tight text-zinc-100"
-                            style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                        >
-                            Zemly
-                        </span>
-                    </div>
+                    <Link to="/" className="flex items-center group">
+                        <Logo className="h-8 transition-transform duration-200 group-hover:scale-[1.02]" />
+                    </Link>
                     <button
                         onClick={() => setSidebarOpen(false)}
                         className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
@@ -765,7 +755,7 @@ const DashboardPage: React.FC = () => {
                         </div>
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-[13px] font-medium text-zinc-300">
-                                {user?.email || 'user@zemly.app'}
+                                {user?.email || 'user@zemly.me'}
                             </p>
                         </div>
                         <button

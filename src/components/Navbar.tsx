@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { IoSearch } from 'react-icons/io5';
-import { BsThreeDotsVertical } from 'react-icons/bs';
 import { BiMenu } from 'react-icons/bi';
 import { IoMdClose } from 'react-icons/io';
 import { useAuthStore } from '../store/useAuthStore';
+import Logo from './Logo';
 
 const Navbar: React.FC = () => {
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -15,49 +14,42 @@ const Navbar: React.FC = () => {
         <nav
             className="fixed top-0 left-0 right-0 z-50 border-b backdrop-blur-xl"
             style={{
-                borderColor: 'rgba(255,255,255,0.06)',
-                background: 'rgba(13, 15, 18, 0.85)',
+                borderColor: 'var(--border-glass)',
+                background: 'rgba(var(--navbar-bg, 255,255,255), 0.92)',
             }}
         >
-            <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
+            <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-2.5 lg:px-8">
                 {/* Logo */}
-                <Link to="/" className="flex items-center gap-2.5 group">
-                    <div
-                        className="flex h-9 w-9 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105"
-                        style={{ background: '#00C896' }}
-                    >
-                        <span
-                            className="text-sm font-bold"
-                            style={{ color: '#0D0F12', fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                        >
-                            Z
-                        </span>
-                    </div>
-                    <span
-                        className="text-xl font-bold tracking-tight text-zinc-100"
-                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                    >
-                        Zemly
-                    </span>
+                <Link to="/" className="flex items-center group">
+                    <Logo className="h-8 transition-transform duration-200 group-hover:scale-[1.02]" />
                 </Link>
 
                 {/* Desktop Nav Links */}
                 <div className="hidden items-center gap-8 md:flex">
                     <a
                         href="#features"
-                        className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-200"
+                        className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-900"
+                        style={{ color: 'var(--text-sidebar)', }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
                     >
                         Features
                     </a>
                     <a
                         href="#pricing"
-                        className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-200"
+                        className="text-sm font-medium transition-colors duration-200"
+                        style={{ color: 'var(--text-sidebar)' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
                     >
                         Pricing
                     </a>
                     <a
                         href="#about"
-                        className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-200"
+                        className="text-sm font-medium transition-colors duration-200"
+                        style={{ color: 'var(--text-sidebar)' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
                     >
                         About
                     </a>
@@ -65,23 +57,10 @@ const Navbar: React.FC = () => {
 
                 {/* Desktop Right Section */}
                 <div className="hidden items-center gap-2 md:flex">
-                    <button
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-300"
-                        aria-label="Search"
-                    >
-                        <IoSearch className="h-[17px] w-[17px]" />
-                    </button>
-                    <button
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-300"
-                        aria-label="Menu"
-                    >
-                        <BsThreeDotsVertical className="h-[17px] w-[17px]" />
-                    </button>
-                    <div className="mx-2 h-5 w-px bg-zinc-800" />
                     {isLoggedIn ? (
                         <Link
                             to="/dashboard"
-                            className="btn-emerald ml-1 rounded-lg px-5 py-2 text-sm"
+                            className="btn-emerald rounded-lg px-5 py-2 text-sm"
                         >
                             Dashboard
                         </Link>
@@ -89,13 +68,16 @@ const Navbar: React.FC = () => {
                         <>
                             <Link
                                 to="/auth"
-                                className="rounded-lg px-4 py-2 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-200"
+                                className="rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200"
+                                style={{ color: 'var(--text-sidebar)' }}
+                                onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
+                                onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
                             >
                                 Log in
                             </Link>
                             <Link
                                 to="/auth"
-                                className="btn-emerald ml-1 rounded-lg px-5 py-2 text-sm"
+                                className="btn-emerald rounded-lg px-5 py-2 text-sm"
                             >
                                 Get Started
                             </Link>
@@ -105,7 +87,8 @@ const Navbar: React.FC = () => {
 
                 {/* Mobile Toggle */}
                 <button
-                    className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors duration-200 hover:bg-zinc-800/60 hover:text-zinc-100 md:hidden"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-200 md:hidden"
+                    style={{ color: 'var(--text-sidebar)' }}
                     onClick={() => setMobileOpen(!mobileOpen)}
                     aria-label="Toggle menu"
                 >
@@ -120,53 +103,41 @@ const Navbar: React.FC = () => {
             {/* Mobile Menu */}
             {mobileOpen && (
                 <div
-                    className="border-t px-6 pb-8 pt-6 backdrop-blur-xl md:hidden"
+                    className="border-t px-6 pb-8 pt-5 md:hidden"
                     style={{
-                        borderColor: 'rgba(255,255,255,0.06)',
-                        background: 'rgba(13, 15, 18, 0.97)',
+                        borderColor: 'var(--border-glass)',
+                        background: 'var(--bg-main)',
                     }}
                 >
                     <div className="flex flex-col gap-5">
                         <a
                             href="#features"
-                            className="text-base font-medium text-zinc-400 transition-colors duration-200 hover:text-zinc-100"
+                            className="text-base font-medium transition-colors duration-200"
+                            style={{ color: 'var(--text-sidebar)' }}
                             onClick={() => setMobileOpen(false)}
                         >
                             Features
                         </a>
                         <a
                             href="#pricing"
-                            className="text-base font-medium text-zinc-400 transition-colors duration-200 hover:text-zinc-100"
+                            className="text-base font-medium transition-colors duration-200"
+                            style={{ color: 'var(--text-sidebar)' }}
                             onClick={() => setMobileOpen(false)}
                         >
                             Pricing
                         </a>
                         <a
                             href="#about"
-                            className="text-base font-medium text-zinc-400 transition-colors duration-200 hover:text-zinc-100"
+                            className="text-base font-medium transition-colors duration-200"
+                            style={{ color: 'var(--text-sidebar)' }}
                             onClick={() => setMobileOpen(false)}
                         >
                             About
                         </a>
 
-                        <div className="my-1 h-px w-full bg-zinc-800/60" />
+                        <div className="my-1 h-px w-full" style={{ background: 'var(--border-glass)' }} />
 
-                        <div className="flex items-center gap-3">
-                            <button
-                                className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
-                                aria-label="Search"
-                            >
-                                <IoSearch className="h-[17px] w-[17px]" />
-                            </button>
-                            <button
-                                className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
-                                aria-label="Settings"
-                            >
-                                <BsThreeDotsVertical className="h-[17px] w-[17px]" />
-                            </button>
-                        </div>
-
-                        <div className="flex flex-col gap-3 pt-1">
+                        <div className="flex flex-col gap-3">
                             {isLoggedIn ? (
                                 <Link
                                     to="/dashboard"
@@ -179,7 +150,7 @@ const Navbar: React.FC = () => {
                                 <>
                                     <Link
                                         to="/auth"
-                                        className="rounded-lg px-5 py-3 text-center text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800/60 hover:text-zinc-100"
+                                        className="rounded-lg px-5 py-3 text-center text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
                                         onClick={() => setMobileOpen(false)}
                                     >
                                         Log in

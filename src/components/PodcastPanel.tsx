@@ -1205,7 +1205,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                                             Z
                                                         </div>
                                                         <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-white/10 bg-white/6 px-4 py-3">
-                                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly</p>
+                                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly AI</p>
                                                             <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
                                                                 {turn.answer}
                                                             </p>
@@ -1273,7 +1273,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                             Z
                                         </div>
                                         <div className="max-w-[85%] rounded-2xl rounded-tl-sm border border-white/10 bg-white/6 px-4 py-3">
-                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly</p>
+                                            <p className="text-[11px] font-semibold text-zinc-300">Zemly AI</p>
                                             <div className="mt-2 flex items-center gap-[5px]">
                                                 <div className="typing-dot" />
                                                 <div className="typing-dot" />
