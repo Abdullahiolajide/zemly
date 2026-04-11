@@ -50,7 +50,7 @@ function buildCoveragePrompt(note: string): { prompt: string; minLines: number }
 
     const sourceDigest = sections
         .map((section, idx) => {
-            const clipped = section.body.slice(0, 3000);
+            const clipped = section.body.slice(0, 30000);
             return `SOURCE ${idx + 1}: ${section.label}\n${clipped}`;
         })
         .join('\n\n');
@@ -296,7 +296,7 @@ serve(async (req: Request) => {
             );
         }
 
-        const note = balanceMultiSourceNote(noteContent, 12000); // Keep all source blocks represented
+        const note = balanceMultiSourceNote(noteContent, 40000); // Keep all source blocks represented
 
         const { prompt, minLines } = buildCoveragePrompt(note);
 

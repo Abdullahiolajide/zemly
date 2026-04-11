@@ -88,7 +88,7 @@ function normalizePodcastScript(script: PodcastLine[]): PodcastLine[] {
     });
 }
 
-const RAISE_HAND_GREETING_AUDIO_URL = import.meta.env.VITE_PODCAST_RAISE_HAND_GREETING_AUDIO_URL?.trim();
+const RAISE_HAND_GREETING_AUDIO_URL = '/greeting.mp3';
 
 const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteText }) => {
     const [view, setView] = useState<PodcastView>('loading');
@@ -363,7 +363,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         };
 
         try {
-            const noteText = getNoteText().slice(0, 12000);
+            const noteText = getNoteText();
             await generateRaiseHandResponseStreaming(
                 noteText,
                 trimmedQuestion,
@@ -441,8 +441,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         setRaiseHandTurns([]);
         questionBufferRef.current = '';
 
-        // Pre-load Azure Speech SDK + token while greeting plays
-        void warmupSpeechRecognition();
+        // Pre-load Azure Speech SDK + token
+        await warmupSpeechRecognition();
+
+        // Start mic & connect fully first
+        await startListeningForQuestion();
 
         if (RAISE_HAND_GREETING_AUDIO_URL) {
             setRaiseHandStatus('intro');
@@ -454,7 +457,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             }
         }
 
-        void startListeningForQuestion();
+        // Restore listening display if still active
+        if (raiseHandActiveRef.current && !submittingRef.current) {
+            setRaiseHandStatus('listening');
+            setMode('raise-hand-listening');
+        }
     }, [pauseMainPlayer, playTransientAudio, startListeningForQuestion]);
 
     /* ── Cleanup audio URL on unmount ── */
