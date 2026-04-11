@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MdAutoAwesome, MdUploadFile } from 'react-icons/md';
+import { MdUploadFile } from 'react-icons/md';
 import { IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
 import { BsChatDots, BsMic } from 'react-icons/bs';
 import { TbCards } from 'react-icons/tb';
@@ -157,8 +157,8 @@ const LandingPage: React.FC = () => {
                         </div>
 
                         {/* Trust line */}
-                        <p className="animate-fade-up animate-delay-4 mt-6 text-sm text-zinc-600">
-                            No credit card required &nbsp;·&nbsp; Free forever plan
+                        <p className="animate-fade-up animate-delay-4 mt-6 text text-zinc-600">
+                            No credit card required 
                         </p>
                     </div>
 
@@ -173,120 +173,14 @@ const LandingPage: React.FC = () => {
                                 boxShadow: '0 0 80px rgba(0,200,150,0.1), 0 32px 80px rgba(0,0,0,0.6)',
                             }}
                         >
-                            {/* Window chrome */}
-                            <div
-                                className="flex items-center gap-2 border-b px-5 py-3.5"
-                                style={{ borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.15)' }}
-                            >
-                                <div className="h-3 w-3 rounded-full bg-red-500/60" />
-                                <div className="h-3 w-3 rounded-full bg-yellow-500/50" />
-                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: '#00C896', opacity: 0.6 }} />
-                                <span className="ml-3 text-xs text-zinc-600">zemly — Biochem Lecture 4.pdf</span>
-                                <div
-                                    className="ml-auto flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium"
-                                    style={{ background: 'rgba(0,200,150,0.12)', color: '#00C896' }}
-                                >
-                                    <MdAutoAwesome className="h-3 w-3" />
-                                    AI ready
-                                </div>
-                            </div>
-
-                            {/* Mock app body */}
-                            <div className="flex min-h-[420px]">
-                                {/* Sidebar */}
-                                <div
-                                    className="hidden w-44 flex-col gap-0.5 border-r p-3 sm:flex"
-                                    style={{ borderColor: 'rgba(255,255,255,0.06)' }}
-                                >
-                                    {[
-                                        { label: 'Document', active: false },
-                                        { label: 'Quiz', active: false },
-                                        { label: 'Flashcards', active: false },
-                                        { label: 'Podcast', active: false },
-                                        { label: 'Chat Bot', active: true },
-                                    ].map((item) => (
-                                        <div
-                                            key={item.label}
-                                            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12px] font-medium"
-                                            style={{
-                                                background: item.active ? 'rgba(0,200,150,0.1)' : 'transparent',
-                                                color: item.active ? '#00C896' : 'rgba(255,255,255,0.35)',
-                                            }}
-                                        >
-                                            <div
-                                                className="h-1.5 w-1.5 rounded-full"
-                                                style={{ background: item.active ? '#00C896' : 'rgba(255,255,255,0.2)' }}
-                                            />
-                                            {item.label}
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* Main content - chat/notes */}
-                                <div className="flex flex-1 flex-col p-5">
-                                    {/* Note title */}
-                                    <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-600">Generated Note</p>
-                                    <p
-                                        className="mb-4 text-base font-bold text-zinc-100"
-                                        style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
-                                    >
-                                        Biochem Lecture 4 — Enzymes & Catalysis
-                                    </p>
-
-                                    {/* Note body */}
-                                    <div className="mb-5 space-y-2 text-[13px] leading-relaxed text-zinc-400">
-                                        <p>Enzymes are biological catalysts that lower activation energy without being consumed. Their specificity is governed by the <span className="font-semibold text-zinc-300">lock-and-key</span> and <span className="font-semibold text-zinc-300">induced-fit</span> models.</p>
-                                        <div className="flex flex-col gap-1.5 mt-3">
-                                            {['Km = [S] at ½ Vmax — measures substrate affinity', 'Competitive inhibitors increase apparent Km', 'Allosteric regulation can be + or −'].map((pt, i) => (
-                                                <div key={i} className="flex items-start gap-2">
-                                                    <div className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full" style={{ background: '#00C896' }} />
-                                                    <span>{pt}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* AI chat bubble */}
-                                    <div className="mt-auto space-y-2">
-                                        <div
-                                            className="rounded-xl rounded-tl-none px-4 py-3 text-[13px] text-zinc-300"
-                                            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.07)' }}
-                                        >
-                                            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#00C896' }}>Zemly AI</span>
-                                            A competitive inhibitor raises Km without changing Vmax, because at high substrate concentrations it can be outcompeted.
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className="flex-1 rounded-lg border px-3 py-2 text-[12px] text-zinc-600"
-                                                style={{ borderColor: 'rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}
-                                            >
-                                                Ask your notes anything…
-                                            </div>
-                                            <div
-                                                className="flex h-8 w-8 items-center justify-center rounded-lg"
-                                                style={{ background: '#00C896' }}
-                                            >
-                                                <MdAutoAwesome className="h-4 w-4 text-zinc-950" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <img
+                                src="/zemly-hero-gif-dark.gif"
+                                alt="Zemly AI App Preview"
+                                className="w-full h-auto object-cover opacity-90 transition-opacity hover:opacity-100"
+                            />
                         </div>
 
-                        {/* Social proof under mockup */}
-                        <div className="mt-5 flex items-center justify-center gap-3 text-sm text-zinc-500">
-                            <div className="flex -space-x-2">
-                                {['#00C896', '#4F9CF9', '#F5A623', '#a78bfa', '#f472b6'].map((c, i) => (
-                                    <div
-                                        key={i}
-                                        className="h-7 w-7 rounded-full border-2 border-zinc-950"
-                                        style={{ background: `${c}50` }}
-                                    />
-                                ))}
-                            </div>
-                            <span>Trusted by students everywhere</span>
-                        </div>
+
                     </div>
                 </div>
             </section>
