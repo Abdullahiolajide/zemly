@@ -17,6 +17,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
     const [isFlipped, setIsFlipped] = useState(false);
     const [showMastery, setShowMastery] = useState(false);
     const [isAdvancing, setIsAdvancing] = useState(false);
+    const [sessionQueueIds, setSessionQueueIds] = useState<number[]>([]);
     const advanceTimerRef = useRef<number | null>(null);
 
     const unfamiliarCount = cards.filter((c) => c.status === 'unfamiliar').length;
@@ -24,13 +25,21 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
     const learningCount = cards.filter((c) => c.status === 'learning').length;
     const masteredCount = cards.filter((c) => c.status === 'mastered').length;
 
-    const studyQueue = [
-        ...cards.filter((c) => c.status === 'unfamiliar'),
-        ...cards.filter((c) => c.status === 'new'),
-        ...cards.filter((c) => c.status === 'learning'),
-    ];
-    const currentCard = studyQueue[0] ?? null;
+    const activeCards = cards.filter((c) => c.status !== 'mastered');
+    const currentCardId = sessionQueueIds[0] ?? null;
+    const currentCard = currentCardId ? cards.find((c) => c.id === currentCardId) ?? null : null;
     const progressPercent = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0;
+
+    useEffect(() => {
+        const activeIds = activeCards.map((card) => card.id);
+        const activeSet = new Set(activeIds);
+
+        setSessionQueueIds((prev) => {
+            const kept = prev.filter((id) => activeSet.has(id));
+            const missing = activeIds.filter((id) => !kept.includes(id));
+            return [...kept, ...missing];
+        });
+    }, [activeCards]);
 
     useEffect(() => {
         return () => {
@@ -53,20 +62,26 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
             newKnowCount = 0;
             newStatus = 'unfamiliar';
         }
+        const willCompleteStudy = newStatus === 'mastered' && sessionQueueIds.length === 1;
+
         advanceTimerRef.current = window.setTimeout(() => {
             onCardUpdate(currentCard.id, newStatus, newKnowCount);
+            setSessionQueueIds((prev) => {
+                const remaining = prev.filter((id) => id !== currentCard.id);
+                if (newStatus === 'mastered') return remaining;
+                return [...remaining, currentCard.id];
+            });
             setIsFlipped(false);
-            const remainingAfterUpdate = studyQueue.length - 1;
-            if (newStatus === 'mastered' && remainingAfterUpdate === 0) {
+            if (willCompleteStudy) {
                 window.setTimeout(() => setShowMastery(true), 400);
             }
             setIsAdvancing(false);
         }, CARD_ADVANCE_MS);
-    }, [CARD_ADVANCE_MS, currentCard, isAdvancing, onCardUpdate, studyQueue.length]);
+    }, [CARD_ADVANCE_MS, currentCard, isAdvancing, onCardUpdate, sessionQueueIds]);
 
-    const handleReset = () => { setShowMastery(false); setIsFlipped(false); onReset(); };
+    const handleReset = () => { setShowMastery(false); setIsFlipped(false); setSessionQueueIds([]); onReset(); };
     const handleExit = () => { setShowMastery(false); onExit(); };
-    const allMastered = studyQueue.length === 0 && masteredCount === cards.length && cards.length > 0;
+    const allMastered = sessionQueueIds.length === 0 && masteredCount === cards.length && cards.length > 0;
 
     return (
         <div className="mx-auto flex w-full max-w-2xl flex-col px-4 py-4 sm:px-8 sm:py-6 lg:px-16">

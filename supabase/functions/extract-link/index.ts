@@ -6,6 +6,9 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 const SUPADATA_API_KEY = Deno.env.get('SUPADATA_API_KEY');
 const SUPADATA_BASE_URL = 'https://api.supadata.ai/v1';
+const LINK_SOURCE_CLIP_CHARS = 600000;
+const LINK_PASS_MAX_OUTPUT_TOKENS = 6144;
+const MAX_LINK_PASSES = 4;
 
 interface ExtractLinkRequest {
     url?: string;
@@ -262,53 +265,97 @@ async function fetchReadableContent(sourceUrl: string): Promise<string> {
     return text;
 }
 
-function buildPrompt(sourceUrl: string, readableText: string, clipChars = 90000): string {
-    const clipped = readableText.slice(0, clipChars);
+interface ParsedPass {
+    title: string;
+    notes: string;
+    continueNeeded: boolean;
+    nextFocus: string;
+}
 
+function parsePass(raw: string): ParsedPass {
+    const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|##CONTINUE##|$)/i);
+    const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)(?=##CONTINUE##|##NEXT_FOCUS##|$)/i);
+    const continueMatch = raw.match(/##CONTINUE##\s*([\s\S]*?)(?=##NEXT_FOCUS##|$)/i);
+    const nextFocusMatch = raw.match(/##NEXT_FOCUS##\s*([\s\S]*?)$/i);
+
+    const continueToken = (continueMatch?.[1] || '').trim().toUpperCase();
+    return {
+        title: (titleMatch?.[1] || '').trim(),
+        notes: (notesMatch?.[1] || '').trim(),
+        continueNeeded: continueToken.startsWith('Y'),
+        nextFocus: (nextFocusMatch?.[1] || '').trim(),
+    };
+}
+
+function buildInitialPrompt(sourceUrl: string, readableText: string): string {
     return `
 You are an expert study notes generator.
 
 INPUT:
 - Source URL: ${sourceUrl}
 - Extracted source text:
-${clipped}
+${readableText}
 
 TASK:
 1) Understand the source deeply.
-2) Generate dense, high-value study notes.
+2) Generate dense, high-value study notes for students.
+3) This is pass 1, so cover as much as possible while staying organized.
 
 RULES:
-- Do not mention that text was extracted.
-- Remove noise like navigation/footer text when present.
-- Keep only meaningful concepts, arguments, definitions, facts, formulas, dates, and examples.
-- Be concise but complete.
+- Do not mention extraction mechanics.
+- Remove obvious navigation/footer noise.
+- Keep meaningful concepts, arguments, definitions, facts, formulas, dates, and examples.
+- Prioritize complete coverage over short output.
 
-OUTPUT EXACTLY THIS FORMAT (include the tags):
+OUTPUT EXACTLY THIS FORMAT:
 
 ##TITLE##
 A concise, descriptive title for this source
 
 ##NOTES##
-## Overview
-3-4 sentences on what this source is about and why it matters.
+Structured study notes (Overview, Detailed Notes, Key Terms, Must-Know Facts, Final Summary)
 
-## Detailed Notes
+##CONTINUE##
+YES or NO
 
-### [Major Topic 1]
-- **[Key term]**: concise explanation
-- supporting details/examples
+##NEXT_FOCUS##
+If CONTINUE is YES, list what should be covered next.
+`;
+}
 
-### [Major Topic 2]
-...
+function buildContinuationPrompt(sourceUrl: string, readableText: string, notesSoFar: string, nextFocus: string): string {
+    const tail = notesSoFar.slice(-24000);
 
-## Key Terms & Definitions
-- **[Term]**: definition in this source context
+    return `
+You are continuing notes generation for the same source.
 
-## Must-Know Facts
-Standalone high-yield facts worth memorizing.
+SOURCE URL:
+${sourceUrl}
 
-## Final Summary
-4-6 sentences with the most important takeaways.
+SOURCE TEXT:
+${readableText}
+
+ALREADY GENERATED NOTES (tail excerpt):
+${tail}
+
+NEXT FOCUS GUIDANCE:
+${nextFocus || 'Continue with uncovered sections, details, examples, and high-yield facts.'}
+
+TASK:
+- Add only NEW material not already covered.
+- Keep the same quality and structure.
+- Continue until coverage is complete.
+
+OUTPUT EXACTLY THIS FORMAT:
+
+##NOTES##
+Only the new continuation notes
+
+##CONTINUE##
+YES or NO
+
+##NEXT_FOCUS##
+If CONTINUE is YES, list what should be covered next.
 `;
 }
 
@@ -323,13 +370,45 @@ function sanitizeGeminiError(message: string): string {
     return message || 'Failed to generate notes from this link.';
 }
 
-async function generateNotes(sourceUrl: string, readableText: string): Promise<string> {
-    const raw = await promptGemini(buildPrompt(sourceUrl, readableText, 65000), {
+async function generateNotes(sourceUrl: string, readableText: string): Promise<{ title: string; noteContent: string }> {
+    const clipped = readableText.slice(0, LINK_SOURCE_CLIP_CHARS);
+
+    const firstRaw = await promptGemini(buildInitialPrompt(sourceUrl, clipped), {
         temperature: 0.25,
-        maxOutputTokens: 4096,
+        maxOutputTokens: LINK_PASS_MAX_OUTPUT_TOKENS,
     });
-    if (!raw?.trim()) throw new Error('AI returned an empty response.');
-    return raw;
+    if (!firstRaw?.trim()) throw new Error('AI returned an empty response.');
+
+    const firstParsed = parsePass(firstRaw);
+    const noteParts: string[] = [];
+    if (firstParsed.notes) noteParts.push(firstParsed.notes);
+
+    let continueNeeded = firstParsed.continueNeeded;
+    let nextFocus = firstParsed.nextFocus;
+
+    for (let pass = 2; pass <= MAX_LINK_PASSES && continueNeeded; pass++) {
+        const raw = await promptGemini(
+            buildContinuationPrompt(sourceUrl, clipped, noteParts.join('\n\n'), nextFocus),
+            {
+                temperature: 0.25,
+                maxOutputTokens: LINK_PASS_MAX_OUTPUT_TOKENS,
+            },
+        );
+
+        const parsed = parsePass(raw);
+        if (parsed.notes) {
+            const alreadyHas = noteParts.some((part) => part.includes(parsed.notes));
+            if (!alreadyHas) noteParts.push(parsed.notes);
+        }
+
+        continueNeeded = parsed.continueNeeded;
+        nextFocus = parsed.nextFocus;
+    }
+
+    return {
+        title: firstParsed.title,
+        noteContent: noteParts.join('\n\n').trim(),
+    };
 }
 
 serve(async (req: Request) => {
@@ -347,10 +426,7 @@ serve(async (req: Request) => {
         }
 
         const readableText = await fetchReadableContent(sourceUrl);
-        const raw = await generateNotes(sourceUrl, readableText);
-
-        const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|$)/i);
-        const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)$/i);
+        const generated = await generateNotes(sourceUrl, readableText);
 
         const fallbackTitle = (() => {
             try {
@@ -360,8 +436,8 @@ serve(async (req: Request) => {
             }
         })();
 
-        const title = (titleMatch?.[1] || '').trim() || fallbackTitle;
-        const noteContent = (notesMatch?.[1] || raw).trim();
+        const title = generated.title.trim() || fallbackTitle;
+        const noteContent = generated.noteContent;
 
         if (!noteContent) {
             return new Response(
@@ -374,7 +450,7 @@ serve(async (req: Request) => {
             JSON.stringify({
                 title,
                 noteContent,
-                extractedText: readableText.slice(0, 200000),
+                extractedText: readableText.slice(0, 600000),
                 sourceUrl,
             }),
             { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

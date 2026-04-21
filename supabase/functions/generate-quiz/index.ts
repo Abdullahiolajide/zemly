@@ -9,14 +9,6 @@ interface QuizRequest {
     noteContent: string;
 }
 
-function getQuizCount(noteContent: string): number {
-    const length = noteContent.trim().length;
-    if (length <= 800) return 15;
-    if (length >= 40000) return 50; // 30 pages
-    const ratio = (length - 800) / (40000 - 800);
-    return Math.round(15 + ratio * 35);
-}
-
 function parseQuestions(raw: string): unknown[] {
     const cleaned = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(cleaned);
@@ -37,14 +29,14 @@ serve(async (req: Request) => {
             );
         }
 
-        const safeCount = getQuizCount(noteContent);
         const note = balanceMultiSourceNote(noteContent, 16000);
 
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
 - Handle content coverage: If the note has multiple SOURCE blocks, sample questions across all sources.
-- Meaningful depth: Decide the number of high-quality questions you can generate depending on the note length (not greater than ${safeCount + 5} and not less than ${safeCount - 5}).
+- Meaningful depth: Decide the number of high-quality questions you can generate depending on the note length, max - 100 questions
+- Prioritize quality and coverage over quantity.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
 - Return ONLY valid JSON, no markdown fences.
@@ -65,9 +57,9 @@ ${note}`;
             throw new Error('Quiz generation returned no questions. Please try again.');
         }
 
-        // Safety cap at 30
-        if (questions.length > 30) {
-            questions = questions.slice(0, 30);
+        // Safety cap at 100
+        if (questions.length > 100) {
+            questions = questions.slice(0, 100);
         }
 
         return new Response(

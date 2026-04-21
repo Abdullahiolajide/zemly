@@ -22,6 +22,19 @@ interface QuizPanelProps {
     getNoteText: () => string;
 }
 
+function getResumeQuestionIndex(items: QuizQuestionRow[]): number {
+    const firstNew = items.findIndex((q) => q.status === 'new');
+    if (firstNew >= 0) return firstNew;
+
+    const firstUnfamiliar = items.findIndex((q) => q.status === 'unfamiliar');
+    if (firstUnfamiliar >= 0) return firstUnfamiliar;
+
+    const firstLearning = items.findIndex((q) => q.status === 'learning');
+    if (firstLearning >= 0) return firstLearning;
+
+    return 0;
+}
+
 const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const [view, setView] = useState<QuizView>('loading');
     const [questions, setQuestions] = useState<QuizQuestionRow[]>([]);
@@ -53,6 +66,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     const existingQs = await getQuizQuestions(existingSet.id);
                     setSetId(existingSet.id);
                     setQuestions(existingQs);
+                    setCurrentIndex(getResumeQuestionIndex(existingQs));
                     setView('quiz');
                 } else if (!cancelled) {
                     setView('generate');
@@ -470,11 +484,10 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     <span className="text-zinc-100">{currentIndex + 1}</span>/{questions.length}
                 </span>
                 <button
-                    onClick={() => { if (currentIndex < questions.length - 1) { setSlideDir('right'); setCurrentIndex((i) => i + 1); } }}
-                    disabled={currentIndex === questions.length - 1}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30 sm:h-12 sm:w-12"
+                    onClick={goNext}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 sm:h-12 sm:w-12"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { !(currentIndex === questions.length - 1) && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronRight className="h-5 w-5 sm:h-7 sm:w-7" strokeWidth={3} />

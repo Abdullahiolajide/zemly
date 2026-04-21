@@ -98,58 +98,37 @@ const AuthPage: React.FC = () => {
     };
 
     return (
-        <div className="relative flex min-h-screen items-center justify-center bg-zinc-950 px-6 py-16">
-            {/* Background glow */}
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div
-                    className="absolute left-1/2 top-1/3 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[160px] opacity-15"
-                    style={{ background: 'radial-gradient(circle, #00C896 0%, transparent 65%)' }}
-                />
-                <div
-                    className="absolute bottom-1/4 right-1/3 h-[360px] w-[360px] rounded-full blur-[130px] opacity-10"
-                    style={{ background: 'radial-gradient(circle, #4F9CF9 0%, transparent 65%)' }}
-                />
-            </div>
-
+        <div className="relative flex min-h-dvh items-center justify-center bg-zinc-950 px-6 py-6 sm:py-8">
             {/* Auth Card */}
             <div className="relative z-10 w-full max-w-md">
                 {/* Logo */}
-                <div className="mb-10 flex flex-col items-center text-center">
+                <div className="mb-6 flex flex-col items-center text-center sm:mb-7">
                     <Link
                         to="/"
-                        className="mb-6 flex items-center justify-center transition-transform duration-200 hover:scale-[1.02]"
+                        className="mb-4 flex items-center justify-center"
                     >
                         <Logo className="h-12" />
                     </Link>
                     <h1
-                        className="text-3xl font-extrabold tracking-tight text-zinc-100 sm:text-4xl"
+                        className="text-2xl font-extrabold tracking-tight text-zinc-100 sm:text-3xl"
                         style={{ fontFamily: "'Bricolage Grotesque', sans-serif", letterSpacing: '-0.02em' }}
                     >
                         {isSignUp ? 'Create your account' : 'Welcome back'}
                     </h1>
-                    <p className="mt-3 text-sm text-zinc-500 sm:text-base">
+                    <p className="mt-2 text-sm text-zinc-500 sm:text-base">
                         {isSignUp
                             ? 'Start organizing your thoughts with AI'
                             : 'Log in to continue where you left off'}
                     </p>
                 </div>
 
-                {/* Glassmorphism Card */}
-                <div
-                    className="rounded-2xl px-7 py-10 shadow-2xl sm:px-10"
-                    style={{
-                        background: 'rgba(255,255,255,0.03)',
-                        border: '1px solid rgba(255,255,255,0.07)',
-                        backdropFilter: 'blur(16px)',
-                        boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
-                    }}
-                >
+                <div className="px-1 py-1 sm:px-2">
                     {/* Google Sign In */}
                     <button
                         type="button"
                         onClick={handleGoogleSignIn}
                         disabled={isGoogleLoading || isSubmitting}
-                        className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/80 text-sm font-medium text-zinc-200 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="flex h-12 w-full items-center justify-center gap-3 bg-zinc-900/80 text-sm font-medium text-zinc-200 transition-colors duration-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         {isGoogleLoading ? (
                             <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-400/30 border-t-zinc-400" />
@@ -184,7 +163,7 @@ const AuthPage: React.FC = () => {
                     </button>
 
                     {/* Divider */}
-                    <div className="my-7 flex items-center gap-4">
+                    <div className="my-5 flex items-center gap-4">
                         <div className="h-px flex-1 bg-zinc-800" />
                         <span className="text-xs font-medium text-zinc-500">
                             or continue with email
@@ -192,7 +171,7 @@ const AuthPage: React.FC = () => {
                         <div className="h-px flex-1 bg-zinc-800" />
                     </div>
 
-                    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                         {/* Email */}
                         <div className="flex flex-col gap-2">
                             <label
@@ -206,12 +185,10 @@ const AuthPage: React.FC = () => {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="you@zemly.me"
+                                placeholder="you@gmail.com"
                                 required
-                                className="w-full rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200"
+                                className="w-full bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
-                                onFocus={e => { e.target.style.borderColor = '#00C896'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.12)'; }}
-                                onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
                             />
                         </div>
 
@@ -228,13 +205,11 @@ const AuthPage: React.FC = () => {
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="••••••••"
+                                placeholder="Enter your password"
                                 required
                                 minLength={6}
-                                className="w-full rounded-xl border border-zinc-800/80 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-all duration-200"
+                                className="w-full bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
-                                onFocus={e => { e.target.style.borderColor = '#00C896'; e.target.style.boxShadow = '0 0 0 3px rgba(0,200,150,0.12)'; }}
-                                onBlur={e => { e.target.style.borderColor = ''; e.target.style.boxShadow = ''; }}
                             />
                         </div>
 
@@ -256,7 +231,7 @@ const AuthPage: React.FC = () => {
                         <button
                             type="submit"
                             disabled={isSubmitting || isGoogleLoading}
-                            className="btn-emerald mt-1 h-12 w-full text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            className="btn-emerald mt-1 h-12 w-full !shadow-none text-sm transition-none hover:!scale-100 hover:!shadow-none disabled:cursor-not-allowed disabled:opacity-60"
                             style={{ fontFamily: "'DM Sans', sans-serif" }}
                         >
                             {isSubmitting ? (
@@ -270,7 +245,7 @@ const AuthPage: React.FC = () => {
                     </form>
 
                     {/* Toggle */}
-                    <p className="mt-8 text-center text-sm text-zinc-400">
+                    <p className="mt-6 text-center text-sm text-zinc-400">
                         {isSignUp
                             ? 'Already have an account?'
                             : "Don't have an account?"}{' '}
@@ -290,7 +265,7 @@ const AuthPage: React.FC = () => {
                         </button>
                     </p>
 
-                    <p className="mt-6 text-center text-xs text-zinc-500">
+                    <p className="mt-4 text-center text-xs text-zinc-500">
                         By continuing, you agree to Zemly AI's{' '}
                         <Link to="/terms" className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300 transition-colors">
                             Terms of Service
@@ -303,7 +278,7 @@ const AuthPage: React.FC = () => {
                 </div>
 
                 {/* Back to Home */}
-                <div className="mt-8 text-center">
+                <div className="mt-6 text-center">
                     <Link
                         to="/"
                         className="text-sm text-zinc-500 transition-colors duration-200 hover:text-zinc-300"

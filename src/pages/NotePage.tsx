@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 import { motion } from 'framer-motion';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -14,6 +14,9 @@ import { TextStyleKit } from '@tiptap/extension-text-style';
 import { Markdown } from 'tiptap-markdown';
 import 'prosemirror-view/style/prosemirror.css';
 import html2pdf from 'html2pdf.js';
+import { marked } from 'marked';
+import markedKatex from 'marked-katex-extension';
+import 'katex/dist/katex.min.css';
 
 import { getNote, updateNote } from '../lib/notesService';
 import type { Note } from '../types';
@@ -63,13 +66,98 @@ const slugToSection: Record<string, SidebarSection> = {
 /* ── Shared glass border ── */
 const glassBorder = '1px solid var(--border-glass)';
 
-const NotePage: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { user } = useAuthStore();
+let markdownRendererConfigured = false;
+if (!markdownRendererConfigured) {
+    marked.use(markedKatex({ throwOnError: false }));
+    markdownRendererConfigured = true;
+}
 
-    const pathSlug = location.pathname.split(`/notes/${id}/`)[1] || '';
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function toEditorContent(content: Note['content']): Note['content'] {
+    if (!content || typeof content !== 'string') return content;
+
+    const trimmed = content.trim();
+    if (!trimmed) return '';
+
+    const hasHtmlTags = /<\s*[a-z][\s\S]*>/i.test(trimmed);
+    if (hasHtmlTags) return content;
+
+    const hasMarkdownSyntax = /(^\s{0,3}#{1,6}\s)|(^\s*[-*+]\s)|(^\s*\d+\.\s)|(\*\*[^*]+\*\*)|(```[\s\S]*```)|(\[[^\]]+\]\([^)]+\))|(\$\$[\s\S]*\$\$)|(\$[^$\n]+\$)/m.test(trimmed);
+
+    if (hasMarkdownSyntax) {
+        try {
+            return marked.parse(content, { async: false });
+        } catch {
+            return `<p>${escapeHtml(content).replace(/\n/g, '<br/>')}</p>`;
+        }
+    }
+
+    return `<p>${escapeHtml(content).replace(/\n/g, '<br/>')}</p>`;
+}
+
+function getYouTubeVideoId(url?: string | null): string | null {
+    if (!url) return null;
+
+    try {
+        const parsed = new URL(url);
+        const host = parsed.hostname.replace(/^www\./, '');
+
+        if (host === 'youtu.be') {
+            const id = parsed.pathname.split('/').filter(Boolean)[0];
+            return id || null;
+        }
+
+        if (host.endsWith('youtube.com')) {
+            const watchId = parsed.searchParams.get('v');
+            if (watchId) return watchId;
+
+            const parts = parsed.pathname.split('/').filter(Boolean);
+            const shortsIdx = parts.findIndex((part) => part === 'shorts');
+            if (shortsIdx >= 0 && parts[shortsIdx + 1]) return parts[shortsIdx + 1];
+
+            const embedIdx = parts.findIndex((part) => part === 'embed');
+            if (embedIdx >= 0 && parts[embedIdx + 1]) return parts[embedIdx + 1];
+        }
+    } catch {
+        return null;
+    }
+
+    return null;
+}
+
+function getNoteIdFromRoute(noteKey?: string, legacyId?: string): number | null {
+    if (legacyId) {
+        const parsedLegacy = Number(legacyId);
+        return Number.isFinite(parsedLegacy) ? parsedLegacy : null;
+    }
+
+    if (!noteKey) return null;
+
+    const parsedDirect = Number(noteKey);
+    if (Number.isFinite(parsedDirect)) return parsedDirect;
+
+    const match = noteKey.match(/-(\d+)$/);
+    if (!match) return null;
+
+    const parsedTail = Number(match[1]);
+    return Number.isFinite(parsedTail) ? parsedTail : null;
+}
+
+const NotePage: React.FC = () => {
+    const { noteKey, id: legacyId, userId: routeUserId, '*': wildcardSlug } = useParams<{ noteKey?: string; id?: string; userId?: string; '*': string }>();
+    const navigate = useNavigate();
+    const { user } = useAuthStore();
+    const noteId = getNoteIdFromRoute(noteKey, legacyId);
+
+    const pathSlug = (wildcardSlug || '').replace(/^\/+/, '');
     const activeSection: SidebarSection = slugToSection[pathSlug] || 'Document';
 
     const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
@@ -86,6 +174,17 @@ const NotePage: React.FC = () => {
     const [documentViewerError, setDocumentViewerError] = useState<string | null>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const [, setEditorKey] = useState(0);
+    const youtubeVideoId = note?.source_type === 'link' ? getYouTubeVideoId(note.source_url) : null;
+    const noteKeyFromNote = note ? `${note.user_id}-${note.id}` : null;
+    const noteBasePath = noteKeyFromNote
+        ? `/notes/${noteKeyFromNote}`
+        : noteKey
+            ? `/notes/${noteKey}`
+            : routeUserId && legacyId
+                ? `/notes/${routeUserId}-${legacyId}`
+                : noteId
+                    ? `/notes/${noteId}`
+                    : '/notes';
 
     const editor = useEditor({
         extensions: [
@@ -123,18 +222,18 @@ const NotePage: React.FC = () => {
     });
 
     useEffect(() => {
-        if (!id) return;
+        if (!noteId) return;
         const fetchNote = async () => {
             try {
                 setLoading(true);
-                const data = await getNote(Number(id));
+                const data = await getNote(noteId);
                 setNote(data);
-                if (data.content && editor) { editor.commands.setContent(data.content); }
+                if (data.content && editor) { editor.commands.setContent(toEditorContent(data.content)); }
             } catch (err) { console.error('Failed to load note:', err); }
             finally { setLoading(false); }
         };
         fetchNote();
-    }, [id, editor]);
+    }, [noteId, editor]);
 
     useEffect(() => {
         let revokedUrl: string | null = null;
@@ -190,14 +289,14 @@ const NotePage: React.FC = () => {
                 setSaveStatus('saving');
                 timeout = setTimeout(async () => {
                     try {
-                        if (!id) return;
-                        await updateNote(Number(id), { content });
+                        if (!noteId) return;
+                        await updateNote(noteId, { content });
                         setSaveStatus('saved');
                     } catch (err) { console.error('Auto-save failed:', err); setSaveStatus('error'); }
                 }, 1200);
             };
         })(),
-        [id],
+        [noteId],
     );
 
     const getStudyText = useCallback(() => {
@@ -307,7 +406,7 @@ const NotePage: React.FC = () => {
                                 return (
                                     <button
                                         key={link.label}
-                                        onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
+                                        onClick={() => navigate(`${noteBasePath}${link.slug ? `/${link.slug}` : ''}`)}
                                         className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-semibold transition-colors duration-150"
                                         style={{
                                             background: isActive ? 'rgba(0,200,150,0.1)' : 'transparent',
@@ -458,7 +557,7 @@ const NotePage: React.FC = () => {
                             return (
                                 <button
                                     key={link.label}
-                                    onClick={() => navigate(`/notes/${id}${link.slug ? `/${link.slug}` : ''}`)}
+                                    onClick={() => navigate(`${noteBasePath}${link.slug ? `/${link.slug}` : ''}`)}
                                     className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors duration-150"
                                     style={{
                                         background: isActive ? 'rgba(0,200,150,0.1)' : 'transparent',
@@ -479,6 +578,35 @@ const NotePage: React.FC = () => {
                         <div className="relative flex flex-1 overflow-hidden">
                             {/* Editor Column */}
                             <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6 lg:px-16">
+                                {youtubeVideoId && (
+                                    <div className="mb-6 overflow-hidden rounded-xl" style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}>
+                                        <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: glassBorder }}>
+                                            <span className="text-[12px] font-medium text-zinc-400">Video Source</span>
+                                            {note.source_url && (
+                                                <a
+                                                    href={note.source_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-[12px] font-medium transition-opacity hover:opacity-80"
+                                                    style={{ color: '#00C896' }}
+                                                >
+                                                    Open on YouTube ↗
+                                                </a>
+                                            )}
+                                        </div>
+                                        <div className="aspect-video w-full">
+                                            <iframe
+                                                src={`https://www.youtube.com/embed/${youtubeVideoId}`}
+                                                title="YouTube video"
+                                                className="h-full w-full border-0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                referrerPolicy="strict-origin-when-cross-origin"
+                                                allowFullScreen
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Toolbar */}
                                 {editor && (() => {
                                     const rawFontSize = editor.getAttributes('textStyle')?.fontSize as string | undefined;
@@ -568,7 +696,7 @@ const NotePage: React.FC = () => {
                                     {!chatHasMessages && (
                                         <div className="grid grid-cols-2 gap-2.5 px-4 py-3">
                                             <button
-                                                onClick={() => navigate(`/notes/${id}/quiz`)}
+                                                onClick={() => navigate(`${noteBasePath}/quiz`)}
                                                 className="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
                                                 style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}
                                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.04)'; }}
@@ -583,7 +711,7 @@ const NotePage: React.FC = () => {
                                                 </div>
                                             </button>
                                             <button
-                                                onClick={() => navigate(`/notes/${id}/flashcards`)}
+                                                onClick={() => navigate(`${noteBasePath}/flashcards`)}
                                                 className="group flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
                                                 style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}
                                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(0,200,150,0.25)'; (e.currentTarget as HTMLElement).style.background = 'rgba(0,200,150,0.04)'; }}
@@ -606,7 +734,7 @@ const NotePage: React.FC = () => {
                                             highlightedText={askAiText}
                                             onClearHighlight={() => setAskAiText(null)}
                                             onHasMessages={setChatHasMessages}
-                                            persistenceKey={id ? `chat-state-${id}` : undefined}
+                                            persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
                                         />
                                     </div>
                                 </div>
@@ -686,7 +814,7 @@ const NotePage: React.FC = () => {
                                             getNoteText={() => note.extracted_text || ''}
                                             highlightedText={askAiText}
                                             onClearHighlight={() => setAskAiText(null)}
-                                            persistenceKey={id ? `chat-state-${id}` : undefined}
+                                            persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
                                         />
                                     </div>
                                 </div>
@@ -697,14 +825,14 @@ const NotePage: React.FC = () => {
                                     getNoteText={() => editor?.getText() || ''}
                                     highlightedText={askAiText}
                                     onClearHighlight={() => setAskAiText(null)}
-                                    persistenceKey={id ? `chat-state-${id}` : undefined}
+                                    persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
                                 />
                             </div>
                         )
                     )}
 
                     {/* ── Flashcards Section ── */}
-                    {id && (
+                    {noteId && (
                         <motion.div
                             className="flex-1 overflow-y-auto"
                             style={{ display: activeSection === 'Flashcards' ? 'flex' : 'none', flexDirection: 'column' }}
@@ -713,14 +841,14 @@ const NotePage: React.FC = () => {
                             transition={{ duration: 0.2, ease: 'easeOut' }}
                         >
                             <FlashcardsPanel
-                                noteId={Number(id)}
+                                noteId={noteId}
                                 getNoteText={getStudyText}
                             />
                         </motion.div>
                     )}
 
                     {/* ── Quiz Section ── */}
-                    {id && (
+                    {noteId && (
                         <motion.div
                             className="flex-1 overflow-y-auto"
                             style={{ display: activeSection === 'Quiz' ? 'flex' : 'none', flexDirection: 'column' }}
@@ -729,14 +857,14 @@ const NotePage: React.FC = () => {
                             transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
                         >
                             <QuizPanel
-                                noteId={Number(id)}
+                                noteId={noteId}
                                 getNoteText={getStudyText}
                             />
                         </motion.div>
                     )}
 
                     {/* ── Podcast Section ── */}
-                    {id && (
+                    {noteId && (
                         <div
                             className="flex-1 overflow-hidden flex flex-col"
                             style={{ display: activeSection === 'Podcast' ? 'flex' : 'none' }}
@@ -749,7 +877,7 @@ const NotePage: React.FC = () => {
                                 transition={{ duration: 0.4, ease: 'easeOut', delay: 0.05 }}
                             >
                                 <PodcastPanel
-                                    noteId={Number(id)}
+                                    noteId={noteId}
                                     noteTitle={note.title}
                                     getNoteText={getStudyText}
                                 />

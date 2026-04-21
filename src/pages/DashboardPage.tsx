@@ -79,6 +79,88 @@ function timeAgo(dateStr: string): string {
     return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
 }
 
+function fallbackLinkTitle(sourceUrl: string): string {
+    try {
+        const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+        if (host.includes('youtube.com') || host.includes('youtu.be')) return 'YouTube Video Note';
+        return `${host} Note`;
+    } catch {
+        return 'Web Link Note';
+    }
+}
+
+function isYouTubeUrl(sourceUrl: string): boolean {
+    try {
+        const host = new URL(sourceUrl).hostname.replace(/^www\./, '');
+        return host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be' || host === 'music.youtube.com';
+    } catch {
+        return false;
+    }
+}
+
+async function fetchYouTubeOEmbedTitle(sourceUrl: string): Promise<string | null> {
+    if (!isYouTubeUrl(sourceUrl)) return null;
+
+    try {
+        const endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(sourceUrl)}&format=json`;
+        const res = await fetch(endpoint);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const title = typeof data?.title === 'string' ? data.title.trim() : '';
+        return title || null;
+    } catch {
+        return null;
+    }
+}
+
+function stripMarkdownTitleNoise(input: string): string {
+    return input
+        .replace(/\r/g, ' ')
+        .replace(/\n/g, ' ')
+        .replace(/#{1,6}\s*/g, '')
+        .replace(/\*\*/g, '')
+        .replace(/`{1,3}/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeLinkNoteTitle(rawTitle: string, sourceUrl: string, noteContent: string, preferredTitle?: string | null): string {
+    const preferred = stripMarkdownTitleNoise(preferredTitle || '');
+    if (preferred) return preferred.slice(0, 120);
+
+    const candidateFromTitle = stripMarkdownTitleNoise(rawTitle);
+    const trimmedContent = noteContent.trim();
+    const contentFirstLine = trimmedContent.split('\n').find((line) => line.trim().length > 0) || '';
+    const candidateFromContent = stripMarkdownTitleNoise(contentFirstLine);
+
+    const pickCandidate = (value: string): string => {
+        let title = value;
+        if (/\s+##\s+NOTES\s+/i.test(title)) {
+            title = title.split(/\s+##\s+NOTES\s+/i)[0].trim();
+        }
+
+        if (title.includes('###')) {
+            title = title.split('###')[0].trim();
+        }
+
+        return title;
+    };
+
+    const picked = pickCandidate(candidateFromTitle) || pickCandidate(candidateFromContent);
+
+    const looksNoisy =
+        !picked ||
+        picked.length < 3 ||
+        picked.length > 180 ||
+        /(^|\s)(overview|detailed notes|solution approach|implementation details|summary)(\s|$)/i.test(picked) ||
+        picked.split(' ').length > 28;
+
+    if (looksNoisy) return fallbackLinkTitle(sourceUrl);
+
+    return picked.length > 120 ? `${picked.slice(0, 117).trimEnd()}...` : picked;
+}
+
 /* ── Helper: get note type icon and label ── */
 function getNoteTypeInfo(sourceType?: string): { icon: React.ComponentType<{ className?: string; style?: React.CSSProperties; color?: string }>, label: string, bg: string, color: string } {
     switch (sourceType) {
@@ -113,6 +195,7 @@ const DashboardPage: React.FC = () => {
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
 
@@ -161,6 +244,10 @@ const DashboardPage: React.FC = () => {
         reloadFolders();
     }, [reloadFolders]);
 
+    const buildNotePath = useCallback((noteId: number) => {
+        return user?.id ? `/notes/${user.id}-${noteId}` : `/notes/${noteId}`;
+    }, [user?.id]);
+
     /* ── Focus new folder input ── */
     useEffect(() => {
         if (showNewFolderInput && newFolderInputRef.current) {
@@ -196,7 +283,7 @@ const DashboardPage: React.FC = () => {
     const handleCreateBlankNote = async (title: string) => {
         try {
             const note = await createNote(title);
-            navigate(`/notes/${note.id}`);
+            navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create note:', err);
         }
@@ -228,7 +315,7 @@ const DashboardPage: React.FC = () => {
                 content,
             );
 
-            navigate(`/notes/${note.id}`);
+            navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create document note:', err);
         }
@@ -285,7 +372,7 @@ const DashboardPage: React.FC = () => {
                 combinedNoteContent,
             );
 
-            navigate(`/notes/${note.id}`);
+            navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create audio note:', err);
         }
@@ -298,16 +385,18 @@ const DashboardPage: React.FC = () => {
         try {
             const result = await extractFromLink(trimmedUrl);
             const fileName = new URL(result.sourceUrl).hostname;
+            const oEmbedTitle = await fetchYouTubeOEmbedTitle(result.sourceUrl);
+            const normalizedTitle = normalizeLinkNoteTitle(result.title || '', result.sourceUrl, result.noteContent || '', oEmbedTitle);
 
             const note = await createLinkNote(
-                result.title,
+                normalizedTitle,
                 result.sourceUrl,
                 result.extractedText,
                 fileName,
                 result.noteContent,
             );
 
-            navigate(`/notes/${note.id}`);
+            navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create link note:', err);
             throw err;
@@ -315,8 +404,15 @@ const DashboardPage: React.FC = () => {
     };
 
     const handleLogout = async () => {
-        await logout();
-        navigate('/');
+        if (isLoggingOut) return;
+
+        try {
+            setIsLoggingOut(true);
+            await logout();
+            navigate('/');
+        } finally {
+            setIsLoggingOut(false);
+        }
     };
 
     const handleDeleteNote = async (noteId: number) => {
@@ -406,7 +502,7 @@ const DashboardPage: React.FC = () => {
         return (
             <div key={note.id}>
                 <div
-                    onClick={() => navigate(`/notes/${note.id}`)}
+                    onClick={() => navigate(buildNotePath(note.id))}
                     className="group flex cursor-pointer items-center gap-4 rounded-xl px-4 py-3.5 transition-all duration-150"
                     onMouseEnter={e => {
                         (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)';
@@ -628,7 +724,7 @@ const DashboardPage: React.FC = () => {
                 {deleteConfirmId === note.id && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_150ms_ease-out]">
                         <div
-                            className="w-full max-w-sm rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
+                            className="mx-4 w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-2xl p-6 animate-[modalSlideUp_200ms_ease-out]"
                             style={{
                                 background: 'var(--bg-main)',
                                 border: '1px solid var(--border-glass-strong)',
@@ -642,7 +738,7 @@ const DashboardPage: React.FC = () => {
                             >
                                 Delete note?
                             </h3>
-                            <p className="mt-2 text-sm text-zinc-500">
+                            <p className="mt-2 max-h-44 overflow-y-auto break-words pr-1 text-sm text-zinc-500">
                                 This will permanently delete &ldquo;{note.title}&rdquo; and all its related data. This action cannot be undone.
                             </p>
                             <div className="mt-6 flex gap-3">
@@ -760,10 +856,15 @@ const DashboardPage: React.FC = () => {
                         </div>
                         <button
                             onClick={handleLogout}
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-red-400"
+                            disabled={isLoggingOut}
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
                             aria-label="Log out"
                         >
-                            <MdLogout className="h-4 w-4" />
+                            {isLoggingOut ? (
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+                            ) : (
+                                <MdLogout className="h-4 w-4" />
+                            )}
                         </button>
                     </div>
                 </div>

@@ -43,10 +43,8 @@ function splitSourceSections(note: string): SourceSection[] {
     });
 }
 
-function buildCoveragePrompt(note: string): { prompt: string; minLines: number } {
+function buildCoveragePrompt(note: string): string {
     const sections = splitSourceSections(note);
-    const sourceCount = Math.max(1, sections.length);
-    const minLines = Math.min(28, Math.max(10, sourceCount * 4));
 
     const sourceDigest = sections
         .map((section, idx) => {
@@ -106,7 +104,7 @@ function buildCoveragePrompt(note: string): { prompt: string; minLines: number }
         ${sourceDigest}`;
 
 
-    return { prompt, minLines };
+    return prompt;
 }
 
 function buildFallbackPodcastScript(note: string): PodcastLine[] {
@@ -298,11 +296,11 @@ serve(async (req: Request) => {
 
         const note = balanceMultiSourceNote(noteContent, 40000); // Keep all source blocks represented
 
-        const { prompt, minLines } = buildCoveragePrompt(note);
+        const prompt = buildCoveragePrompt(note);
 
         const raw = await promptGemini(prompt, {
             temperature: 1.0,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 6144,
             responseMimeType: 'application/json',
         });
 
@@ -317,39 +315,6 @@ serve(async (req: Request) => {
             }
         }
         const normalized = normalizeScript(Array.isArray(parsed?.script) ? parsed.script : []);
-
-        if (normalized.length < minLines) {
-            const retryRaw = await promptGemini(
-                `${prompt}\n\nIMPORTANT: Your previous output was too short. Return at least ${minLines} lines in script. Make the conversation detailed, natural, and engaging.`,
-                {
-                    temperature: 0.8,
-                    maxOutputTokens: 8192,
-                    responseMimeType: 'application/json',
-                },
-            );
-
-            let retryParsed: { script?: PodcastLine[] };
-            try {
-                retryParsed = parsePodcastPayload(retryRaw);
-            } catch {
-                try {
-                    retryParsed = await repairPodcastPayload(retryRaw);
-                } catch {
-                    retryParsed = { script: buildFallbackPodcastScript(note) };
-                }
-            }
-
-            const retried = normalizeScript(Array.isArray(retryParsed?.script)
-                ? retryParsed.script
-                : []);
-
-            if (retried.length >= minLines) {
-                return new Response(
-                    JSON.stringify({ script: retried }),
-                    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-                );
-            }
-        }
 
         if (normalized.length < 2) {
             const fallback = buildFallbackPodcastScript(note);

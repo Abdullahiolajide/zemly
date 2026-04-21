@@ -24,6 +24,22 @@ const AppRouter: React.FC = () => {
                     }
                 />
                 <Route
+                    path="/notes/:noteKey/*"
+                    element={
+                        <ProtectedRoute>
+                            <NotePage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/notes/:userId/:id/*"
+                    element={
+                        <ProtectedRoute>
+                            <NotePage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
                     path="/notes/:id/*"
                     element={
                         <ProtectedRoute>

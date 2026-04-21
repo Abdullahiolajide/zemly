@@ -9,6 +9,8 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const PASS_MAX_OUTPUT_TOKENS = 6144;
+const MAX_NOTES_PASSES = 4;
 
 // ---------------------------------------------------------------------------
 // Convert Uint8Array → base64 string
@@ -53,6 +55,147 @@ async function callGemini(fileBase64: string, mimeType: string, prompt: string, 
 
     const data = await res.json();
     return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+}
+
+async function callGeminiWithFallback(fileBase64: string, mimeType: string, prompt: string): Promise<string> {
+    const attempts = [PASS_MAX_OUTPUT_TOKENS, 4096, 3072];
+    let lastError: unknown = null;
+
+    for (const tokenLimit of attempts) {
+        try {
+            return await callGemini(fileBase64, mimeType, prompt, tokenLimit);
+        } catch (err) {
+            lastError = err;
+            const message = err instanceof Error ? err.message : '';
+            const maybeTokenOrSizeIssue = /maxoutputtokens|max output|token|invalid argument|400|context|too large/i.test(message);
+            if (!maybeTokenOrSizeIssue) throw err;
+        }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Gemini generation failed');
+}
+
+interface ParsedPass {
+    title: string;
+    notes: string;
+    continueNeeded: boolean;
+    nextFocus: string;
+}
+
+function parsePass(raw: string): ParsedPass {
+    const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|##CONTINUE##|$)/i);
+    const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)(?=##CONTINUE##|##NEXT_FOCUS##|$)/i);
+    const continueMatch = raw.match(/##CONTINUE##\s*([\s\S]*?)(?=##NEXT_FOCUS##|$)/i);
+    const nextFocusMatch = raw.match(/##NEXT_FOCUS##\s*([\s\S]*?)$/i);
+
+    const continueToken = (continueMatch?.[1] || '').trim().toUpperCase();
+
+    return {
+        title: (titleMatch?.[1] || '').trim(),
+        notes: (notesMatch?.[1] || '').trim(),
+        continueNeeded: continueToken.startsWith('Y'),
+        nextFocus: (nextFocusMatch?.[1] || '').trim(),
+    };
+}
+
+function buildInitialPrompt(isAudio: boolean, fileName: string): string {
+    if (isAudio) {
+        return `
+You are an expert study notes generator and transcription assistant.
+
+INPUT:
+- The uploaded file is an audio recording (lecture, discussion, lesson, or voice note).
+
+TASK:
+1) Transcribe the audio faithfully into clean readable text.
+2) Turn it into dense, high-value study notes.
+
+RULES:
+- Keep speaker wording faithful while cleaning obvious filler and stutters.
+- Preserve technical terms, formulas, dates, named entities, and key examples.
+- If audio is unclear in places, use [inaudible] briefly.
+- Prioritize completeness for students, not brevity.
+- This is pass 1. Cover as much as possible without sacrificing quality.
+
+OUTPUT EXACTLY THIS FORMAT:
+
+##TITLE##
+A concise, descriptive title
+
+##NOTES##
+Structured study notes (use headings, bullets, key terms, facts, and summary)
+
+##CONTINUE##
+YES or NO
+
+##NEXT_FOCUS##
+If CONTINUE is YES, list what should be covered next in the next pass.
+
+Audio filename: ${fileName}
+`;
+    }
+
+    return `
+You are an expert study notes generator.
+
+TASK:
+- Distill this document into dense, high-value, student-friendly notes.
+- Preserve all critical concepts, definitions, formulas, dates, examples, and key facts.
+- This is pass 1. Cover as much as possible without sacrificing quality.
+
+RULES:
+- Rewrite clearly and concisely (no long verbatim copying).
+- Do not skip important sections.
+- Prefer complete coverage over short output.
+
+OUTPUT EXACTLY THIS FORMAT:
+
+##TITLE##
+A concise, descriptive title
+
+##NOTES##
+Structured study notes (Overview, Detailed Notes, Key Terms, Must-Know Facts, Final Summary)
+
+##CONTINUE##
+YES or NO
+
+##NEXT_FOCUS##
+If CONTINUE is YES, list what should be covered next in the next pass.
+
+Document filename: ${fileName}
+`;
+}
+
+function buildContinuationPrompt(isAudio: boolean, fileName: string, notesSoFar: string, nextFocus: string): string {
+    const tail = notesSoFar.slice(-24000);
+
+    return `
+You are continuing study-note generation for the same ${isAudio ? 'audio recording' : 'document'}.
+
+ALREADY GENERATED NOTES (tail excerpt):
+${tail}
+
+NEXT FOCUS GUIDANCE:
+${nextFocus || 'Continue with uncovered major sections and details.'}
+
+TASK:
+- Add only NEW material not already captured.
+- Keep the same note style and quality.
+- Prioritize remaining high-value details for students.
+
+OUTPUT EXACTLY THIS FORMAT:
+
+##NOTES##
+Only the new continuation notes
+
+##CONTINUE##
+YES or NO
+
+##NEXT_FOCUS##
+If CONTINUE is YES, list what should be covered next.
+
+Source filename: ${fileName}
+`;
 }
 
 // ---------------------------------------------------------------------------
@@ -114,127 +257,32 @@ serve(async (req: Request) => {
 
         const isAudio = mimeType.toLowerCase().startsWith('audio/');
 
-        // Single call: extract transcript/text + generate notes + title in plain text.
-        const prompt = isAudio
-            ? `
-                You are an expert study notes generator and transcription assistant.
+        const firstPrompt = buildInitialPrompt(isAudio, fileName);
+        const firstRaw = await callGeminiWithFallback(fileBase64, mimeType, firstPrompt);
+        const firstParsed = parsePass(firstRaw);
 
-                INPUT:
-                - The uploaded file is an audio recording (lecture, discussion, lesson, or voice note).
+        const title = firstParsed.title || fileName.replace(/\.[^.]+$/, '');
+        const noteParts: string[] = [];
+        if (firstParsed.notes) noteParts.push(firstParsed.notes);
 
-                TASK:
-                1) Transcribe the audio faithfully into clean readable text.
-                2) Turn the transcription into dense, high-value study notes.
+        let continueNeeded = firstParsed.continueNeeded;
+        let nextFocus = firstParsed.nextFocus;
 
-                RULES:
-                - Keep speaker wording faithful while cleaning obvious filler words and stutters.
-                - Preserve technical terms, formulas, dates, named entities, and key examples.
-                - If audio is unclear in places, note it briefly as [inaudible] rather than guessing.
-                - Notes must be concise, structured, and complete.
-                - Do not include any analysis about being an AI model.
+        for (let pass = 2; pass <= MAX_NOTES_PASSES && continueNeeded; pass++) {
+            const prompt = buildContinuationPrompt(isAudio, fileName, noteParts.join('\n\n'), nextFocus);
+            const raw = await callGeminiWithFallback(fileBase64, mimeType, prompt);
+            const parsed = parsePass(raw);
 
-                OUTPUT EXACTLY THIS FORMAT (include the tags):
+            if (parsed.notes) {
+                const alreadyHas = noteParts.some((part) => part.includes(parsed.notes));
+                if (!alreadyHas) noteParts.push(parsed.notes);
+            }
 
-                ##TITLE##
-                A concise, descriptive title for this audio lesson
-
-                ##NOTES##
-                ## 📌 Overview
-                3-4 sentences. What is this recording about and why does it matter?
-
-                ## 🗣️ Clean Transcript (Condensed)
-                - A readable transcript summary in chronological flow
-                - Preserve key quotes only when they matter
-
-                ## 📚 Detailed Notes
-
-                ### [Major Topic 1]
-                - **[Key term]**: Concise but complete explanation
-                - Supporting facts/examples from the recording
-
-                ### [Major Topic 2]
-                ...
-
-                ## 🔑 Key Terms & Definitions
-                - **[Term]**: Definition as intended in the recording
-
-                ## ⚡ Must-Know Facts
-                Standalone facts, formulas, dates, and stats worth memorizing.
-
-                ## 📝 Final Summary
-                4-6 sentences covering the most critical takeaways.
-
-                Audio filename: ${fileName}
-                `
-            : `
-                    You are an expert study notes generator. Distill this document into the densest, most useful study notes possible.
-
-                    CORE PHILOSOPHY:
-                    Every sentence must earn its place. Include key concepts, definitions, named terms, examples that aid understanding, formulas, dates, and facts. Cut filler, repetition, and verbose explanations.
-
-                    RULES:
-                    - Never copy text verbatim — rewrite clearly and concisely
-                    - Never skip a key concept or important fact
-                    - Preserve examples only if they genuinely aid understanding
-                    - Compress aggressively but never at the cost of accuracy
-                    - Work through the ENTIRE document — do not truncate early
-                    - Length is proportional to content density
-
-                    OUTPUT EXACTLY THIS FORMAT (include the tags):
-
-                    ##TITLE##
-                    A concise, descriptive title for this document (not the filename)
-
-                    ##NOTES##
-                    ## 📌 Overview
-                    3-4 sentences. What is this document about and why does it matter?
-
-                    ## 📚 Detailed Notes
-
-                    ### [Major Topic 1]
-
-                    #### [Subtopic if applicable]
-                    - **[Key term]**: Concise but complete explanation
-                    - Supporting detail only if it adds meaning
-                    - Examples that genuinely aid understanding
-                    - Formulas, figures, or dates with context
-
-                    ### [Major Topic 2]
-                    ...
-
-                    (Cover every major topic — do not skip sections)
-
-                    ## 🔑 Key Terms & Definitions
-                    - **[Term]**: Definition as the document intends it
-
-                    ## ⚡ Must-Know Facts
-                    Standalone facts, dates, formulas, statistics worth memorizing — one line each.
-
-                    ## 📝 Final Summary
-                    4-6 sentences covering the most critical takeaways.
-
-                    Document filename: ${fileName}
-                    `;
-
-        let raw = '';
-        try {
-            // Keep output high but within commonly supported limits for flash-lite models.
-            raw = await callGemini(fileBase64, mimeType, prompt, 8192);
-        } catch (err) {
-            const message = err instanceof Error ? err.message : '';
-            const maybeTokenLimit = /maxoutputtokens|max output|token|invalid argument|400/i.test(message);
-            if (!maybeTokenLimit) throw err;
-
-            // Fallback for stricter model limits/projects.
-            raw = await callGemini(fileBase64, mimeType, prompt, 6144);
+            continueNeeded = parsed.continueNeeded;
+            nextFocus = parsed.nextFocus;
         }
 
-        // ── Parse the three sections ──
-        const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|$)/i);
-        const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)$/i);
-
-        const title = (titleMatch?.[1] || '').trim() || fileName.replace(/\.[^.]+$/, '');
-        const noteContent = (notesMatch?.[1] || raw).trim();
+        const noteContent = noteParts.join('\n\n');
         const extractedText = noteContent;
 
         if (!noteContent) {

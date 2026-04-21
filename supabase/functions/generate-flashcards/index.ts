@@ -14,14 +14,6 @@ interface Flashcard {
     back: string;
 }
 
-function getFlashcardCount(noteContent: string): number {
-    const length = noteContent.trim().length;
-    if (length <= 800) return 15;
-    if (length >= 40000) return 50; // 30 pages
-    const ratio = (length - 800) / (40000 - 800);
-    return Math.round(15 + ratio * 35);
-}
-
 function extractLikelyJsonObject(input: string): string | null {
     const text = input.trim();
     const start = text.indexOf('{');
@@ -103,14 +95,13 @@ function parseFlashcards(raw: string): Flashcard[] {
     throw new Error('Model returned invalid JSON. Please try generating again.');
 }
 
-async function repairFlashcards(raw: string, targetCount: number): Promise<Flashcard[]> {
+async function repairFlashcards(raw: string): Promise<Flashcard[]> {
     const repairPrompt = `Convert the following output into strict valid JSON.
 
 Rules:
 - Return ONLY JSON.
 - JSON shape must be: {"flashcards":[{"front":"...","back":"..."}]}
 - Keep the same meaning as much as possible.
-- Keep exactly ${targetCount} flashcards when possible.
 - Do not include markdown fences or explanation.
 
 BROKEN OUTPUT:
@@ -138,12 +129,11 @@ serve(async (req: Request) => {
             );
         }
 
-        const safeCount = getFlashcardCount(noteContent);
         const note = balanceMultiSourceNote(noteContent, 16000);
 
         const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
-        Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length (not greater than ${safeCount + 5} and not less than ${safeCount - 5}).
+        Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length, max - 100 questions
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
         ${note}`;
@@ -158,15 +148,15 @@ serve(async (req: Request) => {
         try {
             flashcards = parseFlashcards(raw);
         } catch {
-            flashcards = await repairFlashcards(raw, safeCount);
+            flashcards = await repairFlashcards(raw);
         }
 
         if (flashcards.length === 0) {
             throw new Error('Flashcard generation returned no cards. Please try again.');
         }
 
-        if (flashcards.length > 30) {
-            flashcards = flashcards.slice(0, 30);
+        if (flashcards.length > 100) {
+            flashcards = flashcards.slice(0, 100);
         }
 
         return new Response(
