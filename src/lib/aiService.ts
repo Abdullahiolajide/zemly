@@ -539,8 +539,17 @@ export async function generatePodcast(
 export async function generatePodcastAudio(
     script: PodcastLine[],
 ): Promise<Blob> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    // Use refreshSession to get a fresh token — the cached token from getSession
+    // may have expired during the long script generation phase that precedes this call.
+    let token: string | undefined;
+    try {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        token = refreshed?.session?.access_token;
+    } catch {
+        // Fallback to cached session if refresh fails
+        const { data: session } = await supabase.auth.getSession();
+        token = session?.session?.access_token;
+    }
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-podcast-audio`, {
         method: 'POST',
@@ -561,14 +570,21 @@ export async function generatePodcastAudio(
         throw new Error(errMsg);
     }
 
-    const result = await res.json();
-    // Decode base64 audio to a Blob
-    const binaryString = atob(result.audio);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+    // Edge function now returns binary MP3 directly (not base64 JSON)
+    const contentType = res.headers.get('Content-Type') || 'audio/mpeg';
+
+    // Handle legacy base64 JSON response for backward compatibility
+    if (contentType.includes('application/json')) {
+        const result = await res.json();
+        const binaryString = atob(result.audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: result.mimeType || 'audio/mpeg' });
     }
-    return new Blob([bytes], { type: result.mimeType || 'audio/mpeg' });
+
+    return await res.blob();
 }
 
 export interface RaiseHandResponseResult {

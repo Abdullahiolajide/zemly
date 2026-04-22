@@ -31,22 +31,6 @@ const AppRouter: React.FC = () => {
                         </ProtectedRoute>
                     }
                 />
-                <Route
-                    path="/notes/:userId/:id/*"
-                    element={
-                        <ProtectedRoute>
-                            <NotePage />
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/notes/:id/*"
-                    element={
-                        <ProtectedRoute>
-                            <NotePage />
-                        </ProtectedRoute>
-                    }
-                />
             </Routes>
         </BrowserRouter>
     );

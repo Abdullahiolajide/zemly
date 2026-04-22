@@ -7,7 +7,6 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TextAlign from '@tiptap/extension-text-align';
 import Highlight from '@tiptap/extension-highlight';
-import Underline from '@tiptap/extension-underline';
 import Image from '@tiptap/extension-image';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TextStyleKit } from '@tiptap/extension-text-style';
@@ -30,16 +29,13 @@ import ImageToolbar from '../components/ImageToolbar';
 import TableGridPicker from '../components/TableGridPicker';
 import TableToolbar from '../components/TableToolbar';
 
-import { MdAutoAwesome } from 'react-icons/md';
 import { IoDocumentTextOutline } from 'react-icons/io5';
-import { BsChatDots, BsMic, BsThreeDotsVertical } from 'react-icons/bs';
-import { FiArrowRight } from 'react-icons/fi';
+import { BsChatDots, BsMic } from 'react-icons/bs';
 import { TbCards } from 'react-icons/tb';
 import { PiExam, PiHighlighter } from 'react-icons/pi';
 import { RiMoonLine } from 'react-icons/ri';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
 import { useAuthStore } from '../store/useAuthStore';
-import { LuClock4 } from 'react-icons/lu';
 import {
     FiBold, FiItalic, FiUnderline as FiUnderlineIcon, FiImage,
     FiAlignLeft, FiAlignCenter, FiAlignRight,
@@ -133,12 +129,7 @@ function getYouTubeVideoId(url?: string | null): string | null {
     return null;
 }
 
-function getNoteIdFromRoute(noteKey?: string, legacyId?: string): number | null {
-    if (legacyId) {
-        const parsedLegacy = Number(legacyId);
-        return Number.isFinite(parsedLegacy) ? parsedLegacy : null;
-    }
-
+function getNoteIdFromRoute(noteKey?: string): number | null {
     if (!noteKey) return null;
 
     const parsedDirect = Number(noteKey);
@@ -152,10 +143,10 @@ function getNoteIdFromRoute(noteKey?: string, legacyId?: string): number | null 
 }
 
 const NotePage: React.FC = () => {
-    const { noteKey, id: legacyId, userId: routeUserId, '*': wildcardSlug } = useParams<{ noteKey?: string; id?: string; userId?: string; '*': string }>();
+    const { noteKey, '*': wildcardSlug } = useParams<{ noteKey?: string; '*': string }>();
     const navigate = useNavigate();
     const { user } = useAuthStore();
-    const noteId = getNoteIdFromRoute(noteKey, legacyId);
+    const noteId = getNoteIdFromRoute(noteKey);
 
     const pathSlug = (wildcardSlug || '').replace(/^\/+/, '');
     const activeSection: SidebarSection = slugToSection[pathSlug] || 'Document';
@@ -180,11 +171,9 @@ const NotePage: React.FC = () => {
         ? `/notes/${noteKeyFromNote}`
         : noteKey
             ? `/notes/${noteKey}`
-            : routeUserId && legacyId
-                ? `/notes/${routeUserId}-${legacyId}`
-                : noteId
-                    ? `/notes/${noteId}`
-                    : '/notes';
+            : noteId
+                ? `/notes/${noteId}`
+                : '/notes';
 
     const editor = useEditor({
         extensions: [
@@ -192,7 +181,6 @@ const NotePage: React.FC = () => {
             Markdown,
             Placeholder.configure({ placeholder: 'Start writing your note…' }),
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
-            Underline,
             Highlight.configure({ multicolor: true }),
             Image.extend({
                 addAttributes() {
@@ -424,8 +412,7 @@ const NotePage: React.FC = () => {
                         </div>
 
                         {/* Upgrade Button */}
-                        <button className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 py-2.5 text-[13px] font-bold">
-                            <MdAutoAwesome className="h-4 w-4" />
+                        <button className="btn-emerald mt-6 flex w-full items-center justify-center py-2.5 text-[13px] font-bold">
                             Upgrade to Premium
                         </button>
                     </nav>
@@ -499,18 +486,6 @@ const NotePage: React.FC = () => {
                             <span className={`hidden text-xs font-medium sm:block ${saveStatus === 'saved' ? 'text-zinc-600' : saveStatus === 'saving' ? 'text-amber-400' : 'text-red-400'}`}>
                                 {saveStatus === 'saved' ? '' : saveStatus === 'saving' ? 'Saving…' : 'Error saving'}
                             </span>
-                            {[
-                                { icon: LuClock4, title: 'Last edited', onClick: undefined },
-                            ].map(({ icon: Icon, title, onClick }, i) => (
-                                <button
-                                    key={i} onClick={onClick} title={title}
-                                    className="hidden h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 sm:flex"
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-                                >
-                                    <Icon className="h-4 w-4" />
-                                </button>
-                            ))}
                             <button
                                 onClick={handleExportPdf}
                                 disabled={exporting}
@@ -537,12 +512,22 @@ const NotePage: React.FC = () => {
                                 <RiMoonLine className="h-4 w-4" />
                             </button>
                             <button
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300"
+                                onClick={() => setChatPanelOpen((current) => !current)}
+                                className="flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-zinc-500 transition-colors hover:text-zinc-300"
                                 style={{ background: 'transparent' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
                                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                aria-label={chatPanelOpen ? 'Hide sidebar' : 'Show sidebar'}
+                                title={chatPanelOpen ? 'Hide sidebar' : 'Show sidebar'}
                             >
-                                <BsThreeDotsVertical className="h-4 w-4" />
+                                {chatPanelOpen ? (
+                                    <HiOutlineChevronDoubleLeft className="h-4 w-4" />
+                                ) : (
+                                    <HiOutlineChevronDoubleRight className="h-4 w-4" />
+                                )}
+                                <span className="hidden text-[12px] font-medium sm:inline">
+                                    {chatPanelOpen ? 'Hide sidebar' : 'Show sidebar'}
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -579,7 +564,7 @@ const NotePage: React.FC = () => {
                             {/* Editor Column */}
                             <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6 lg:px-16">
                                 {youtubeVideoId && (
-                                    <div className="mb-6 overflow-hidden rounded-xl" style={{ border: glassBorder, background: 'var(--bg-glass-hover)' }}>
+                                    <div className="mb-6 overflow-hidden rounded-xl" style={{ border: glassBorder, background: 'var(--bg-glass-hover)', maxWidth: '720px' }}>
                                         <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: glassBorder }}>
                                             <span className="text-[12px] font-medium text-zinc-400">Video Source</span>
                                             {note.source_url && (
@@ -684,12 +669,6 @@ const NotePage: React.FC = () => {
                                 <div className="flex h-full min-w-[380px] flex-col">
                                     <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: glassBorder }}>
                                         <span className="text-[13px] font-semibold text-zinc-300" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>Zemly AI</span>
-                                        <button
-                                            onClick={() => setChatPanelOpen(false)}
-                                            className="flex items-center gap-1 text-[12px] font-medium text-zinc-500 transition-colors hover:text-zinc-300"
-                                        >
-                                            Hide <FiArrowRight className="h-3 w-3" />
-                                        </button>
                                     </div>
 
                                     {/* Quick-link cards */}
@@ -740,30 +719,6 @@ const NotePage: React.FC = () => {
                                 </div>
                             </div>
 
-                            {!chatPanelOpen && (
-                                <button
-                                    onClick={() => setChatPanelOpen(true)}
-                                    className="absolute right-0 top-1/2 z-30 hidden h-12 w-28 -translate-y-1/2 items-center justify-center gap-2 rounded-l-full rounded-r-none text-[12px] font-semibold text-zinc-200 transition-colors lg:flex"
-                                    style={{
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid var(--border-glass)',
-                                        borderRight: 'none',
-                                    }}
-                                    onMouseEnter={e => {
-                                        const el = e.currentTarget as HTMLElement;
-                                        el.style.background = 'rgba(255,255,255,0.1)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        const el = e.currentTarget as HTMLElement;
-                                        el.style.background = 'rgba(255,255,255,0.06)';
-                                    }}
-                                    title="Open AI Chat"
-                                    aria-label="Open AI Chat"
-                                >
-                                    <BsChatDots className="h-3.5 w-3.5" />
-                                    <span>AI Chat</span>
-                                </button>
-                            )}
                         </div>
                     )}
 

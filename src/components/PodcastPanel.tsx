@@ -648,14 +648,16 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                 setProgress(prev => {
                     const next = prev + (0.1 / simulatedDuration) * 100;
                     if (next >= 100) {
-                        setIsPlaying(false);
+                        // Schedule the stop outside of the state updater to avoid
+                        // cascading re-renders that cause "Maximum update depth exceeded"
+                        queueMicrotask(() => setIsPlaying(false));
                         return 100;
                     }
                     const lineIdx = Math.min(
                         Math.floor((next / 100) * normalizedScript.length),
                         normalizedScript.length - 1
                     );
-                    setCurrentLineIdx(lineIdx);
+                    queueMicrotask(() => setCurrentLineIdx(lineIdx));
                     return next;
                 });
             }, tickMs);

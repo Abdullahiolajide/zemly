@@ -46,6 +46,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     const [explanationsMap, setExplanationsMap] = useState<Record<number, string>>({});
     const [loadingExplanation, setLoadingExplanation] = useState(false);
     const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
+    const [isAnimating, setIsAnimating] = useState(false);
 
     const currentQ = questions[currentIndex] ?? null;
     const selectedOption = currentQ ? (answersMap[currentQ.id] ?? null) : null;
@@ -118,13 +119,18 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
     }, [answered, currentQ]);
 
     const goNext = () => {
+        if (isAnimating) return;
+        setIsAnimating(true);
         setLoadingExplanation(false);
         if (currentIndex < questions.length - 1) { setSlideDir('right'); setCurrentIndex((i) => i + 1); }
-        else { setView('results'); }
+        else { setIsAnimating(false); setView('results'); }
     };
     const goPrev = () => {
+        if (isAnimating) return;
+        setIsAnimating(true);
         setLoadingExplanation(false);
         if (currentIndex > 0) { setSlideDir('left'); setCurrentIndex((i) => i - 1); }
+        else { setIsAnimating(false); }
     };
 
     const handleExplain = useCallback(async () => {
@@ -352,7 +358,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
 
             {/* Question area */}
             <div className="min-h-0 flex-1 overflow-hidden">
-                <AnimatePresence mode="wait" initial={false}>
+                <AnimatePresence mode="wait" initial={false} onExitComplete={() => setIsAnimating(false)}>
                     {currentQ && (
                         <motion.div
                             key={currentQ.id}
@@ -472,10 +478,10 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             >
                 <button
                     onClick={goPrev}
-                    disabled={currentIndex === 0}
+                    disabled={currentIndex === 0 || isAnimating}
                     className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30 sm:h-12 sm:w-12"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { !(currentIndex === 0) && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
+                    onMouseEnter={e => { !(currentIndex === 0 || isAnimating) && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronLeft className="h-5 w-5 sm:h-7 sm:w-7" strokeWidth={3} />
@@ -485,9 +491,10 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 </span>
                 <button
                     onClick={goNext}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 sm:h-12 sm:w-12"
+                    disabled={isAnimating}
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-300 transition-all hover:text-zinc-100 disabled:opacity-30 sm:h-12 sm:w-12"
                     style={{ background: 'transparent' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'; }}
+                    onMouseEnter={e => { !isAnimating && ((e.currentTarget as HTMLElement).style.background = 'var(--bg-glass-hover)'); }}
                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                 >
                     <FiChevronRight className="h-5 w-5 sm:h-7 sm:w-7" strokeWidth={3} />

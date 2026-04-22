@@ -1,10 +1,9 @@
 // supabase/functions/generate-podcast-audio/index.ts
 // Converts a podcast script into audio using Azure Speech Service (TTS)
-// Uses batched parallel synthesis to avoid timeout on long scripts
+// Uses sequential batched synthesis to stay within Supabase timeout limits
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
-import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 
 interface PodcastLine {
     speaker: string;
@@ -20,8 +19,14 @@ const VOICE_MAP: Record<string, string> = {
     Corey: 'en-US-AdamMultilingualNeural',
 };
 
-/** Max lines per TTS batch — keeps each Azure call fast */
-const BATCH_SIZE = 8;
+/**
+ * Larger batches = fewer Azure round-trips = faster overall.
+ * Azure handles large SSML documents well, so 20 lines per call is safe.
+ */
+const BATCH_SIZE = 20;
+
+/** Hard cap on script length to stay within Supabase's wall clock limit */
+const MAX_LINES = 40;
 
 /**
  * Escape special XML characters in text for SSML.
@@ -64,7 +69,8 @@ async function synthesizeBatch(
         headers: {
             'Ocp-Apim-Subscription-Key': speechKey,
             'Content-Type': 'application/ssml+xml',
-            'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
+            // Use a lighter MP3 format for faster synthesis and smaller payload
+            'X-Microsoft-OutputFormat': 'audio-16khz-32kbitrate-mono-mp3',
             'User-Agent': 'zemly-podcast',
         },
         body: ssml,
@@ -113,19 +119,19 @@ serve(async (req: Request) => {
             );
         }
 
-        // Cap at 60 lines max
-        const trimmedScript = script.slice(0, 60);
-
-        // Split into batches and synthesize in parallel
+        const trimmedScript = script.slice(0, MAX_LINES);
         const batches = chunk(trimmedScript, BATCH_SIZE);
-        console.log(`[generate-podcast-audio] Synthesising ${trimmedScript.length} lines in ${batches.length} parallel batches`);
+        console.log(`[generate-podcast-audio] Synthesising ${trimmedScript.length} lines in ${batches.length} sequential batches`);
 
-        const audioChunks = await Promise.all(
-            batches.map((batch, idx) => {
-                console.log(`[generate-podcast-audio] Starting batch ${idx + 1}/${batches.length} (${batch.length} lines)`);
-                return synthesizeBatch(batch, speechKey, speechRegion);
-            }),
-        );
+        // Process batches sequentially to avoid Azure rate-limiting.
+        // With BATCH_SIZE=20 and MAX_LINES=40, this is only 2 Azure calls.
+        const audioChunks: Uint8Array[] = [];
+        for (let idx = 0; idx < batches.length; idx++) {
+            const batch = batches[idx];
+            console.log(`[generate-podcast-audio] Batch ${idx + 1}/${batches.length} (${batch.length} lines)`);
+            const audioData = await synthesizeBatch(batch, speechKey, speechRegion);
+            audioChunks.push(audioData);
+        }
 
         // Concatenate all MP3 buffers (MP3 is frame-based, simple concat works)
         const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
@@ -136,17 +142,17 @@ serve(async (req: Request) => {
             offset += audioChunk.length;
         }
 
-        const audioBase64 = base64Encode(combined);
         console.log(`[generate-podcast-audio] Audio generated: ${combined.length} bytes (${batches.length} batches)`);
 
-        return new Response(
-            JSON.stringify({
-                audio: audioBase64,
-                mimeType: 'audio/mpeg',
-                lineCount: trimmedScript.length,
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+        // Return binary MP3 directly instead of base64 JSON — much faster and ~33% smaller
+        return new Response(combined, {
+            headers: {
+                ...corsHeaders,
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': String(combined.length),
+                'X-Line-Count': String(trimmedScript.length),
+            },
+        });
     } catch (err) {
         const error = err as Error;
         console.error('[generate-podcast-audio] Error:', error);

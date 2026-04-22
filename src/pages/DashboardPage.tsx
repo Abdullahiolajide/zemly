@@ -7,7 +7,7 @@ import {
 } from '../components/CreateNoteModals';
 import { IoSearch, IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
 import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft } from 'react-icons/bs';
-import { MdLogout, MdAutoAwesome, MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
+import { MdLogout, MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
 import { BiHome, BiBookBookmark } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
@@ -823,9 +823,8 @@ const DashboardPage: React.FC = () => {
 
                     {/* Upgrade Button */}
                     <button
-                        className="btn-emerald mt-6 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-[13px]"
+                        className="btn-emerald mt-6 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-[13px]"
                     >
-                        <MdAutoAwesome className="h-4 w-4" />
                         Upgrade to Premium
                     </button>
                 </nav>
