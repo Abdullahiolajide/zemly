@@ -1,0 +1,90 @@
+// supabase/functions/create-checkout/index.ts
+// Creates a Dodo Payments checkout session for the Zemly Unlimited plan.
+
+import { corsHeaders } from '../_shared/cors.ts';
+
+const DODO_API_URL = 'https://api.dodopayments.com';       // live
+const DODO_TEST_API_URL = 'https://test.dodopayments.com'; // test
+
+Deno.serve(async (req: Request) => {
+    // Handle CORS pre-flight
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+    }
+
+    try {
+        const DODO_API_KEY = Deno.env.get('DODO_PAYMENTS_API_KEY');
+        if (!DODO_API_KEY) {
+            throw new Error('DODO_PAYMENTS_API_KEY is not configured');
+        }
+
+        // Determine mode from env (default to test for safety)
+        const mode = Deno.env.get('DODO_PAYMENTS_MODE') || 'test';
+        const baseUrl = mode === 'live' ? DODO_API_URL : DODO_TEST_API_URL;
+
+        const body = await req.json();
+        const { product_id, customer_email, customer_name, success_url, failure_url } = body;
+
+        if (!product_id) {
+            return new Response(
+                JSON.stringify({ error: 'product_id is required' }),
+                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+        }
+
+        // Build the checkout session request
+        const checkoutPayload: Record<string, unknown> = {
+            product_cart: [
+                {
+                    product_id,
+                    quantity: 1,
+                },
+            ],
+        };
+
+        // Attach customer info if provided
+        if (customer_email) {
+            checkoutPayload.customer = {
+                email: customer_email,
+                ...(customer_name ? { name: customer_name } : {}),
+            };
+        }
+
+        // Attach redirect URLs if provided
+        if (success_url) checkoutPayload.return_url = success_url; // Dodo uses return_url
+
+        const response = await fetch(`${baseUrl}/checkouts`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${DODO_API_KEY}`,
+            },
+            body: JSON.stringify(checkoutPayload),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Dodo Payments API error:', response.status, errorText);
+            return new Response(
+                JSON.stringify({ error: 'Failed to create checkout session', details: errorText, dodo_status: response.status }),
+                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+        }
+
+        const data = await response.json();
+
+        return new Response(
+            JSON.stringify({
+                session_id: data.session_id,
+                checkout_url: data.checkout_url,
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+    } catch (err) {
+        console.error('create-checkout error:', err);
+        return new Response(
+            JSON.stringify({ error: (err as Error).message || 'Internal server error' }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+    }
+});

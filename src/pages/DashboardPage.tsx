@@ -14,7 +14,7 @@ import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-i
 import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import Logo from '../components/Logo';
 import { createNote, createDocumentNote, createAudioNote, createLinkNote, getUserNotes, deleteNote, updateNote } from '../lib/notesService';
 import { uploadDocumentToStorage, extractDocumentFromStorage, extractFromLink, inferAudioMimeType } from '../lib/aiService';
@@ -25,6 +25,7 @@ import {
 import type { Note } from '../types';
 import type { Folder } from '../lib/foldersService';
 import ThemeModal from '../components/ThemeModal';
+import UpgradeModal from '../components/UpgradeModal';
 
 /* ── Sidebar nav items ── */
 const navLinks = [
@@ -193,11 +194,29 @@ const DashboardPage: React.FC = () => {
     const [notes, setNotes] = useState<Note[]>([]);
     const [notesLoading, setNotesLoading] = useState(true);
     const [themeModalOpen, setThemeModalOpen] = useState(false);
+    const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    /* ── Payment result banner ── */
+    const [paymentBanner, setPaymentBanner] = useState<'success' | 'failed' | null>(null);
+
+    useEffect(() => {
+        const paymentResult = searchParams.get('payment');
+        if (paymentResult === 'success' || paymentResult === 'failed') {
+            setPaymentBanner(paymentResult);
+            // Clean up the URL
+            searchParams.delete('payment');
+            setSearchParams(searchParams, { replace: true });
+            // Auto-dismiss after 6 seconds
+            const timer = setTimeout(() => setPaymentBanner(null), 6000);
+            return () => clearTimeout(timer);
+        }
+    }, [searchParams, setSearchParams]);
 
     /* ── Tab state ── */
     const [activeTab, setActiveTab] = useState<DashboardTab>('notes');
@@ -823,6 +842,7 @@ const DashboardPage: React.FC = () => {
 
                     {/* Upgrade Button */}
                     <button
+                        onClick={() => setUpgradeModalOpen(true)}
                         className="btn-emerald mt-6 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-[13px]"
                     >
                         Upgrade to Premium
@@ -873,6 +893,30 @@ const DashboardPage: React.FC = () => {
             <div className="flex min-w-0 flex-1 flex-col overflow-y-auto" style={{ background: 'var(--bg-main)' }}>
                 {/* Main scrollable area */}
                 <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-6 lg:px-10 lg:py-8">
+                    {/* Payment result banner */}
+                    {paymentBanner && (
+                        <div
+                            className="mb-4 flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium animate-[fadeIn_200ms_ease-out]"
+                            style={{
+                                background: paymentBanner === 'success' ? 'rgba(0,200,150,0.08)' : 'rgba(239,68,68,0.08)',
+                                border: `1px solid ${paymentBanner === 'success' ? 'rgba(0,200,150,0.2)' : 'rgba(239,68,68,0.2)'}`,
+                                color: paymentBanner === 'success' ? '#00C896' : '#ef4444',
+                            }}
+                        >
+                            <span>
+                                {paymentBanner === 'success'
+                                    ? '🎉 Payment successful! Welcome to Zemly Unlimited.'
+                                    : '❌ Payment was not completed. Please try again.'}
+                            </span>
+                            <button
+                                onClick={() => setPaymentBanner(null)}
+                                className="ml-3 text-zinc-500 transition-colors hover:text-zinc-300"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
                     {/* Top row */}
                     <div className="mb-6 flex flex-wrap items-start justify-between gap-3 sm:mb-8">
                         <div className="flex items-center gap-3">
@@ -1320,6 +1364,11 @@ const DashboardPage: React.FC = () => {
             <ThemeModal
                 open={themeModalOpen}
                 onClose={() => setThemeModalOpen(false)}
+            />
+            <UpgradeModal
+                isOpen={upgradeModalOpen}
+                onClose={() => setUpgradeModalOpen(false)}
+                userEmail={user?.email}
             />
         </div>
     );

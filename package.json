@@ -27,6 +27,7 @@
     "@tiptap/starter-kit": "^3.20.0",
     "@types/canvas-confetti": "^1.9.0",
     "canvas-confetti": "^1.9.4",
+    "dodopayments-checkout": "^1.8.0",
     "framer-motion": "^12.34.3",
     "html2pdf.js": "^0.14.0",
     "katex": "^0.16.45",

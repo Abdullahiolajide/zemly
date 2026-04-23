@@ -44,6 +44,7 @@ import {
 import { RxStrikethrough } from 'react-icons/rx';
 import { AiOutlineOrderedList } from 'react-icons/ai';
 import ThemeModal from '../components/ThemeModal';
+import UpgradeModal from '../components/UpgradeModal';
 
 /* ── Note-page sidebar nav items ── */
 const noteSidebarLinks = [
@@ -156,6 +157,7 @@ const NotePage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [themeModalOpen, setThemeModalOpen] = useState(false);
+    const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
     const [imageModalOpen, setImageModalOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [askAiText, setAskAiText] = useState<string | null>(null);
@@ -412,7 +414,10 @@ const NotePage: React.FC = () => {
                         </div>
 
                         {/* Upgrade Button */}
-                        <button className="btn-emerald mt-6 flex w-full items-center justify-center py-2.5 text-[13px] font-bold">
+                        <button
+                            onClick={() => setUpgradeModalOpen(true)}
+                            className="btn-emerald mt-6 flex w-full items-center justify-center py-2.5 text-[13px] font-bold"
+                        >
                             Upgrade to Premium
                         </button>
                     </nav>
@@ -843,6 +848,11 @@ const NotePage: React.FC = () => {
             </div>
 
             <ThemeModal open={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
+            <UpgradeModal
+                isOpen={upgradeModalOpen}
+                onClose={() => setUpgradeModalOpen(false)}
+                userEmail={user?.email}
+            />
             <ImageUploadModal
                 open={imageModalOpen}
                 onClose={() => setImageModalOpen(false)}
