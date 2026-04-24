@@ -18,6 +18,24 @@
     scroll-behavior: smooth;
   }
 
+  button:enabled,
+  a[href],
+  summary,
+  [role='button']:not([aria-disabled='true']),
+  input[type='button']:not(:disabled),
+  input[type='submit']:not(:disabled),
+  input[type='reset']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'],
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
+
   /* ── Dark mode base ── */
   html.dark {
     --bg-main: #0D0F12;

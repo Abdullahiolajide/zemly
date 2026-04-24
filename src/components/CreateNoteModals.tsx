@@ -27,7 +27,7 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center cursor-pointer"
             onClick={onClose}
         >
             {/* Backdrop */}
@@ -36,7 +36,7 @@ const ModalWrapper: React.FC<ModalWrapperProps> = ({ open, onClose, children }) 
             {/* Card */}
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="relative z-10 mx-4 w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-[modalSlideUp_250ms_ease-out]"
+                className="relative z-10 mx-4 w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl cursor-default animate-[modalSlideUp_250ms_ease-out]"
                 style={{
                     background: 'var(--bg-main)',
                     border: '1px solid var(--border-glass-strong)',

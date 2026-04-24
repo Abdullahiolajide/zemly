@@ -12,6 +12,8 @@ interface ChatPanelProps {
     onClearHighlight: () => void;
     onHasMessages?: (has: boolean) => void;
     persistenceKey?: string;
+    maxUserMessages?: number;
+    onRequireUpgrade?: () => void;
 }
 
 interface PersistedChatState {
@@ -108,7 +110,7 @@ function buildRelevantContext(fullText: string, query: string, maxChars = 1800):
     return out;
 }
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onClearHighlight, onHasMessages, persistenceKey }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onClearHighlight, onHasMessages, persistenceKey, maxUserMessages, onRequireUpgrade }) => {
     const [messages, setMessages] = useState<ChatMessage[]>(() => readPersistedChatState(persistenceKey)?.messages ?? []);
     const [chatMemory, setChatMemory] = useState(() => readPersistedChatState(persistenceKey)?.memory ?? '');
     const [input, setInput] = useState('');
@@ -127,9 +129,18 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
         writePersistedChatState(persistenceKey, { messages, memory: chatMemory });
     }, [messages, chatMemory, persistenceKey]);
 
+    const userMessageCount = messages.filter((message) => message.role === 'user').length;
+    const reachedMessageLimit = typeof maxUserMessages === 'number' && userMessageCount >= maxUserMessages;
+
     const handleSend = useCallback(async () => {
         const trimmed = input.trim();
         if (!trimmed && !highlightedText) return;
+
+        if (typeof maxUserMessages === 'number' && messages.filter((message) => message.role === 'user').length >= maxUserMessages) {
+            setError('Your free plan includes 3 AI messages. Upgrade to keep chatting.');
+            onRequireUpgrade?.();
+            return;
+        }
 
         const isFirstMessage = messages.length === 0;
         const fullNoteText = getNoteText();
@@ -202,7 +213,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
             setIsStreaming(false);
             abortRef.current = null;
         }
-    }, [input, highlightedText, messages, getNoteText, onClearHighlight, chatMemory]);
+    }, [input, highlightedText, messages, getNoteText, onClearHighlight, chatMemory, maxUserMessages, onRequireUpgrade]);
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -381,7 +392,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                     </button>
                 </div>
                 <p className="mt-2 text-center text-[11px] text-zinc-600">
-                    Grounded in your note content
+                    {reachedMessageLimit ? 'Free plan limit reached. Upgrade to continue.' : 'Grounded in your note content'}
                 </p>
             </div>
         </div>

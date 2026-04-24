@@ -45,6 +45,7 @@ import { RxStrikethrough } from 'react-icons/rx';
 import { AiOutlineOrderedList } from 'react-icons/ai';
 import ThemeModal from '../components/ThemeModal';
 import UpgradeModal from '../components/UpgradeModal';
+import { getUserSubscription, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
 
 /* ── Note-page sidebar nav items ── */
 const noteSidebarLinks = [
@@ -165,6 +166,7 @@ const NotePage: React.FC = () => {
     const [chatHasMessages, setChatHasMessages] = useState(false);
     const [documentViewerUrl, setDocumentViewerUrl] = useState('');
     const [documentViewerError, setDocumentViewerError] = useState<string | null>(null);
+    const [subscription, setSubscription] = useState<UserSubscriptionRecord | null>(null);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const [, setEditorKey] = useState(0);
     const youtubeVideoId = note?.source_type === 'link' ? getYouTubeVideoId(note.source_url) : null;
@@ -271,6 +273,31 @@ const NotePage: React.FC = () => {
         };
     }, [note?.source_url]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSubscription = async () => {
+            if (!user?.id) {
+                setSubscription(null);
+                return;
+            }
+
+            try {
+                const record = await getUserSubscription(user.id, user.email);
+                if (!cancelled) setSubscription(record);
+            } catch (err) {
+                console.error('Failed to load subscription:', err);
+                if (!cancelled) setSubscription(null);
+            }
+        };
+
+        void loadSubscription();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
+
     const handleAutoSave = useCallback(
         (() => {
             let timeout: ReturnType<typeof setTimeout>;
@@ -328,6 +355,8 @@ const NotePage: React.FC = () => {
         if (!active) (e.currentTarget as HTMLElement).style.background = '';
     };
 
+    const isPremium = isPremiumSubscription(subscription);
+
     /* ──────────────────────────────────────────────────────── */
 
     if (loading) {
@@ -351,14 +380,13 @@ const NotePage: React.FC = () => {
             </div>
         );
     }
-
     return (
         <>
             <div className="flex h-screen flex-col text-zinc-100 lg:flex-row" style={{ background: 'var(--bg-main)' }}>
                 {/* Desktop backdrop */}
                 {sidebarOpen && (
                     <div
-                        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+                        className="fixed inset-0 z-40 cursor-pointer bg-black/50 backdrop-blur-sm lg:hidden"
                         onClick={() => setSidebarOpen(false)}
                     />
                 )}
@@ -414,12 +442,14 @@ const NotePage: React.FC = () => {
                         </div>
 
                         {/* Upgrade Button */}
-                        <button
-                            onClick={() => setUpgradeModalOpen(true)}
-                            className="btn-emerald mt-6 flex w-full items-center justify-center py-2.5 text-[13px] font-bold"
-                        >
-                            Upgrade to Premium
-                        </button>
+                        {!isPremium && (
+                            <button
+                                onClick={() => setUpgradeModalOpen(true)}
+                                className="btn-emerald mt-6 flex w-full items-center justify-center py-2.5 text-[13px] font-bold"
+                            >
+                                Upgrade to Unlimited
+                            </button>
+                        )}
                     </nav>
 
                     {/* Sidebar Footer */}
@@ -719,6 +749,8 @@ const NotePage: React.FC = () => {
                                             onClearHighlight={() => setAskAiText(null)}
                                             onHasMessages={setChatHasMessages}
                                             persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
+                                            maxUserMessages={isPremium ? undefined : 3}
+                                            onRequireUpgrade={() => setUpgradeModalOpen(true)}
                                         />
                                     </div>
                                 </div>
@@ -775,6 +807,8 @@ const NotePage: React.FC = () => {
                                             highlightedText={askAiText}
                                             onClearHighlight={() => setAskAiText(null)}
                                             persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
+                                            maxUserMessages={isPremium ? undefined : 3}
+                                            onRequireUpgrade={() => setUpgradeModalOpen(true)}
                                         />
                                     </div>
                                 </div>
@@ -786,6 +820,8 @@ const NotePage: React.FC = () => {
                                     highlightedText={askAiText}
                                     onClearHighlight={() => setAskAiText(null)}
                                     persistenceKey={noteId ? `chat-state-${noteId}` : undefined}
+                                    maxUserMessages={isPremium ? undefined : 3}
+                                    onRequireUpgrade={() => setUpgradeModalOpen(true)}
                                 />
                             </div>
                         )
@@ -840,6 +876,8 @@ const NotePage: React.FC = () => {
                                     noteId={noteId}
                                     noteTitle={note.title}
                                     getNoteText={getStudyText}
+                                    isPremium={isPremium}
+                                    onRequireUpgrade={() => setUpgradeModalOpen(true)}
                                 />
                             </motion.div>
                         </div>
@@ -852,6 +890,7 @@ const NotePage: React.FC = () => {
                 isOpen={upgradeModalOpen}
                 onClose={() => setUpgradeModalOpen(false)}
                 userEmail={user?.email}
+                userId={user?.id}
             />
             <ImageUploadModal
                 open={imageModalOpen}

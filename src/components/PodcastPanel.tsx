@@ -39,6 +39,8 @@ interface PodcastPanelProps {
     noteId: number;
     noteTitle?: string;
     getNoteText: () => string;
+    isPremium?: boolean;
+    onRequireUpgrade?: () => void;
 }
 
 async function fetchAudioBlob(audioUrl: string): Promise<Blob> {
@@ -90,7 +92,7 @@ function normalizePodcastScript(script: PodcastLine[]): PodcastLine[] {
 
 const RAISE_HAND_GREETING_AUDIO_URL = '/greeting.mp3';
 
-const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteText }) => {
+const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteText, isPremium = true, onRequireUpgrade }) => {
     const [view, setView] = useState<PodcastView>('loading');
     const [script, setScript] = useState<PodcastLine[]>([]);
     const [error, setError] = useState<string | null>(null);
@@ -434,6 +436,11 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     }, [currentLineIdx, getNoteText, normalizedScript, noteTitle, playTransientAudio, raiseHandTurns, startListeningForQuestion]);
 
     const beginRaiseHandFlow = useCallback(async () => {
+        if (!isPremium) {
+            onRequireUpgrade?.();
+            return;
+        }
+
         raiseHandActiveRef.current = true;
         pauseMainPlayer();
         setRaiseHandError(null);
@@ -462,7 +469,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             setRaiseHandStatus('listening');
             setMode('raise-hand-listening');
         }
-    }, [pauseMainPlayer, playTransientAudio, startListeningForQuestion]);
+    }, [isPremium, onRequireUpgrade, pauseMainPlayer, playTransientAudio, startListeningForQuestion]);
 
     /* ── Cleanup audio URL on unmount ── */
     useEffect(() => {
@@ -930,9 +937,9 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                         onClick={beginRaiseHandFlow}
                                         className="flex shrink-0 items-center gap-1.5 rounded-2xl px-3 py-1.5 text-[12px] font-semibold transition-all sm:mt-1 sm:px-4 sm:py-2 sm:text-[14px]"
                                         style={{
-                                            background: 'rgba(33,89,170,0.2)',
-                                            border: '1px solid rgba(79,156,249,0.45)',
-                                            color: '#5EA9FF',
+                                            background: isPremium ? 'rgba(33,89,170,0.2)' : 'rgba(245,166,35,0.16)',
+                                            border: `1px solid ${isPremium ? 'rgba(79,156,249,0.45)' : 'rgba(245,166,35,0.35)'}`,
+                                            color: isPremium ? '#5EA9FF' : '#F5A623',
                                         }}
                                     >
                                         <HiOutlineHand className="h-3.5 w-3.5 sm:h-4 sm:w-4" />

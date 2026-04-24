@@ -120,6 +120,9 @@ allowed_mime_types = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 [functions.cleanup-orphan-documents]
 verify_jwt = false
 
+[functions.dodo-webhook]
+verify_jwt = false
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

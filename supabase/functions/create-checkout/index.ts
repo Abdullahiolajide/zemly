@@ -23,7 +23,7 @@ Deno.serve(async (req: Request) => {
         const baseUrl = mode === 'live' ? DODO_API_URL : DODO_TEST_API_URL;
 
         const body = await req.json();
-        const { product_id, customer_email, customer_name, success_url, failure_url } = body;
+        const { product_id, customer_email, customer_name, customer_id, success_url, failure_url } = body;
 
         if (!product_id) {
             return new Response(
@@ -46,6 +46,14 @@ Deno.serve(async (req: Request) => {
         if (customer_email) {
             checkoutPayload.customer = {
                 email: customer_email,
+                ...(customer_name ? { name: customer_name } : {}),
+            };
+        }
+
+        if (customer_id || customer_email || customer_name) {
+            checkoutPayload.metadata = {
+                ...(customer_id ? { user_id: customer_id } : {}),
+                ...(customer_email ? { email: customer_email } : {}),
                 ...(customer_name ? { name: customer_name } : {}),
             };
         }

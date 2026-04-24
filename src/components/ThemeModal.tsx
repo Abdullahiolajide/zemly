@@ -30,7 +30,7 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center"
+            className="fixed inset-0 z-50 flex items-center justify-center cursor-pointer"
             onClick={onClose}
         >
             {/* Backdrop */}
@@ -39,7 +39,7 @@ const ThemeModal: React.FC<ThemeModalProps> = ({ open, onClose }) => {
             {/* Card */}
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="relative z-10 w-full max-w-xl mx-4 rounded-2xl shadow-2xl shadow-black/50 animate-[modalSlideUp_250ms_ease-out]"
+                className="relative z-10 w-full max-w-xl mx-4 rounded-2xl shadow-2xl shadow-black/50 cursor-default animate-[modalSlideUp_250ms_ease-out]"
                 style={{
                     background: 'rgba(18, 21, 27, 0.95)',
                     border: '1px solid rgba(255,255,255,0.08)',

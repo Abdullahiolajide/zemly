@@ -32,7 +32,7 @@ const TableGridPicker: React.FC<TableGridPickerProps> = ({ editor }) => {
             {open && (
                 <>
                     {/* Backdrop */}
-                    <div className="fixed inset-0 z-[98]" onClick={() => setOpen(false)} />
+                    <div className="fixed inset-0 z-[98] cursor-pointer" onClick={() => setOpen(false)} />
 
                     {/* Grid picker */}
                     <div className="absolute left-0 top-full z-[99] mt-2 rounded-xl border border-zinc-800/60 bg-zinc-900 p-3 shadow-xl shadow-black/40">

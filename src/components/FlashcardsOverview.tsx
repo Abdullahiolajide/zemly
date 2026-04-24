@@ -275,7 +275,7 @@ const FlashcardsOverview: React.FC<FlashcardsOverviewProps> = ({ cards, onStartS
             {/* Delete Confirmation Modal */}
             {deletingId !== null && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingId(null)} />
+                    <div className="absolute inset-0 cursor-pointer bg-black/70 backdrop-blur-sm" onClick={() => setDeletingId(null)} />
                     <div
                         className="relative w-full max-w-sm rounded-2xl p-6"
                         style={{ background: 'var(--bg-main)', border: '1px solid var(--border-glass-strong)', backdropFilter: 'blur(20px)', boxShadow: '0 24px 64px rgba(0,0,0,0.15)' }}

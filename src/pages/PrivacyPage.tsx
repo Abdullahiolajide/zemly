@@ -54,7 +54,7 @@ const PrivacyPage: React.FC = () => {
                             We gather information to provide and improve our educational tools. This falls into a few categories:
                         </p>
                         <ul className="list-inside list-disc space-y-2 text-zinc-300">
-                            <li><strong>Information You Provide:</strong> When you register, we collect account details like your name and email address. If you purchase a premium plan, payment details are collected securely via our third-party payment processors.</li>
+                            <li><strong>Information You Provide:</strong> When you register, we collect account details like your name and email address. If you purchase the unlimited plan, payment details are collected securely via our third-party payment processors.</li>
                             <li><strong>Study Materials & Content:</strong> To generate smart notes, quizzes, and podcasts, we securely collect the documents, text, and media you voluntarily upload or input into the platform. We ask that you avoid uploading sensitive personal documentation (like health records or financial info).</li>
                             <li><strong>Automated Usage Data:</strong> Like most websites, we automatically log technical data such as your IP address, browser type, device details, and how you interact with our features via cookies and similar tracking technologies.</li>
                         </ul>

@@ -8,7 +8,7 @@ import {
 import { IoSearch, IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
 import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft } from 'react-icons/bs';
 import { MdLogout, MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
-import { BiHome, BiBookBookmark } from 'react-icons/bi';
+import { BiHome } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
 import { RiMoonLine } from 'react-icons/ri';
@@ -26,11 +26,13 @@ import type { Note } from '../types';
 import type { Folder } from '../lib/foldersService';
 import ThemeModal from '../components/ThemeModal';
 import UpgradeModal from '../components/UpgradeModal';
+import AccountSettingsModal from '../components/AccountSettingsModal';
+import { getUserSubscription, getSubscriptionPlanLabel, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
+import { supabase } from '../lib/supabaseClient';
 
 /* ── Sidebar nav items ── */
 const navLinks = [
     { icon: BiHome, label: 'Dashboard', active: true },
-    { icon: BiBookBookmark, label: 'Study Guides', active: false },
     { icon: IoSettingsOutline, label: 'Settings', active: false },
 ];
 
@@ -193,8 +195,12 @@ const DashboardPage: React.FC = () => {
     const [openModal, setOpenModal] = useState<ModalType>(null);
     const [notes, setNotes] = useState<Note[]>([]);
     const [notesLoading, setNotesLoading] = useState(true);
+    const [subscription, setSubscription] = useState<UserSubscriptionRecord | null>(null);
+    const [subscriptionLoading, setSubscriptionLoading] = useState(true);
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+    const [accountModalOpen, setAccountModalOpen] = useState(false);
+    const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -217,6 +223,26 @@ const DashboardPage: React.FC = () => {
             return () => clearTimeout(timer);
         }
     }, [searchParams, setSearchParams]);
+
+    useEffect(() => {
+        if (paymentBanner !== 'success' || !user?.id) return;
+
+        let cancelled = false;
+        const refreshSubscription = async () => {
+            try {
+                const record = await getUserSubscription(user.id, user.email);
+                if (!cancelled) setSubscription(record);
+            } catch (err) {
+                console.error('Failed to refresh subscription:', err);
+            }
+        };
+
+        void refreshSubscription();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [paymentBanner, user?.id]);
 
     /* ── Tab state ── */
     const [activeTab, setActiveTab] = useState<DashboardTab>('notes');
@@ -260,12 +286,86 @@ const DashboardPage: React.FC = () => {
     }, [fetchNotes]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        const loadSubscription = async () => {
+            if (!user?.id) {
+                setSubscription(null);
+                setSubscriptionLoading(false);
+                return;
+            }
+
+            setSubscriptionLoading(true);
+            try {
+                const record = await getUserSubscription(user.id, user.email);
+                if (!cancelled) setSubscription(record);
+            } catch (err) {
+                console.error('Failed to load subscription:', err);
+                if (!cancelled) setSubscription(null);
+            } finally {
+                if (!cancelled) setSubscriptionLoading(false);
+            }
+        };
+
+        void loadSubscription();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
+
+    useEffect(() => {
         reloadFolders();
     }, [reloadFolders]);
 
     const buildNotePath = useCallback((noteId: number) => {
         return user?.id ? `/notes/${user.id}-${noteId}` : `/notes/${noteId}`;
     }, [user?.id]);
+
+    const isPremium = isPremiumSubscription(subscription);
+    const freeNoteLimitReached = !isPremium && notes.length >= 1;
+
+    const handleNoteCreationBlocked = useCallback(() => {
+        setOpenModal(null);
+        setUpgradeModalOpen(true);
+    }, []);
+
+    const handleManageBilling = useCallback(async () => {
+        try {
+            setBillingPortalLoading(true);
+
+            const { data, error } = await supabase.functions.invoke('create-billing-portal');
+
+            if (error) throw error;
+
+            const portalUrl = typeof data?.portal_url === 'string'
+                ? data.portal_url
+                : typeof data?.url === 'string'
+                    ? data.url
+                    : typeof data?.link === 'string'
+                        ? data.link
+                        : '';
+
+            if (!portalUrl) {
+                throw new Error('Billing portal URL was not returned.');
+            }
+
+            window.open(portalUrl, '_blank', 'noopener,noreferrer');
+        } catch (err) {
+            console.error('Failed to open billing portal:', err);
+        } finally {
+            setBillingPortalLoading(false);
+        }
+    }, []);
+
+    const openNoteCreationModal = useCallback((modalType: ModalType) => {
+        if (!modalType) return;
+        if (freeNoteLimitReached) {
+            handleNoteCreationBlocked();
+            return;
+        }
+        setOpenModal(modalType);
+    }, [freeNoteLimitReached, handleNoteCreationBlocked]);
 
     /* ── Focus new folder input ── */
     useEffect(() => {
@@ -301,6 +401,10 @@ const DashboardPage: React.FC = () => {
     /* ── Create blank note → navigate ── */
     const handleCreateBlankNote = async (title: string) => {
         try {
+            if (freeNoteLimitReached) {
+                handleNoteCreationBlocked();
+                return;
+            }
             const note = await createNote(title);
             navigate(buildNotePath(note.id));
         } catch (err) {
@@ -317,6 +421,10 @@ const DashboardPage: React.FC = () => {
         publicUrls: string[];
     }) => {
         try {
+            if (freeNoteLimitReached) {
+                handleNoteCreationBlocked();
+                return;
+            }
             const content = result.noteContent
                 .split('\n')
                 .filter((line) => !/^SOURCE\s*:/i.test(line.trim()))
@@ -342,6 +450,10 @@ const DashboardPage: React.FC = () => {
 
     const handleCreateAudioNote = async (files: File[]) => {
         if (!files.length) return;
+        if (freeNoteLimitReached) {
+            handleNoteCreationBlocked();
+            return;
+        }
 
         const perFileResults: {
             file: File;
@@ -400,6 +512,11 @@ const DashboardPage: React.FC = () => {
     const handleCreateWebsiteLinkNote = async (url: string) => {
         const trimmedUrl = url.trim();
         if (!trimmedUrl) return;
+
+        if (freeNoteLimitReached) {
+            handleNoteCreationBlocked();
+            return;
+        }
 
         try {
             const result = await extractFromLink(trimmedUrl);
@@ -789,7 +906,7 @@ const DashboardPage: React.FC = () => {
             {/* ─── MOBILE BACKDROP ─── */}
             {sidebarOpen && (
                 <div
-                    className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+                    className="fixed inset-0 z-40 cursor-pointer bg-black/50 backdrop-blur-sm lg:hidden"
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
@@ -825,6 +942,11 @@ const DashboardPage: React.FC = () => {
                         {navLinks.map((link) => (
                             <button
                                 key={link.label}
+                                onClick={() => {
+                                    if (link.label === 'Settings') {
+                                        setAccountModalOpen(true);
+                                    }
+                                }}
                                 className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors duration-150 ${link.active
                                     ? 'text-zinc-100'
                                     : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
@@ -841,12 +963,14 @@ const DashboardPage: React.FC = () => {
                     </div>
 
                     {/* Upgrade Button */}
-                    <button
-                        onClick={() => setUpgradeModalOpen(true)}
-                        className="btn-emerald mt-6 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-[13px]"
-                    >
-                        Upgrade to Premium
-                    </button>
+                    {!isPremium && (
+                        <button
+                            onClick={() => setUpgradeModalOpen(true)}
+                            className="btn-emerald mt-6 flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-[13px]"
+                        >
+                            Upgrade to Unlimited
+                        </button>
+                    )}
                 </nav>
 
                 {/* Sidebar Footer */}
@@ -962,7 +1086,7 @@ const DashboardPage: React.FC = () => {
                         {quickActions.map((action, i) => (
                             <button
                                 key={action.title}
-                                onClick={() => setOpenModal(modalKeyMap[action.title] ?? null)}
+                                onClick={() => openNoteCreationModal(modalKeyMap[action.title] ?? null)}
                                 className="animate-fade-up group flex items-center gap-4 rounded-xl px-4 py-4 text-left transition-all duration-200"
                                 style={{
                                     animationDelay: `${i * 60}ms`,
@@ -1365,10 +1489,26 @@ const DashboardPage: React.FC = () => {
                 open={themeModalOpen}
                 onClose={() => setThemeModalOpen(false)}
             />
+            <AccountSettingsModal
+                open={accountModalOpen}
+                onClose={() => setAccountModalOpen(false)}
+                userName={user?.email?.split('@')[0] || user?.email || null}
+                userEmail={user?.email || null}
+                planLabel={subscriptionLoading ? 'Loading…' : getSubscriptionPlanLabel(subscription)}
+                isSubscribed={isPremium}
+                onUpgrade={() => {
+                    setAccountModalOpen(false);
+                    setUpgradeModalOpen(true);
+                }}
+                onManageBilling={handleManageBilling}
+                isManageBillingLoading={billingPortalLoading}
+                onLogout={handleLogout}
+            />
             <UpgradeModal
                 isOpen={upgradeModalOpen}
                 onClose={() => setUpgradeModalOpen(false)}
                 userEmail={user?.email}
+                userId={user?.id}
             />
         </div>
     );

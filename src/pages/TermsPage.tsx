@@ -106,8 +106,8 @@ const TermsPage: React.FC = () => {
                             7. Billing and Account Management
                         </h2>
                         <ul className="list-inside list-disc space-y-2 text-zinc-300 mb-4">
-                            <li><strong>Subscription Plans:</strong> We may offer premium features on a recurring billing cycle. Your payment method will be charged automatically at the beginning of each cycle.</li>
-                            <li><strong>Stopping Subscription:</strong> You can cancel your premium access at any time through the dashboard. After canceling, your premium benefits will remain active until the current billing period expires.</li>
+                            <li><strong>Subscription Plans:</strong> We may offer unlimited features on a recurring billing cycle. Your payment method will be charged automatically at the beginning of each cycle.</li>
+                            <li><strong>Stopping Subscription:</strong> You can cancel your unlimited access at any time through the dashboard. After canceling, your unlimited benefits will remain active until the current billing period expires.</li>
                             <li><strong>Refund Requests:</strong> Given that Zemly AI is a digital service, payments are primarily non-refundable. However, if a severe technical malfunction prevents you from using the service, reach out to support within 30 days of the charge.</li>
                         </ul>
                     </section>

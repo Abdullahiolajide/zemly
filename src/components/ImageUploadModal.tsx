@@ -52,7 +52,7 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onClose, onIm
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
             {/* Backdrop */}
-            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeIfNotUploading} />
+            <div className="absolute inset-0 cursor-pointer bg-black/70 backdrop-blur-sm" onClick={closeIfNotUploading} />
 
             {/* Modal */}
             <div

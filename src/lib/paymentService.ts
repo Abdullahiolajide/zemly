@@ -68,10 +68,11 @@ function initDodoPayments(onEvent?: CheckoutEventCallback): void {
 export async function openPremiumCheckout(opts?: {
     customerEmail?: string;
     customerName?: string;
+    customerId?: string;
     billingCycle?: BillingCycle;
     onEvent?: CheckoutEventCallback;
 }): Promise<void> {
-    const { customerEmail, customerName, billingCycle = 'annual', onEvent } = opts ?? {};
+    const { customerEmail, customerName, customerId, billingCycle = 'annual', onEvent } = opts ?? {};
 
     initDodoPayments(onEvent);
 
@@ -91,6 +92,7 @@ export async function openPremiumCheckout(opts?: {
             product_id: productId,
             customer_email: customerEmail,
             customer_name: customerName,
+            customer_id: customerId,
             success_url: `${window.location.origin}/dashboard?payment=success`,
             failure_url: `${window.location.origin}/dashboard?payment=failed`,
         },
