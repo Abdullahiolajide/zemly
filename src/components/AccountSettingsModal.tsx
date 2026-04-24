@@ -3,10 +3,10 @@ import {
     IoClose,
     IoPersonOutline,
     IoSettingsOutline,
-    IoLogOutOutline,
     IoSunnyOutline,
     IoCheckboxOutline,
     IoMoonOutline,
+    IoLogOutOutline,
 } from 'react-icons/io5';
 import { useThemeStore, type ThemeChoice } from '../store/useThemeStore';
 
@@ -20,10 +20,11 @@ interface AccountSettingsModalProps {
     onUpgrade: () => void;
     onManageBilling: () => void;
     isManageBillingLoading: boolean;
+    isLogoutLoading: boolean;
     onLogout: () => void;
 }
 
-const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ open, onClose, userName, userEmail, planLabel, isSubscribed, onUpgrade, onManageBilling, isManageBillingLoading, onLogout }) => {
+const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ open, onClose, userName, userEmail, planLabel, isSubscribed, onUpgrade, onManageBilling, isManageBillingLoading, isLogoutLoading, onLogout }) => {
     const { theme, setTheme } = useThemeStore();
 
     if (!open) return null;
@@ -57,26 +58,26 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ open, onClo
                     <IoClose className="h-5 w-5" />
                 </button>
 
-                <div className="px-8 py-8">
-                    <div className="space-y-5">
+                <div className="p-5 sm:p-8">
+                    <div className="space-y-6 sm:space-y-5">
                         <section>
                             <div className="flex items-center gap-2 text-[14px] font-semibold" style={{ color: 'var(--text-sidebar-hover)' }}>
                                 <IoPersonOutline className="h-4.5 w-4.5" />
                                 <span>My profile</span>
                             </div>
                             <div className="mt-3 border-t pt-4" style={{ borderColor: 'var(--border-glass-strong)' }}>
-                                <div className="space-y-4 text-[15px]" style={{ color: 'var(--text-sidebar-hover)' }}>
-                                    <div className="flex items-start justify-between gap-6">
+                                <div className="space-y-5 sm:space-y-4 text-[15px]" style={{ color: 'var(--text-sidebar-hover)' }}>
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-6">
                                         <span style={{ color: 'var(--text-sidebar)' }}>Display name</span>
-                                        <span className="text-right font-medium">{userName || 'Not set'}</span>
+                                        <span className="font-medium sm:text-right">{userName || 'Not set'}</span>
                                     </div>
-                                    <div className="flex items-start justify-between gap-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-6">
                                         <span style={{ color: 'var(--text-sidebar)' }}>Email</span>
-                                        <span className="max-w-[52%] break-all text-right font-medium">{userEmail || 'Unknown'}</span>
+                                        <span className="break-all font-medium sm:max-w-[60%] sm:text-right">{userEmail || 'Unknown'}</span>
                                     </div>
-                                    <div className="flex items-center justify-between gap-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6">
                                         <span style={{ color: 'var(--text-sidebar)' }}>Active plan</span>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <span
                                                 className="rounded-full border px-3 py-1 text-[13px] font-medium shadow-sm"
                                                 style={{
@@ -130,14 +131,14 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ open, onClo
                             </div>
                             <div className="mt-3 border-t pt-4" style={{ borderColor: 'var(--border-glass-strong)' }}>
                                 <div className="space-y-4 text-[15px]" style={{ color: 'var(--text-sidebar-hover)' }}>
-                                    <div className="flex items-center justify-between gap-6">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-6">
                                         <div>
                                             <div className="font-medium" style={{ color: 'var(--text-sidebar-hover)' }}>Appearance</div>
                                             <div className="text-[12px]" style={{ color: 'var(--text-sidebar)' }}>Customize how Zemly looks on your device.</div>
                                         </div>
                                         <button
                                             onClick={() => setTheme(nextTheme)}
-                                            className="inline-flex items-center gap-2 text-[14px] font-medium transition-colors hover:opacity-80"
+                                            className="inline-flex self-start sm:self-auto items-center gap-2 text-[14px] font-medium transition-colors hover:opacity-80"
                                             style={{ color: 'var(--text-sidebar-hover)' }}
                                             aria-label={`Switch to ${appearanceLabel} mode`}
                                         >
@@ -168,9 +169,22 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ open, onClo
                             </div>
                             <div className="mt-3 border-t pt-4" style={{ borderColor: 'var(--border-glass-strong)' }}>
                                 <div className="flex justify-end">
-                                    <button onClick={onLogout} className="inline-flex items-center gap-2 text-[14px] font-medium text-red-500 transition-colors hover:text-red-600">
-                                        <IoLogOutOutline className="h-4.5 w-4.5" />
-                                        <span>Logout</span>
+                                    <button
+                                        onClick={onLogout}
+                                        disabled={isLogoutLoading}
+                                        className="inline-flex items-center gap-2 text-[14px] font-medium text-red-500 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-70"
+                                    >
+                                        {isLogoutLoading ? (
+                                            <>
+                                                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                                Logging out...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IoLogOutOutline className="h-5 w-5" />
+                                                <span>Logout</span>
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>

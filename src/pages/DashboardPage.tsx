@@ -6,11 +6,11 @@ import {
     WebsiteLinkModal,
 } from '../components/CreateNoteModals';
 import { IoSearch, IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
-import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft } from 'react-icons/bs';
-import { MdLogout, MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
+import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft, BsList } from 'react-icons/bs';
+import { MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
 import { BiHome } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
-import { HiOutlineChevronDoubleLeft, HiOutlineChevronDoubleRight } from 'react-icons/hi';
+import { HiOutlineChevronDoubleLeft } from 'react-icons/hi';
 import { RiMoonLine } from 'react-icons/ri';
 import { FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
@@ -29,6 +29,7 @@ import UpgradeModal from '../components/UpgradeModal';
 import AccountSettingsModal from '../components/AccountSettingsModal';
 import { getUserSubscription, getSubscriptionPlanLabel, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
 import { supabase } from '../lib/supabaseClient';
+import { getEdgeFunctionAuthHeaders } from '../lib/edgeFunctionAuth';
 
 /* ── Sidebar nav items ── */
 const navLinks = [
@@ -334,7 +335,11 @@ const DashboardPage: React.FC = () => {
         try {
             setBillingPortalLoading(true);
 
-            const { data, error } = await supabase.functions.invoke('create-billing-portal');
+            const authHeaders = await getEdgeFunctionAuthHeaders();
+
+            const { data, error } = await supabase.functions.invoke('create-billing-portal', {
+                headers: authHeaders,
+            });
 
             if (error) throw error;
 
@@ -715,7 +720,7 @@ const DashboardPage: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <p className="text-sm font-semibold text-zinc-200">
+                            <p className="text-sm font-semibold text-zinc-200 break-words">
                                 {note.title}
                             </p>
                         )}
@@ -998,16 +1003,11 @@ const DashboardPage: React.FC = () => {
                             </p>
                         </div>
                         <button
-                            onClick={handleLogout}
-                            disabled={isLoggingOut}
+                            onClick={() => setAccountModalOpen(true)}
                             className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-60"
-                            aria-label="Log out"
+                            aria-label="Open settings"
                         >
-                            {isLoggingOut ? (
-                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
-                            ) : (
-                                <MdLogout className="h-4 w-4" />
-                            )}
+                            <IoSettingsOutline className="h-4 w-4" />
                         </button>
                     </div>
                 </div>
@@ -1049,7 +1049,7 @@ const DashboardPage: React.FC = () => {
                                 className={`flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-zinc-800/50 hover:text-zinc-200 ${sidebarOpen ? 'lg:hidden' : ''}`}
                                 aria-label="Expand sidebar"
                             >
-                                <HiOutlineChevronDoubleRight className="h-4 w-4" />
+                                <BsList className="h-5 w-5" />
                             </button>
                             <div>
                                 <h1
@@ -1502,6 +1502,7 @@ const DashboardPage: React.FC = () => {
                 }}
                 onManageBilling={handleManageBilling}
                 isManageBillingLoading={billingPortalLoading}
+                isLogoutLoading={isLoggingOut}
                 onLogout={handleLogout}
             />
             <UpgradeModal

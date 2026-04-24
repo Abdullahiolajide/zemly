@@ -2,6 +2,7 @@
 // Frontend wrapper to invoke Supabase Edge Functions for AI features
 
 import { supabase } from './supabaseClient';
+import { getEdgeFunctionAuthHeaders } from './edgeFunctionAuth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -227,14 +228,13 @@ export async function deleteDocumentFromStorage(path: string): Promise<void> {
 export async function extractDocumentFromStorage(
     input: ExtractDocumentFromStorageInput,
 ): Promise<Omit<DocumentExtractResult, 'publicUrl'>> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/extract-document`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify(input),
@@ -285,7 +285,10 @@ export async function uploadAndExtractDocument(
  * Generate notes from a public website or YouTube URL.
  */
 export async function extractFromLink(url: string): Promise<ExtractLinkResult> {
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('extract-link', {
+        headers: authHeaders,
         body: { url },
     });
 
@@ -308,7 +311,10 @@ export async function chatWithNote(
     messages: ChatMessage[],
     memory?: string,
 ): Promise<ChatResponse> {
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('chat', {
+        headers: authHeaders,
         body: { noteContent, messages, memory },
     });
 
@@ -333,14 +339,13 @@ export async function chatWithNoteStream(
     },
     memory?: string,
 ): Promise<void> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ noteContent, messages, memory }),
@@ -416,7 +421,10 @@ export async function chatWithNoteStream(
 export async function generateFlashcards(
     noteContent: string,
 ): Promise<Flashcard[]> {
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('generate-flashcards', {
+        headers: authHeaders,
         body: { noteContent },
     });
 
@@ -431,7 +439,10 @@ export async function generateFlashcards(
 export async function generateQuiz(
     noteContent: string,
 ): Promise<QuizQuestion[]> {
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('generate-quiz', {
+        headers: authHeaders,
         body: { noteContent },
     });
 
@@ -449,14 +460,13 @@ export async function generateQuizExplanation(
     correctIndex: number,
     noteContent: string,
 ): Promise<string> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
@@ -539,23 +549,13 @@ export async function generatePodcast(
 export async function generatePodcastAudio(
     script: PodcastLine[],
 ): Promise<Blob> {
-    // Use refreshSession to get a fresh token — the cached token from getSession
-    // may have expired during the long script generation phase that precedes this call.
-    let token: string | undefined;
-    try {
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        token = refreshed?.session?.access_token;
-    } catch {
-        // Fallback to cached session if refresh fails
-        const { data: session } = await supabase.auth.getSession();
-        token = session?.session?.access_token;
-    }
+    const authHeaders = await getEdgeFunctionAuthHeaders(true);
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/generate-podcast-audio`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ script }),
@@ -621,14 +621,13 @@ export async function generateRaiseHandResponse(
         conversationHistory?: Array<{ question: string; answer: string }>;
     },
 ): Promise<RaiseHandResponseResult> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/raise-hand-response`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({
@@ -705,14 +704,13 @@ export async function generateRaiseHandResponseStreaming(
         signal?: AbortSignal;
     },
 ): Promise<void> {
-    const { data: session } = await supabase.auth.getSession();
-    const token = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/raise-hand-response`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({

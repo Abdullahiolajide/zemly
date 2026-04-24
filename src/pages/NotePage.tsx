@@ -18,6 +18,8 @@ import markedKatex from 'marked-katex-extension';
 import 'katex/dist/katex.min.css';
 
 import { getNote, updateNote } from '../lib/notesService';
+import { supabase } from '../lib/supabaseClient';
+import { getEdgeFunctionAuthHeaders } from '../lib/edgeFunctionAuth';
 import type { Note } from '../types';
 import FlashcardsPanel from '../components/FlashcardsPanel';
 import QuizPanel from '../components/QuizPanel';
@@ -41,11 +43,13 @@ import {
     FiAlignLeft, FiAlignCenter, FiAlignRight,
     FiList, FiMinus, FiPlus, FiDownload,
 } from 'react-icons/fi';
+import { IoSettingsOutline } from 'react-icons/io5';
 import { RxStrikethrough } from 'react-icons/rx';
 import { AiOutlineOrderedList } from 'react-icons/ai';
 import ThemeModal from '../components/ThemeModal';
 import UpgradeModal from '../components/UpgradeModal';
-import { getUserSubscription, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
+import AccountSettingsModal from '../components/AccountSettingsModal';
+import { getSubscriptionPlanLabel, getUserSubscription, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
 
 /* ── Note-page sidebar nav items ── */
 const noteSidebarLinks = [
@@ -159,6 +163,7 @@ const NotePage: React.FC = () => {
     const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+    const [accountModalOpen, setAccountModalOpen] = useState(false);
     const [imageModalOpen, setImageModalOpen] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [askAiText, setAskAiText] = useState<string | null>(null);
@@ -167,6 +172,8 @@ const NotePage: React.FC = () => {
     const [documentViewerUrl, setDocumentViewerUrl] = useState('');
     const [documentViewerError, setDocumentViewerError] = useState<string | null>(null);
     const [subscription, setSubscription] = useState<UserSubscriptionRecord | null>(null);
+    const [billingPortalLoading, setBillingPortalLoading] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const [, setEditorKey] = useState(0);
     const youtubeVideoId = note?.source_type === 'link' ? getYouTubeVideoId(note.source_url) : null;
@@ -178,6 +185,75 @@ const NotePage: React.FC = () => {
             : noteId
                 ? `/notes/${noteId}`
                 : '/notes';
+
+    const handleManageBilling = useCallback(async () => {
+        try {
+            setBillingPortalLoading(true);
+
+            const authHeaders = await getEdgeFunctionAuthHeaders();
+
+            const { data, error } = await supabase.functions.invoke('create-billing-portal', {
+                headers: authHeaders,
+            });
+
+            if (error) throw error;
+
+            const portalUrl = typeof data?.portal_url === 'string'
+                ? data.portal_url
+                : typeof data?.url === 'string'
+                    ? data.url
+                    : typeof data?.link === 'string'
+                        ? data.link
+                        : '';
+
+            if (!portalUrl) {
+                throw new Error('Billing portal URL was not returned.');
+            }
+
+            window.open(portalUrl, '_blank', 'noopener,noreferrer');
+        } catch (err) {
+            console.error('Failed to open billing portal:', err);
+        } finally {
+            setBillingPortalLoading(false);
+        }
+    }, []);
+
+    const handleLogout = useCallback(async () => {
+        if (isLoggingOut) return;
+
+        try {
+            setIsLoggingOut(true);
+            await useAuthStore.getState().logout();
+            navigate('/');
+        } finally {
+            setIsLoggingOut(false);
+        }
+    }, [isLoggingOut, navigate]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadSubscription = async () => {
+            if (!user?.id) {
+                if (!cancelled) setSubscription(null);
+                return;
+            }
+
+            try {
+                const record = await getUserSubscription(user.id, user.email);
+                if (!cancelled) setSubscription(record);
+            } catch (err) {
+                console.error('Failed to load subscription:', err);
+                if (!cancelled) setSubscription(null);
+            }
+        };
+
+        void loadSubscription();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id, user?.email]);
 
     const editor = useEditor({
         extensions: [
@@ -272,31 +348,6 @@ const NotePage: React.FC = () => {
             if (revokedUrl) URL.revokeObjectURL(revokedUrl);
         };
     }, [note?.source_url]);
-
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadSubscription = async () => {
-            if (!user?.id) {
-                setSubscription(null);
-                return;
-            }
-
-            try {
-                const record = await getUserSubscription(user.id, user.email);
-                if (!cancelled) setSubscription(record);
-            } catch (err) {
-                console.error('Failed to load subscription:', err);
-                if (!cancelled) setSubscription(null);
-            }
-        };
-
-        void loadSubscription();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [user?.id]);
 
     const handleAutoSave = useCallback(
         (() => {
@@ -476,6 +527,14 @@ const NotePage: React.FC = () => {
                                     {user?.email || 'user@zemly.me'}
                                 </p>
                             </div>
+                            <button
+                                onClick={() => setAccountModalOpen(true)}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-zinc-300"
+                                aria-label="Open settings"
+                                title="Settings"
+                            >
+                                <IoSettingsOutline className="h-4 w-4" />
+                            </button>
                         </div>
                     </div>
                 </aside>
@@ -886,6 +945,19 @@ const NotePage: React.FC = () => {
             </div>
 
             <ThemeModal open={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
+            <AccountSettingsModal
+                open={accountModalOpen}
+                onClose={() => setAccountModalOpen(false)}
+                userName={user?.email?.split('@')[0]}
+                userEmail={user?.email}
+                planLabel={getSubscriptionPlanLabel(subscription)}
+                isSubscribed={isPremium}
+                onUpgrade={() => setUpgradeModalOpen(true)}
+                onManageBilling={handleManageBilling}
+                isManageBillingLoading={billingPortalLoading}
+                isLogoutLoading={isLoggingOut}
+                onLogout={handleLogout}
+            />
             <UpgradeModal
                 isOpen={upgradeModalOpen}
                 onClose={() => setUpgradeModalOpen(false)}

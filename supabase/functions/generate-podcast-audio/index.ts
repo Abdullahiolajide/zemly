@@ -15,8 +15,8 @@ interface AudioRequest {
 }
 
 const VOICE_MAP: Record<string, string> = {
-    Hope: 'en-US-AvaMultilingualNeural',
-    Corey: 'en-US-AdamMultilingualNeural',
+    Anna: 'en-US-AvaMultilingualNeural',
+    Micheal: 'en-US-AdamMultilingualNeural',
 };
 
 /**
@@ -45,7 +45,7 @@ function escapeXml(text: string): string {
  */
 function buildSsml(lines: PodcastLine[]): string {
     const voiceBlocks = lines.map((line) => {
-        const voiceName = VOICE_MAP[line.speaker] || VOICE_MAP.Hope;
+        const voiceName = VOICE_MAP[line.speaker] || VOICE_MAP.Anna;
         const escapedText = escapeXml(line.text);
         return `    <voice name="${voiceName}">\n      <prosody rate="1.05">${escapedText}</prosody>\n      <break time="600ms"/>\n    </voice>`;
     });

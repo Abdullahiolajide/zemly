@@ -140,7 +140,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                     Generate Flashcards
                     <span className="flashcards-sparkle ml-1">✨</span>
                 </h2>
-                <p className="text-[13px] text-zinc-500 sm:text-[15px]">One-time generation based on note length (15–30 flashcards)</p>
+                <p className="text-[13px] text-zinc-500 sm:text-[15px]">Master the concepts in your notes with flashcards</p>
             </div>
 
             {error && (

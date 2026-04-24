@@ -183,7 +183,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                     >
                         ✨ Generate Quiz
                     </h2>
-                    <p className="text-[13px] text-zinc-500 sm:text-[15px]">One-time generation based on note length (15–30 questions)</p>
+                    <p className="text-[13px] text-zinc-500 sm:text-[15px]">Test yourself with multichoice questions </p>
                 </div>
 
                 {error && (

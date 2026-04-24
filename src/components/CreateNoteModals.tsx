@@ -545,7 +545,7 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                     disabled={isGenerating || isRecording || !audioItems.length}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    {isGenerating ? 'Generating Notes...' : 'Generate Combined Note'}
+                    {isGenerating ? 'Generating Notes...' : 'Generate Note'}
                 </button>
             </div>
         </ModalWrapper>
@@ -1011,7 +1011,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                             Generating combined note...
                         </span>
                     ) : (
-                        'Generate Combined Note'
+                        'Generate Note'
                     )}
                 </button>
             </div>

@@ -19,6 +19,38 @@ interface SourceSection {
     body: string;
 }
 
+const PODCAST_RESPONSE_SCHEMA = {
+    type: 'object',
+    properties: {
+        script: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    speaker: { type: 'string' },
+                    text: { type: 'string' },
+                },
+                required: ['speaker', 'text'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['script'],
+    additionalProperties: false,
+} as const;
+
+function preparePodcastNote(note: string): string {
+    return note
+        .replace(/\r\n/g, '\n')
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .filter((line) => !/^page\s+\d+$/i.test(line))
+        .filter((line) => !/^\d+$/.test(line))
+        .map((line) => line.replace(/\s{2,}/g, ' '))
+        .join('\n');
+}
+
 function splitSourceSections(note: string): SourceSection[] {
     const chunks = note
         .split(/(?=^\s*SOURCE:\s*.*$)/gmi)
@@ -61,8 +93,8 @@ function buildCoveragePrompt(note: string): string {
 
         Characters:
 
-        Hope (female): intelligent, curious, and expressive. She does NOT only ask questions — she also explains ideas, shares interpretations, makes connections, gives examples, and occasionally challenges or builds on Corey’s points.
-        Corey (male): expert, deeply knowledgeable, explains clearly, adds structure and depth, refines and expands ideas.
+        Anna (female): intelligent, curious, and expressive. She does NOT only ask questions — she also explains ideas, shares interpretations, makes connections, gives examples, and occasionally challenges or builds on Micheal’s points.
+        Micheal (male): expert, deeply knowledgeable, explains clearly, adds structure and depth, refines and expands ideas.
 
         Instructions:
 
@@ -70,12 +102,12 @@ function buildCoveragePrompt(note: string): string {
         BOTH speakers should contribute meaningfully (not just Q&A)
         Start with a brief intro to the topic
         Break down concepts step-by-step
-        Include moments where Hope:
+        Include moments where Anna:
         explains concepts in her own words
-        attempts answers before Corey confirms or corrects
+        attempts answers before Micheal confirms or corrects
         adds relatable examples or analogies
         reacts thoughtfully (not just “oh I see”)
-        Corey should:
+        Micheal should:
         deepen explanations
         correct gently when needed
         connect ideas and provide clarity
@@ -98,7 +130,7 @@ function buildCoveragePrompt(note: string): string {
 
         Output Format (STRICT):
         Return ONLY valid JSON, no markdown, no backticks:
-        {"script":[{"speaker":"Hope","text":"..."},{"speaker":"Corey","text":"..."}]}
+        {"script":[{"speaker":"Anna","text":"..."},{"speaker":"Micheal","text":"..."}]}
 
         NOTE:
         ${sourceDigest}`;
@@ -135,12 +167,12 @@ function buildFallbackPodcastScript(note: string): PodcastLine[] {
 
     const script: PodcastLine[] = [];
     for (let i = 0; i < Math.max(6, Math.min(8, sourceLines.length * 2)); i++) {
-        const speaker = i % 2 === 0 ? 'Hope' : 'Corey';
+        const speaker = i % 2 === 0 ? 'Anna' : 'Micheal';
         const sourceLine = sourceLines[i % sourceLines.length];
 
         script.push({
             speaker,
-            text: speaker === 'Hope'
+            text: speaker === 'Anna'
                 ? `Can you break down this part: ${sourceLine}`
                 : `Yes. The key idea here is ${sourceLine}`,
         });
@@ -223,9 +255,9 @@ async function repairPodcastPayload(raw: string): Promise<{ script?: PodcastLine
 
 Rules:
 - Return ONLY JSON.
-- The JSON shape must be: {"script":[{"speaker":"Hope","text":"..."},{"speaker":"Corey","text":"..."}]}
+- The JSON shape must be: {"script":[{"speaker":"Anna","text":"..."},{"speaker":"Micheal","text":"..."}]}
 - Keep the same meaning as much as possible.
-- Use exactly two speakers: Hope and Corey.
+- Use exactly two speakers: Anna and Micheal.
 - Do not include markdown fences or explanation.
 
 BROKEN OUTPUT:
@@ -260,24 +292,24 @@ function normalizeScript(script: PodcastLine[]): PodcastLine[] {
         if (uniqueSpeakers.length === 2) break;
     }
 
-    const primary = uniqueSpeakers[0] || 'Hope';
-    const secondary = uniqueSpeakers[1] || 'Corey';
+    const primary = uniqueSpeakers[0] || 'Anna';
+    const secondary = uniqueSpeakers[1] || 'Micheal';
 
     let flip = false;
     return cleaned.map((line, idx) => {
         const speaker = line.speaker.toLowerCase();
-        if (speaker === primary.toLowerCase() || speaker === 'hope') {
+        if (speaker === primary.toLowerCase() || speaker === 'anna') {
             flip = false;
-            return { speaker: 'Hope', text: line.text };
+            return { speaker: 'Anna', text: line.text };
         }
-        if (speaker === secondary.toLowerCase() || speaker === 'corey') {
+        if (speaker === secondary.toLowerCase() || speaker === 'micheal') {
             flip = true;
-            return { speaker: 'Corey', text: line.text };
+            return { speaker: 'Micheal', text: line.text };
         }
 
         // Fallback: alternate unknown speakers so the transcript remains a dialogue.
         flip = idx === 0 ? false : !flip;
-        return { speaker: flip ? 'Corey' : 'Hope', text: line.text };
+        return { speaker: flip ? 'Micheal' : 'Anna', text: line.text };
     });
 }
 
@@ -294,14 +326,16 @@ serve(async (req: Request) => {
             );
         }
 
-        const note = balanceMultiSourceNote(noteContent, 40000); // Keep all source blocks represented
+        const cleanedNote = preparePodcastNote(noteContent);
+        const note = balanceMultiSourceNote(cleanedNote, 24000); // Keep all source blocks represented
 
         const prompt = buildCoveragePrompt(note);
 
         const raw = await promptGemini(prompt, {
-            temperature: 1.0,
+            temperature: 0.7,
             maxOutputTokens: 6144,
             responseMimeType: 'application/json',
+            responseSchema: PODCAST_RESPONSE_SCHEMA,
         });
 
         let parsed: { script?: PodcastLine[] };

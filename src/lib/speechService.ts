@@ -3,6 +3,7 @@
 // The SDK is lazy-loaded so the ~2 MB bundle only ships when needed.
 
 import { supabase } from './supabaseClient';
+import { getEdgeFunctionAuthHeaders } from './edgeFunctionAuth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -23,14 +24,13 @@ async function fetchSpeechToken(): Promise<{ token: string; region: string }> {
         return { token: cachedToken.token, region: cachedToken.region };
     }
 
-    const { data: session } = await supabase.auth.getSession();
-    const accessToken = session?.session?.access_token;
+    const authHeaders = await getEdgeFunctionAuthHeaders();
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/speech-token`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            ...authHeaders,
             apikey: SUPABASE_ANON_KEY,
         },
     });

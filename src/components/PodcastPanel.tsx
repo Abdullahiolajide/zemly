@@ -15,14 +15,14 @@ import { getPodcastSession, upsertPodcastScript, uploadPodcastAudio } from '../l
 
 /* ── Speaker config ── */
 const SPEAKERS = {
-    Hope: {
-        name: 'Hope',
+    Anna: {
+        name: 'Anna',
         color: '#E07070',
         avatarBg: 'linear-gradient(135deg, #D35F5F, #E07070)',
         align: 'left' as const,
     },
-    Corey: {
-        name: 'Corey',
+    Micheal: {
+        name: 'Micheal',
         color: '#F5A623',
         avatarBg: 'linear-gradient(135deg, #D4912A, #F5A623)',
         align: 'right' as const,
@@ -68,24 +68,24 @@ function normalizePodcastScript(script: PodcastLine[]): PodcastLine[] {
 
     if (cleaned.length === 0) return [];
 
-    const knownHope = ['hope', 'alex', 'host'];
-    const knownCorey = ['corey', 'sam', 'cohost', 'co-host'];
+    const knownHope = ['anna', 'hope', 'alex', 'host'];
+    const knownCorey = ['micheal', 'michael', 'corey', 'sam', 'cohost', 'co-host'];
 
-    let nextSpeaker: 'Hope' | 'Corey' = 'Hope';
+    let nextSpeaker: 'Anna' | 'Micheal' = 'Anna';
 
     return cleaned.map((line, idx) => {
         const key = line.speaker.toLowerCase();
         if (knownHope.some((token) => key.includes(token))) {
-            nextSpeaker = 'Corey';
-            return { speaker: 'Hope', text: line.text };
+            nextSpeaker = 'Micheal';
+            return { speaker: 'Anna', text: line.text };
         }
         if (knownCorey.some((token) => key.includes(token))) {
-            nextSpeaker = 'Hope';
-            return { speaker: 'Corey', text: line.text };
+            nextSpeaker = 'Anna';
+            return { speaker: 'Micheal', text: line.text };
         }
 
-        const speaker = idx === 0 ? 'Hope' : nextSpeaker;
-        nextSpeaker = speaker === 'Hope' ? 'Corey' : 'Hope';
+        const speaker = idx === 0 ? 'Anna' : nextSpeaker;
+        nextSpeaker = speaker === 'Anna' ? 'Micheal' : 'Anna';
         return { speaker, text: line.text };
     });
 }
@@ -800,7 +800,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const remainingTime = displayDuration - displayCurrentTime;
 
     const getSpeakerConfig = (speakerName: string) => {
-        return speakerName.toLowerCase().includes('corey') ? SPEAKERS.Corey : SPEAKERS.Hope;
+        return speakerName.toLowerCase().includes('micheal') ? SPEAKERS.Micheal : SPEAKERS.Anna;
     };
 
     /* ── Loading ── */
@@ -902,20 +902,20 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                         <div
                                             className="absolute left-0 top-0 z-10 flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-bold text-white sm:h-11 sm:w-11 sm:text-[13px]"
                                             style={{
-                                                background: SPEAKERS.Hope.avatarBg,
+                                                background: SPEAKERS.Anna.avatarBg,
                                                 border: '2px solid var(--podcast-avatar-ring)',
                                             }}
                                         >
-                                            {SPEAKERS.Hope.name[0]}
+                                            {SPEAKERS.Anna.name[0]}
                                         </div>
                                         <div
                                             className="absolute bottom-0 left-5 flex h-10 w-10 items-center justify-center rounded-full text-[12px] font-bold text-white sm:left-6 sm:h-11 sm:w-11 sm:text-[13px]"
                                             style={{
-                                                background: SPEAKERS.Corey.avatarBg,
+                                                background: SPEAKERS.Micheal.avatarBg,
                                                 border: '2px solid var(--podcast-avatar-ring)',
                                             }}
                                         >
-                                            {SPEAKERS.Corey.name[0]}
+                                            {SPEAKERS.Micheal.name[0]}
                                         </div>
                                     </div>
 

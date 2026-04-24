@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { DodoPayments } from 'dodopayments-checkout';
+import { getEdgeFunctionAuthHeaders } from './edgeFunctionAuth';
 
 /* ── Dodo Payments product ID (set after creating the product in the Dodo dashboard) ── */
 const MONTHLY_DODO_PRODUCT_ID =
@@ -87,7 +88,10 @@ export async function openPremiumCheckout(opts?: {
     }
 
     // Call our edge function to create a checkout session
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('create-checkout', {
+        headers: authHeaders,
         body: {
             product_id: productId,
             customer_email: customerEmail,

@@ -407,6 +407,26 @@ interface ParsedPass {
   nextFocus: string;
 }
 
+function extractLooseNotes(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  const taggedNotes = trimmed.match(/##NOTES##\s*([\s\S]*?)(?=##CONTINUE##|##NEXT_FOCUS##|$)/i)?.[1]?.trim();
+  if (taggedNotes) return taggedNotes;
+
+  const hasTagMarkers = /##TITLE##|##NOTES##|##CONTINUE##|##NEXT_FOCUS##/i.test(trimmed);
+  if (!hasTagMarkers) return trimmed;
+
+  const looseBody = trimmed
+    .replace(/^\s*##TITLE##[\s\S]*?(?=##NOTES##|##CONTINUE##|##NEXT_FOCUS##|$)/i, '')
+    .replace(/^\s*##NOTES##\s*/i, '')
+    .replace(/\s*##CONTINUE##[\s\S]*$/i, '')
+    .replace(/\s*##NEXT_FOCUS##[\s\S]*$/i, '')
+    .trim();
+
+  return looseBody;
+}
+
 function parsePass(raw: string): ParsedPass {
   const titleMatch = raw.match(/##TITLE##\s*([\s\S]*?)(?=##NOTES##|##CONTINUE##|$)/i);
   const notesMatch = raw.match(/##NOTES##\s*([\s\S]*?)(?=##CONTINUE##|##NEXT_FOCUS##|$)/i);
@@ -417,10 +437,34 @@ function parsePass(raw: string): ParsedPass {
 
   return {
     title: (titleMatch?.[1] || '').trim(),
-    notes: (notesMatch?.[1] || '').trim(),
+    notes: (notesMatch?.[1] || extractLooseNotes(raw)).trim(),
     continueNeeded: continueToken.startsWith('Y'),
     nextFocus: (nextFocusMatch?.[1] || '').trim(),
   };
+}
+
+function normalizeNoteContent(note: string): string {
+  return note
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+
+      if (/^[•*]\s+/.test(trimmed)) {
+        return trimmed.replace(/^[•*]\s+/, '- ');
+      }
+
+      const headingMatch = trimmed.match(/^(?![-*•])([A-Za-z][A-Za-z0-9()/'&,\- ]{2,80}):$/);
+      if (headingMatch) {
+        return `## ${headingMatch[1].trim()}`;
+      }
+
+      return line;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -448,6 +492,9 @@ STYLE RULES:
 - Keep speaker wording faithful while cleaning obvious filler and stutters.
 - Preserve technical terms, formulas, dates, named entities, and key examples.
 - If audio is unclear in places, use [inaudible] briefly.
+- Use markdown structure only: headings for major topics, bullets for details, and short paragraphs where needed.
+- Do not dump raw OCR fragments or page headers/footers.
+- If you include formulas, format them as readable markdown or short inline math, not as broken symbol strings.
 
 ${isLarge ? `- This is pass 1 of potentially several. Cover the FIRST portion of content thoroughly.` : `- Cover ALL content in one pass. Be complete.`}
 
@@ -484,6 +531,9 @@ STYLE RULES:
 - Write as if explaining to a smart peer — no jargon without a definition.
 - No filler phrases like "In this document..." or "The author explains...".
 - Rewrite clearly and concisely — no long verbatim copying.
+- Use markdown structure only: headings for major topics, bullets for details, and short paragraphs where needed.
+- Do not dump raw OCR fragments or page headers/footers.
+- If you include formulas, format them as readable markdown or short inline math, not as broken symbol strings.
 
 ${isLarge ? `- This is pass 1 of potentially several. Cover the FIRST portion of content thoroughly. Do not rush or thin out coverage to fit everything.` : `- Cover ALL content in one pass. Be complete but not padded.`}
 
@@ -611,7 +661,7 @@ serve(async (req: Request) => {
 
     const title = firstParsed.title || fileName.replace(/\.[^.]+$/, '');
     const noteParts: string[] = [];
-    if (firstParsed.notes) noteParts.push(firstParsed.notes);
+    if (firstParsed.notes) noteParts.push(normalizeNoteContent(firstParsed.notes));
 
     // Only continue if file was large AND AI says there's more to cover
     let continueNeeded = isLarge && firstParsed.continueNeeded;
@@ -624,14 +674,14 @@ serve(async (req: Request) => {
 
       if (parsed.notes) {
         const alreadyHas = noteParts.some((part) => part.includes(parsed.notes));
-        if (!alreadyHas) noteParts.push(parsed.notes);
+        if (!alreadyHas) noteParts.push(normalizeNoteContent(parsed.notes));
       }
 
       continueNeeded = parsed.continueNeeded;
       nextFocus = parsed.nextFocus;
     }
 
-    const noteContent = noteParts.join('\n\n');
+    const noteContent = normalizeNoteContent(noteParts.join('\n\n'));
     const extractedText = noteContent;
 
     if (!noteContent) {
