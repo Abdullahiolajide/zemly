@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { promptGemini } from '../_shared/gemini.ts';
+import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -74,10 +75,6 @@ function transcriptContentToText(content: unknown): string {
 }
 
 async function fetchSupadataTranscript(url: string): Promise<string> {
-    if (!SUPADATA_API_KEY) {
-        throw new Error('SUPADATA_API_KEY is not set in Supabase secrets.');
-    }
-
     const query = new URLSearchParams({
         url,
         text: 'true',
@@ -288,13 +285,15 @@ function parsePass(raw: string): ParsedPass {
 }
 
 function buildInitialPrompt(sourceUrl: string, readableText: string): string {
+    const sanitizedText = sanitizeNoteForPrompt(readableText);
+
     return `
 You are an expert study notes generator.
 
 INPUT:
 - Source URL: ${sourceUrl}
 - Extracted source text:
-${readableText}
+${sanitizedText}
 
 TASK:
 1) Understand the source deeply.
@@ -325,6 +324,8 @@ If CONTINUE is YES, list what should be covered next.
 
 function buildContinuationPrompt(sourceUrl: string, readableText: string, notesSoFar: string, nextFocus: string): string {
     const tail = notesSoFar.slice(-24000);
+    const sanitizedText = sanitizeNoteForPrompt(readableText);
+    const sanitizedTail = sanitizeNoteForPrompt(tail);
 
     return `
 You are continuing notes generation for the same source.
@@ -333,18 +334,15 @@ SOURCE URL:
 ${sourceUrl}
 
 SOURCE TEXT:
-${readableText}
+${sanitizedText}
 
 ALREADY GENERATED NOTES (tail excerpt):
-${tail}
+${sanitizedTail}
 
 NEXT FOCUS GUIDANCE:
 ${nextFocus || 'Continue with uncovered sections, details, examples, and high-yield facts.'}
 
 TASK:
-- Add only NEW material not already covered.
-- Keep the same quality and structure.
-- Continue until coverage is complete.
 
 OUTPUT EXACTLY THIS FORMAT:
 
@@ -371,7 +369,7 @@ function sanitizeGeminiError(message: string): string {
 }
 
 async function generateNotes(sourceUrl: string, readableText: string): Promise<{ title: string; noteContent: string }> {
-    const clipped = readableText.slice(0, LINK_SOURCE_CLIP_CHARS);
+    const clipped = sanitizeNoteForPrompt(readableText.slice(0, LINK_SOURCE_CLIP_CHARS));
 
     const firstRaw = await promptGemini(buildInitialPrompt(sourceUrl, clipped), {
         temperature: 0.25,

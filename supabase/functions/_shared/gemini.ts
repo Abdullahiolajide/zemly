@@ -5,7 +5,7 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
 //Deno.env.get('GEMINI_MODEL') || 
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite';
+const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`;
 
 /** Max characters of note content to send — supports up to ~30 pages (~25k tokens) */
@@ -73,7 +73,7 @@ function buildRequestBody(
     const {
         systemInstruction,
         temperature = 0.7,
-        maxOutputTokens = 1024,
+        maxOutputTokens = 8192,
         responseMimeType,
         responseSchema,
     } = options;

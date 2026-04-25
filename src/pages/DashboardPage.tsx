@@ -5,7 +5,7 @@ import {
     DocumentUploadModal,
     WebsiteLinkModal,
 } from '../components/CreateNoteModals';
-import { IoSearch, IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
+import { IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
 import { BsThreeDotsVertical, BsChevronRight, BsFolder2, BsFolderPlus, BsArrowLeft, BsList } from 'react-icons/bs';
 import { MdUploadFile, MdDriveFileMoveOutline } from 'react-icons/md';
 import { BiHome } from 'react-icons/bi';
@@ -204,6 +204,7 @@ const DashboardPage: React.FC = () => {
     const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+    const [deletingNoteId, setDeletingNoteId] = useState<number | null>(null);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { user, logout } = useAuthStore();
     const navigate = useNavigate();
@@ -557,7 +558,10 @@ const DashboardPage: React.FC = () => {
     };
 
     const handleDeleteNote = async (noteId: number) => {
+        if (deletingNoteId === noteId) return;
+
         try {
+            setDeletingNoteId(noteId);
             await deleteNote(noteId);
             // Also remove from any folder
             if (user?.id) {
@@ -570,6 +574,8 @@ const DashboardPage: React.FC = () => {
             setMenuOpenId(null);
         } catch (err) {
             console.error('Failed to delete note:', err);
+        } finally {
+            setDeletingNoteId(null);
         }
     };
 
@@ -885,7 +891,8 @@ const DashboardPage: React.FC = () => {
                             <div className="mt-6 flex gap-3">
                                 <button
                                     onClick={() => setDeleteConfirmId(null)}
-                                    className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200"
+                                    disabled={deletingNoteId === note.id}
+                                    className="flex-1 rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-400 transition-all hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
                                     style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                                     onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass-strong)'; }}
                                     onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-glass)'; }}
@@ -894,9 +901,10 @@ const DashboardPage: React.FC = () => {
                                 </button>
                                 <button
                                     onClick={() => handleDeleteNote(note.id)}
-                                    className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                                    disabled={deletingNoteId === note.id}
+                                    className="flex-1 rounded-xl bg-red-500/90 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
                                 >
-                                    Delete
+                                    {deletingNoteId === note.id ? 'Deleting...' : 'Delete'}
                                 </button>
                             </div>
                         </div>
@@ -1065,7 +1073,7 @@ const DashboardPage: React.FC = () => {
                         </div>
 
                         {/* Search */}
-                        <button
+                        {/* <button
                             className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs text-zinc-500 transition-all hover:text-zinc-400 sm:px-4 sm:text-sm"
                             style={{
                                 borderColor: 'var(--border-glass)',
@@ -1078,7 +1086,7 @@ const DashboardPage: React.FC = () => {
                             <kbd className="ml-2 hidden rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 sm:inline sm:ml-3">
                                 ⌘K
                             </kbd>
-                        </button>
+                        </button> */}
                     </div>
 
                     {/* ── Quick Action Cards ── */}

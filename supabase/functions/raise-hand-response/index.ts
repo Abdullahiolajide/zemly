@@ -12,6 +12,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 import { streamGemini, truncateNote } from '../_shared/gemini.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface RaiseHandRequest {
     noteContent: string;
@@ -173,7 +174,7 @@ serve(async (req: Request) => {
     }
 
     // ── Build prompt ──
-    const context = truncateNote(noteContent || '', 12000).trim();
+    const context = sanitizeNoteForPrompt(truncateNote(noteContent || '', 12000)).trim();
     const podcastWindow = buildPodcastWindow(podcastScript, currentLineIndex);
     const history = buildConversationHistory(conversationHistory);
     const prompt = `You are currently in a LIVE podcast Q&A moment. The student interrupted the podcast with a question.

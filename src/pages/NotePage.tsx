@@ -11,6 +11,7 @@ import Image from '@tiptap/extension-image';
 import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import { TextStyleKit } from '@tiptap/extension-text-style';
 import { Markdown } from 'tiptap-markdown';
+import { Mathematics, migrateMathStrings } from '@tiptap/extension-mathematics';
 import 'prosemirror-view/style/prosemirror.css';
 import html2pdf from 'html2pdf.js';
 import { marked } from 'marked';
@@ -72,37 +73,6 @@ let markdownRendererConfigured = false;
 if (!markdownRendererConfigured) {
     marked.use(markedKatex({ throwOnError: false }));
     markdownRendererConfigured = true;
-}
-
-function escapeHtml(text: string): string {
-    return text
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-function toEditorContent(content: Note['content']): Note['content'] {
-    if (!content || typeof content !== 'string') return content;
-
-    const trimmed = content.trim();
-    if (!trimmed) return '';
-
-    const hasHtmlTags = /<\s*[a-z][\s\S]*>/i.test(trimmed);
-    if (hasHtmlTags) return content;
-
-    const hasMarkdownSyntax = /(^\s{0,3}#{1,6}\s)|(^\s*[-*+]\s)|(^\s*\d+\.\s)|(\*\*[^*]+\*\*)|(```[\s\S]*```)|(\[[^\]]+\]\([^)]+\))|(\$\$[\s\S]*\$\$)|(\$[^$\n]+\$)/m.test(trimmed);
-
-    if (hasMarkdownSyntax) {
-        try {
-            return marked.parse(content, { async: false });
-        } catch {
-            return `<p>${escapeHtml(content).replace(/\n/g, '<br/>')}</p>`;
-        }
-    }
-
-    return `<p>${escapeHtml(content).replace(/\n/g, '<br/>')}</p>`;
 }
 
 function getYouTubeVideoId(url?: string | null): string | null {
@@ -258,6 +228,7 @@ const NotePage: React.FC = () => {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+            Mathematics,
             Markdown,
             Placeholder.configure({ placeholder: 'Start writing your note…' }),
             TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -286,22 +257,34 @@ const NotePage: React.FC = () => {
             },
         },
         onUpdate: ({ editor: ed }) => { handleAutoSave(ed.getJSON() as Record<string, unknown>); },
+        onCreate: ({ editor: ed }) => { migrateMathStrings(ed); },
         onTransaction: () => { setEditorKey((k) => k + 1); },
     });
 
-    useEffect(() => {
-        if (!noteId) return;
-        const fetchNote = async () => {
-            try {
-                setLoading(true);
-                const data = await getNote(noteId);
-                setNote(data);
-                if (data.content && editor) { editor.commands.setContent(toEditorContent(data.content)); }
-            } catch (err) { console.error('Failed to load note:', err); }
-            finally { setLoading(false); }
-        };
-        fetchNote();
-    }, [noteId, editor]);
+   useEffect(() => {
+    if (!noteId || !editor) return;
+    const fetchNote = async () => {
+        try {
+            setLoading(true);
+            const data = await getNote(noteId);
+            setNote(data);
+            if (data.content) {
+                setTimeout(() => {
+                    if (!editor.isDestroyed) {
+                        editor.commands.setContent(
+                            typeof data.content === 'string' ? data.content : data.content
+                        );
+                        requestAnimationFrame(() => {
+                            if (!editor.isDestroyed) migrateMathStrings(editor);
+                        });
+                    }
+                }, 0);
+            }
+        } catch (err) { console.error('Failed to load note:', err); }
+        finally { setLoading(false); }
+    };
+    fetchNote();
+}, [noteId, editor]);
 
     useEffect(() => {
         let revokedUrl: string | null = null;

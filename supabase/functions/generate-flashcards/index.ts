@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { balanceMultiSourceNote, promptGemini } from '../_shared/gemini.ts';
+import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface FlashcardsRequest {
     noteContent: string;
@@ -129,11 +130,13 @@ serve(async (req: Request) => {
             );
         }
 
-        const note = balanceMultiSourceNote(noteContent, 16000);
+        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 100000));
 
         const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
         Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length, max - 100 questions
+        - Generate 1 question per major concept or named term in the note.
+        - Do not stop early. Cover the entire note.
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
         ${note}`;

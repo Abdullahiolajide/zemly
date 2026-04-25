@@ -2,7 +2,6 @@
 // Azure Speech SDK wrapper for real-time speech-to-text.
 // The SDK is lazy-loaded so the ~2 MB bundle only ships when needed.
 
-import { supabase } from './supabaseClient';
 import { getEdgeFunctionAuthHeaders } from './edgeFunctionAuth';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;

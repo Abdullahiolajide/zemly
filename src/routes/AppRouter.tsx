@@ -5,6 +5,8 @@ import DashboardPage from '../pages/DashboardPage';
 import NotePage from '../pages/NotePage';
 import TermsPage from '../pages/TermsPage';
 import PrivacyPage from '../pages/PrivacyPage';
+import AboutPage from '../pages/AboutPage';
+import ContactPage from '../pages/ContactPage';
 import ProtectedRoute from './ProtectedRoute';
 
 const AppRouter: React.FC = () => {
@@ -15,6 +17,8 @@ const AppRouter: React.FC = () => {
                 <Route path="/auth" element={<AuthPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/about" element={<AboutPage />} />
+                <Route path="/contact" element={<ContactPage />} />
                 <Route
                     path="/dashboard"
                     element={

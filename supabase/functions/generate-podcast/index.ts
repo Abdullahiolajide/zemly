@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { balanceMultiSourceNote, promptGemini } from '../_shared/gemini.ts';
+import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface PodcastRequest {
     noteContent: string;
@@ -81,7 +82,7 @@ function buildCoveragePrompt(note: string): string {
     const sourceDigest = sections
         .map((section, idx) => {
             const clipped = section.body.slice(0, 30000);
-            return `SOURCE ${idx + 1}: ${section.label}\n${clipped}`;
+            return `SOURCE ${idx + 1}: ${section.label}\n${sanitizeNoteForPrompt(clipped)}`;
         })
         .join('\n\n');
 
@@ -327,7 +328,7 @@ serve(async (req: Request) => {
         }
 
         const cleanedNote = preparePodcastNote(noteContent);
-        const note = balanceMultiSourceNote(cleanedNote, 24000); // Keep all source blocks represented
+        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(cleanedNote, 24000)); // Keep all source blocks represented
 
         const prompt = buildCoveragePrompt(note);
 

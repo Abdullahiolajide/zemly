@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
 import { streamGemini, callGemini, truncateNote } from '../_shared/gemini.ts';
+import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface ChatRequest {
     noteContent: string;
@@ -39,9 +40,9 @@ serve(async (req: Request) => {
         // Use memory if available (follow-ups), otherwise note context (first message).
         // Never send both — memory already captures the note content.
         const contextBlock = hasMemory
-            ? `\n\nCOMPACT NOTE MEMORY:\n${memory}`
+            ? `\n\nCOMPACT NOTE MEMORY:\n${sanitizeNoteForPrompt(memory || '')}`
             : hasNoteContext
-                ? `\n\nNOTE CONTEXT:\n${truncateNote(noteContent)}`
+                ? `\n\nNOTE CONTEXT:\n${sanitizeNoteForPrompt(truncateNote(noteContent))}`
                 : '';
 
         const systemInstruction = isFirstMessage
@@ -148,7 +149,7 @@ Rules:
 - Plain text only, no markdown code fences.
 
 NOTE:
-${truncateNote(noteContent)}`;
+${sanitizeNoteForPrompt(truncateNote(noteContent))}`;
 
                             const { text: memoryText } = await callGemini([
                                 { role: 'user', parts: [{ text: memoryPrompt }] },

@@ -27,7 +27,7 @@ const Navbar: React.FC = () => {
                 {/* Desktop Nav Links */}
                 <div className="hidden items-center gap-8 md:flex">
                     <a
-                        href="#features"
+                        href="/#features"
                         className="text-sm font-medium text-zinc-500 transition-colors duration-200 hover:text-zinc-900"
                         style={{ color: 'var(--text-sidebar)', }}
                         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
@@ -35,24 +35,24 @@ const Navbar: React.FC = () => {
                     >
                         Features
                     </a>
-                    <a
-                        href="#pricing"
-                        className="text-sm font-medium transition-colors duration-200"
-                        style={{ color: 'var(--text-sidebar)' }}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
-                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
-                    >
-                        Pricing
-                    </a>
-                    <a
-                        href="#about"
+                    <Link
+                        to="/about"
                         className="text-sm font-medium transition-colors duration-200"
                         style={{ color: 'var(--text-sidebar)' }}
                         onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
                         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
                     >
                         About
-                    </a>
+                    </Link>
+                    <Link
+                        to="/contact"
+                        className="text-sm font-medium transition-colors duration-200"
+                        style={{ color: 'var(--text-sidebar)' }}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar-hover)')}
+                        onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'var(--text-sidebar)')}
+                    >
+                        Contact
+                    </Link>
                 </div>
 
                 {/* Desktop Right Section */}
@@ -111,29 +111,29 @@ const Navbar: React.FC = () => {
                 >
                     <div className="flex flex-col gap-5">
                         <a
-                            href="#features"
+                            href="/#features"
                             className="text-base font-medium transition-colors duration-200"
                             style={{ color: 'var(--text-sidebar)' }}
                             onClick={() => setMobileOpen(false)}
                         >
                             Features
                         </a>
-                        <a
-                            href="#pricing"
-                            className="text-base font-medium transition-colors duration-200"
-                            style={{ color: 'var(--text-sidebar)' }}
-                            onClick={() => setMobileOpen(false)}
-                        >
-                            Pricing
-                        </a>
-                        <a
-                            href="#about"
+                        <Link
+                            to="/about"
                             className="text-base font-medium transition-colors duration-200"
                             style={{ color: 'var(--text-sidebar)' }}
                             onClick={() => setMobileOpen(false)}
                         >
                             About
-                        </a>
+                        </Link>
+                        <Link
+                            to="/contact"
+                            className="text-base font-medium transition-colors duration-200"
+                            style={{ color: 'var(--text-sidebar)' }}
+                            onClick={() => setMobileOpen(false)}
+                        >
+                            Contact
+                        </Link>
 
                         <div className="my-1 h-px w-full" style={{ background: 'var(--border-glass)' }} />
 
