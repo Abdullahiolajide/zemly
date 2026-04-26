@@ -233,6 +233,60 @@ html.light .btn-emerald:hover {
   box-shadow: 0 6px 20px rgba(0, 168, 122, 0.25);
 }
 
+/* Auth page polish */
+.auth-mode-panel {
+  animation: authPanelIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes authPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes authFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+html.light .auth-google-btn {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #22221f;
+}
+
+html.light .auth-google-btn:hover {
+  background: #f7f7f5;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+html.light .auth-input {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #1a1a18;
+}
+
+html.light .auth-input:focus {
+  background: #ffffff;
+  border-color: rgba(0, 168, 122, 0.55);
+  box-shadow: 0 0 0 3px rgba(0, 168, 122, 0.12);
+}
+
+html.light .auth-input::placeholder {
+  color: rgba(26, 26, 24, 0.42);
+}
+
 /* ══════════════════════════════════════════════════════
    GLASSMORPHISM CARD
 ══════════════════════════════════════════════════════ */

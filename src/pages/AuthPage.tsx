@@ -4,10 +4,67 @@ import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabaseClient';
 import Logo from '../components/Logo';
 
+type EyeIconProps = {
+    visible: boolean;
+};
+
+const EyeIcon: React.FC<EyeIconProps> = ({ visible }) => {
+    if (visible) {
+        return (
+            <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                    d="M2 12c1.7-3.7 5.3-6 10-6s8.3 2.3 10 6c-1.7 3.7-5.3 6-10 6S3.7 15.7 2 12Z"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+                <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+            </svg>
+        );
+    }
+
+    return (
+        <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+                d="M3 3 21 21"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M10.6 6.25A10.2 10.2 0 0 1 12 6c4.7 0 8.3 2.3 10 6a10.56 10.56 0 0 1-3.06 3.84"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M6.2 6.83A11.1 11.1 0 0 0 2 12c1.7 3.7 5.3 6 10 6 1.47 0 2.82-.23 4.03-.66"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M9.88 9.88A3 3 0 0 0 14.12 14.12"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+        </svg>
+    );
+};
+
 const AuthPage: React.FC = () => {
     const [isSignUp, setIsSignUp] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isGoogleLoading, setIsGoogleLoading] = useState(false);
     const [error, setError] = useState('');
@@ -20,6 +77,17 @@ const AuthPage: React.FC = () => {
         e.preventDefault();
         setError('');
         setSuccessMessage('');
+
+        if (isSignUp) {
+            setShowPassword(false);
+            setShowConfirmPassword(false);
+        }
+
+        if (isSignUp && password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+
         setIsSubmitting(true);
         setLoading(true);
 
@@ -41,11 +109,13 @@ const AuthPage: React.FC = () => {
                     setSuccessMessage(
                         'Account created! Check your email for a confirmation link.'
                     );
+                    setConfirmPassword('');
                     return;
                 }
 
                 // If auto-confirmed (e.g. email confirmation disabled in Supabase)
                 if (data.session) {
+                    setConfirmPassword('');
                     navigate('/dashboard');
                 }
             } else {
@@ -122,13 +192,16 @@ const AuthPage: React.FC = () => {
                     </p>
                 </div>
 
-                <div className="px-1 py-1 sm:px-2">
+                <div
+                    key={isSignUp ? 'signup' : 'signin'}
+                    className="auth-mode-panel px-1 py-1 sm:px-2"
+                >
                     {/* Google Sign In */}
                     <button
                         type="button"
                         onClick={handleGoogleSignIn}
                         disabled={isGoogleLoading || isSubmitting}
-                        className="flex h-12 w-full items-center justify-center gap-3 bg-zinc-900/80 text-sm font-medium text-zinc-200 transition-colors duration-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="auth-google-btn flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/80 text-sm font-medium text-zinc-200 transition-colors duration-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         {isGoogleLoading ? (
                             <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-400/30 border-t-zinc-400" />
@@ -183,11 +256,13 @@ const AuthPage: React.FC = () => {
                             <input
                                 id="auth-email"
                                 type="email"
+                                name="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 placeholder="you@gmail.com"
+                                autoComplete="email"
                                 required
-                                className="w-full bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
+                                className="auth-input w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
                                 style={{ fontFamily: "'DM Sans', sans-serif" }}
                             />
                         </div>
@@ -200,18 +275,67 @@ const AuthPage: React.FC = () => {
                             >
                                 Password
                             </label>
-                            <input
-                                id="auth-password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Enter your password"
-                                required
-                                minLength={6}
-                                className="w-full bg-zinc-900/60 px-4 py-3.5 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
-                                style={{ fontFamily: "'DM Sans', sans-serif" }}
-                            />
+                            <div className="relative">
+                                <input
+                                    id="auth-password"
+                                    type={showPassword ? 'text' : 'password'}
+                                    name="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter your password"
+                                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                                    required
+                                    minLength={6}
+                                    className="auth-input w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3.5 pr-12 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
+                                    style={{ fontFamily: "'DM Sans', sans-serif" }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword((prev) => !prev)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 transition-colors duration-150 hover:text-zinc-300"
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                    aria-pressed={showPassword}
+                                >
+                                    <EyeIcon visible={showPassword} />
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Confirm Password (Sign Up only) */}
+                        {isSignUp && (
+                            <div className="animate-[authFieldIn_220ms_ease-out] flex flex-col gap-2">
+                                <label
+                                    htmlFor="auth-confirm-password"
+                                    className="text-sm font-medium text-zinc-300"
+                                >
+                                    Confirm Password
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        id="auth-confirm-password"
+                                        type={showConfirmPassword ? 'text' : 'password'}
+                                        name="confirmPassword"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        placeholder="Confirm your password"
+                                        autoComplete="new-password"
+                                        required={isSignUp}
+                                        minLength={6}
+                                        className="auth-input w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3.5 pr-12 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition-colors duration-200 focus:bg-zinc-900/80"
+                                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword((prev) => !prev)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-zinc-500 transition-colors duration-150 hover:text-zinc-300"
+                                        aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                                        aria-pressed={showConfirmPassword}
+                                    >
+                                        <EyeIcon visible={showConfirmPassword} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Error */}
                         {error && (
@@ -255,6 +379,9 @@ const AuthPage: React.FC = () => {
                                 setIsSignUp(!isSignUp);
                                 setError('');
                                 setSuccessMessage('');
+                                setConfirmPassword('');
+                                setShowPassword(false);
+                                setShowConfirmPassword(false);
                             }}
                             className="font-semibold transition-colors duration-200"
                             style={{ color: '#00C896' }}
