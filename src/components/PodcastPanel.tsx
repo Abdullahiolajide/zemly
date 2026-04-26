@@ -9,6 +9,7 @@ import {
     IoPlaySkipForwardSharp, IoPlaySkipBackSharp,
     IoVolumeHighOutline, IoVolumeMuteOutline,
 } from 'react-icons/io5';
+import { MdRefresh } from 'react-icons/md';
 import { HiOutlineHand } from 'react-icons/hi';
 import type { PodcastLine } from '../lib/aiService';
 import { generatePodcast, generatePodcastAudio, generateRaiseHandResponseStreaming } from '../lib/aiService';
@@ -99,6 +100,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
     const [error, setError] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generationPhase, setGenerationPhase] = useState<'script' | 'audio'>('script');
+    const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
 
     /* ── Player state ── */
     const [isPlaying, setIsPlaying] = useState(false);
@@ -715,6 +717,31 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         }
     }, [getNoteText, noteId, setupAudioElement]);
 
+    /* ── Regenerate audio only ── */
+    const handleRegenerateAudio = useCallback(async () => {
+        if (normalizedScript.length === 0) {
+            setError('No script available. Generate a podcast first.');
+            return;
+        }
+
+        setIsRegeneratingAudio(true);
+        setError(null);
+        pauseMainPlayer();
+
+        try {
+            const audioBlob = await generatePodcastAudio(normalizedScript);
+            setupAudioElement(audioBlob);
+            await uploadPodcastAudio(noteId, audioBlob);
+            setHasAudio(true);
+            posthog.capture('podcast_audio_regenerated', { note_id: noteId });
+        } catch (err) {
+            console.error('Audio regeneration failed:', err);
+            setError(err instanceof Error ? err.message : 'Failed to regenerate audio');
+        } finally {
+            setIsRegeneratingAudio(false);
+        }
+    }, [normalizedScript, setupAudioElement, noteId, pauseMainPlayer]);
+
     /* ── Player controls ── */
     const togglePlay = () => {
         if (hasAudio && audioRef.current) {
@@ -1051,6 +1078,19 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                                             title={hasAudio ? 'Download audio' : 'Audio not available'}
                                         >
                                             <BsDownload className="h-4 w-4" />
+                                        </button>
+
+                                        <button
+                                            onClick={handleRegenerateAudio}
+                                            disabled={isRegeneratingAudio || normalizedScript.length === 0}
+                                            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-30"
+                                            title={normalizedScript.length === 0 ? 'Generate script first' : 'Regenerate audio'}
+                                        >
+                                            {isRegeneratingAudio ? (
+                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-500/30 border-t-zinc-300" />
+                                            ) : (
+                                                <MdRefresh className="h-4 w-4" />
+                                            )}
                                         </button>
                                     </div>
                                 </div>

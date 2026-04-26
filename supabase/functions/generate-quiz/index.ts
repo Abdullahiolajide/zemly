@@ -129,8 +129,8 @@ serve(async (req: Request) => {
 RULES:
 - Handle content coverage: If the note has multiple SOURCE blocks, sample questions across all sources.
 - Meaningful depth: Decide the number of high-quality questions you can generate depending on the note length, max - 100 questions
-- Generate 1 question per major concept or named term in the note.
-- Do not stop early. Cover the entire note.
+- Generate well though natural questons a way humans would ask them, not like a robot
+- Do not stop early. Cover the entire note. and a bit of inbetweens
 - Prioritize quality and coverage over quantity.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.

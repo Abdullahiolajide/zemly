@@ -336,7 +336,6 @@ serve(async (req: Request) => {
             temperature: 0.7,
             maxOutputTokens: 6144,
             responseMimeType: 'application/json',
-            responseSchema: PODCAST_RESPONSE_SCHEMA,
         });
 
         let parsed: { script?: PodcastLine[] };

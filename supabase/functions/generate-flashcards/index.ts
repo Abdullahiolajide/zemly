@@ -135,7 +135,7 @@ serve(async (req: Request) => {
         const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
         Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length, max - 100 questions
-        - Generate 1 question per major concept or named term in the note.
+        - Generate well though natural questons a way humans would ask them, not like a robot
         - Do not stop early. Cover the entire note.
         Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
