@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import posthog from 'posthog-js';
 import { startRecognition, warmupSpeechRecognition } from '../lib/speechService';
 import type { RecognitionHandle } from '../lib/speechService';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -540,6 +541,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
                         }
                     }
 
+                    posthog.capture('podcast_generated', { note_id: noteId, has_audio: !!saved.audioUrl });
                     setView('player');
                     return;
                 }

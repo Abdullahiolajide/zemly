@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import posthog from 'posthog-js';
 import { MdAutoAwesome } from 'react-icons/md';
 import type { FlashcardCard, FlashcardStatus } from '../types';
 import type { Flashcard } from '../lib/aiService';
@@ -40,6 +41,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                     const existingCards = await getFlashcards(existingSet.id);
                     setSetId(existingSet.id);
                     setCards(existingCards);
+                    posthog.capture('flashcard_opened', { note_id: noteId, card_count: existingCards.length });
                     setView('overview');
                 }
             } catch (err) {
@@ -63,6 +65,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
             const { set, cards: savedCards } = await saveFlashcardSet(noteId, generated.map((c) => ({ front: c.front, back: c.back })));
             setSetId(set.id);
             setCards(savedCards);
+            posthog.capture('flashcard_opened', { note_id: noteId, card_count: savedCards.length });
             setView('overview');
         } catch (err) {
             console.error('Flashcard generation failed:', err);

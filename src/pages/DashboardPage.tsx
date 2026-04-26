@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import posthog from 'posthog-js';
 import {
     BlankDocumentModal,
     AudioModal,
@@ -229,6 +230,8 @@ const DashboardPage: React.FC = () => {
     useEffect(() => {
         if (paymentBanner !== 'success' || !user?.id) return;
 
+        posthog.capture('subscription_started', { user_id: user.id, user_email: user.email });
+
         let cancelled = false;
         const refreshSubscription = async () => {
             try {
@@ -412,6 +415,7 @@ const DashboardPage: React.FC = () => {
                 return;
             }
             const note = await createNote(title);
+            posthog.capture('note_created', { note_type: 'blank', note_id: note.id });
             navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create note:', err);
@@ -537,7 +541,7 @@ const DashboardPage: React.FC = () => {
                 fileName,
                 result.noteContent,
             );
-
+            posthog.capture('youtube_note_generated', { note_id: note.id, source_url: result.sourceUrl });
             navigate(buildNotePath(note.id));
         } catch (err) {
             console.error('Failed to create link note:', err);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import posthog from 'posthog-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { IoCheckmark, IoClose } from 'react-icons/io5';
@@ -96,6 +97,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             setAnswersMap({});
             setExplanationsMap({});
             setLoadingExplanation(false);
+            posthog.capture('quiz_started', { note_id: noteId, question_count: saved.length });
             setView('quiz');
         } catch (err) {
             console.error('Quiz generation failed:', err);
