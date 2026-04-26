@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { requireAuth } from '../_shared/auth.ts';
 
 const DODO_API_URL = 'https://api.dodopayments.com';
 const DODO_TEST_API_URL = 'https://test.dodopayments.com';
@@ -51,6 +52,9 @@ Deno.serve(async (req: Request) => {
         });
     }
 
+    const { user, unauthorized } = await requireAuth(req);
+    if (unauthorized) return unauthorized;
+
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL');
         const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -71,16 +75,8 @@ Deno.serve(async (req: Request) => {
             global: { headers: { Authorization: authHeader } },
         });
 
-        const { data: authData, error: authError } = await supabase.auth.getUser();
-        if (authError || !authData.user) {
-            return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-                status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-        }
-
-        const userId = authData.user.id;
-        const email = authData.user.email?.trim().toLowerCase() || null;
+        const userId = user!.id;
+        const email = user!.email?.trim().toLowerCase() || null;
 
         const subscription = await lookupSubscription(supabase, userId, email);
 

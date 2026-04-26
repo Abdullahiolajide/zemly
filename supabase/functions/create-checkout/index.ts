@@ -1,16 +1,18 @@
 // supabase/functions/create-checkout/index.ts
 // Creates a Dodo Payments checkout session for the Zemly Unlimited plan.
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { requireAuth } from '../_shared/auth.ts';
 
 const DODO_API_URL = 'https://api.dodopayments.com';       // live
 const DODO_TEST_API_URL = 'https://test.dodopayments.com'; // test
 
 Deno.serve(async (req: Request) => {
     // Handle CORS pre-flight
-    if (req.method === 'OPTIONS') {
-        return new Response('ok', { headers: corsHeaders });
-    }
+    if (req.method === 'OPTIONS') return handleCors();
+
+    const { unauthorized } = await requireAuth(req);
+    if (unauthorized) return unauthorized;
 
     try {
         const DODO_API_KEY = Deno.env.get('DODO_PAYMENTS_API_KEY');

@@ -12,6 +12,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 import { streamGemini, truncateNote } from '../_shared/gemini.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { requireAuth } from '../_shared/auth.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface RaiseHandRequest {
@@ -142,6 +143,9 @@ function extractSentences(
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
+
+    const { unauthorized } = await requireAuth(req);
+    if (unauthorized) return unauthorized;
 
     // ── Parse & validate (before we start streaming) ──
     let parsed: RaiseHandRequest;

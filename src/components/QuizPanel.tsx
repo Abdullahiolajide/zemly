@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import ReactMarkdown from 'react-markdown';
 import posthog from 'posthog-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
@@ -443,8 +445,33 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                                             className="mb-4 rounded-xl p-4 sm:p-5"
                                             style={{ border: '1px solid var(--brand-emerald)', background: 'rgba(0,200,150,0.04)' }}
                                         >
-                                            <p className="mb-2 text-[13px] font-bold text-zinc-100">Here's an explanation of the correct answer</p>
-                                            <p className="text-[13px] leading-relaxed text-zinc-300">{explanation}</p>
+                                            <p className="mb-2 text-[14px] font-bold text-zinc-100 sm:text-[15px]">Here's an explanation of the correct answer</p>
+                                            <div className="prose prose-invert max-w-none text-[14px] leading-relaxed text-zinc-300 sm:text-[15px]">
+                                                <ReactMarkdown
+                                                    components={{
+                                                        p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                                                        ul: ({ children }) => <ul className="mb-2 ml-4 list-inside list-disc space-y-1 leading-relaxed">{children}</ul>,
+                                                        ol: ({ children }) => <ol className="mb-2 ml-4 list-inside list-decimal space-y-1 leading-relaxed">{children}</ol>,
+                                                        li: ({ children }) => <li className="ml-0">{children}</li>,
+                                                        h1: ({ children }) => <h1 className="mb-2 text-base font-bold">{children}</h1>,
+                                                        h2: ({ children }) => <h2 className="mb-2 text-sm font-bold">{children}</h2>,
+                                                        h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold">{children}</h3>,
+                                                        strong: ({ children }) => <strong className="font-semibold text-emerald-300">{children}</strong>,
+                                                        em: ({ children }) => <em className="italic text-zinc-300">{children}</em>,
+                                                        code: ({ children, className }: { children?: ReactNode; className?: string }) => {
+                                                            const isInline = !className?.includes('language-');
+                                                            return isInline ? (
+                                                                <code className="inline-block rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-emerald-300">{children}</code>
+                                                            ) : (
+                                                                <code className="mb-2 block rounded bg-zinc-800 p-2 text-xs font-mono text-emerald-300">{children}</code>
+                                                            );
+                                                        },
+                                                        blockquote: ({ children }) => <blockquote className="mb-2 border-l-2 border-emerald-400/50 pl-3 italic text-zinc-400">{children}</blockquote>,
+                                                    }}
+                                                >
+                                                    {explanation}
+                                                </ReactMarkdown>
+                                            </div>
                                         </div>
                                     )}
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">

@@ -3,6 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { requireAuth } from '../_shared/auth.ts';
 import { streamGemini, callGemini, truncateNote } from '../_shared/gemini.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
@@ -14,6 +15,9 @@ interface ChatRequest {
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
+
+    const { unauthorized } = await requireAuth(req);
+    if (unauthorized) return unauthorized;
 
     try {
         const { noteContent, messages, memory } = (await req.json()) as ChatRequest;

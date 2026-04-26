@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { FiChevronLeft } from 'react-icons/fi';
 import { IoClose, IoCheckmark } from 'react-icons/io5';
 import type { FlashcardCard, FlashcardStatus } from '../types';
@@ -25,7 +25,7 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
     const learningCount = cards.filter((c) => c.status === 'learning').length;
     const masteredCount = cards.filter((c) => c.status === 'mastered').length;
 
-    const activeCards = cards.filter((c) => c.status !== 'mastered');
+    const activeCards = useMemo(() => cards.filter((c) => c.status !== 'mastered'), [cards]);
     const currentCardId = sessionQueueIds[0] ?? null;
     const currentCard = currentCardId ? cards.find((c) => c.id === currentCardId) ?? null : null;
     const progressPercent = cards.length > 0 ? (masteredCount / cards.length) * 100 : 0;
@@ -37,6 +37,12 @@ const FlashcardsStudy: React.FC<FlashcardsStudyProps> = ({ cards, onBack, onCard
         setSessionQueueIds((prev) => {
             const kept = prev.filter((id) => activeSet.has(id));
             const missing = activeIds.filter((id) => !kept.includes(id));
+            
+            // If the queue already correctly contains the active cards in the exact same order, don't update state
+            if (kept.length === prev.length && missing.length === 0) {
+                return prev;
+            }
+            
             return [...kept, ...missing];
         });
     }, [activeCards]);

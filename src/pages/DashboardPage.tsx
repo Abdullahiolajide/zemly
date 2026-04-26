@@ -472,6 +472,7 @@ const DashboardPage: React.FC = () => {
             noteContent: string;
             extractedText: string;
             publicUrl: string;
+            path?: string;
         }[] = [];
 
         try {
@@ -487,6 +488,7 @@ const DashboardPage: React.FC = () => {
                     file,
                     ...extracted,
                     publicUrl: upload.publicUrl,
+                    path: upload.path,
                 });
             }
 
@@ -503,7 +505,7 @@ const DashboardPage: React.FC = () => {
                 .map((item) => item.noteContent)
                 .join('\n\n');
 
-            const sourceUrl = perFileResults[0]?.publicUrl || '';
+            const sourceUrl = perFileResults[0]?.path || perFileResults[0]?.publicUrl || '';
             const fileName = files.map((f) => f.name).join(' | ');
 
             const note = await createAudioNote(

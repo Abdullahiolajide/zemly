@@ -144,6 +144,7 @@ const NotePage: React.FC = () => {
     const [subscription, setSubscription] = useState<UserSubscriptionRecord | null>(null);
     const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
+    const [isEditorHydrated, setIsEditorHydrated] = useState(false);
     const editorContentRef = useRef<HTMLDivElement>(null);
     const [, setEditorKey] = useState(0);
     const youtubeVideoId = note?.source_type === 'link' ? getYouTubeVideoId(note.source_url) : null;
@@ -257,8 +258,16 @@ const NotePage: React.FC = () => {
             },
         },
         onUpdate: ({ editor: ed }) => { handleAutoSave(ed.getJSON() as Record<string, unknown>); },
-        onCreate: ({ editor: ed }) => { migrateMathStrings(ed); },
-        onTransaction: () => { setEditorKey((k) => k + 1); },
+        onCreate: ({ editor: ed }) => {
+            requestAnimationFrame(() => {
+                if (!ed.isDestroyed) migrateMathStrings(ed);
+            });
+        },
+        onTransaction: () => {
+            requestAnimationFrame(() => {
+                setEditorKey((k) => k + 1);
+            });
+        },
     });
 
    useEffect(() => {
@@ -275,10 +284,15 @@ const NotePage: React.FC = () => {
                             typeof data.content === 'string' ? data.content : data.content
                         );
                         requestAnimationFrame(() => {
-                            if (!editor.isDestroyed) migrateMathStrings(editor);
+                            if (!editor.isDestroyed) {
+                                migrateMathStrings(editor);
+                                setIsEditorHydrated(true);
+                            }
                         });
                     }
                 }, 0);
+            } else {
+                setIsEditorHydrated(true);
             }
         } catch (err) { console.error('Failed to load note:', err); }
         finally { setLoading(false); }
@@ -303,16 +317,25 @@ const NotePage: React.FC = () => {
                 return;
             }
 
+            let fetchUrl = note.source_url;
             try {
                 setDocumentViewerError(null);
 
                 // Determine fetch URL - handle both storage paths and full URLs
-                let fetchUrl = note.source_url;
-                if (!note.source_url.startsWith('http')) {
+                let storagePath = note.source_url;
+
+                // Extract path if it's a full Supabase storage URL
+                if (storagePath.includes('/object/public/documents/')) {
+                    storagePath = storagePath.split('/object/public/documents/')[1];
+                } else if (storagePath.includes('/object/sign/documents/')) {
+                    storagePath = storagePath.split('/object/sign/documents/')[1].split('?')[0];
+                }
+
+                if (!storagePath.startsWith('http')) {
                     const { data: signedData } = await supabase.storage
                         .from('documents')
-                        .createSignedUrl(note.source_url, 604800);
-                    fetchUrl = signedData?.signedUrl ?? '';
+                        .createSignedUrl(storagePath, 604800);
+                    fetchUrl = signedData?.signedUrl ?? fetchUrl;
                 }
 
                 const res = await fetch(fetchUrl);
@@ -328,7 +351,10 @@ const NotePage: React.FC = () => {
             } catch {
                 if (!isCancelled) {
                     // Fallback to direct URL if blob-based loading fails.
-                    setDocumentViewerUrl(note.source_url);
+                    // We must use fetchUrl because note.source_url could be a raw path.
+                    // But if fetchUrl is not a full URL (e.g. signedData failed), we'll try to fallback.
+                    const finalUrl = (fetchUrl && fetchUrl.startsWith('http')) ? fetchUrl : note.source_url;
+                    setDocumentViewerUrl(finalUrl);
                     setDocumentViewerError('Could not preload the document. Showing direct link mode.');
                 }
             }
@@ -737,8 +763,18 @@ const NotePage: React.FC = () => {
                                 })()}
 
                                 {/* Editor Content */}
-                                <div ref={editorContentRef}>
-                                    <EditorContent editor={editor} />
+                                <div ref={editorContentRef} className="relative min-h-[60vh]">
+                                    {!isEditorHydrated && (
+                                        <div className="absolute inset-0 z-10 flex pt-6 text-zinc-500">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-600 border-t-emerald-400" />
+                                                <span className="text-[13px] font-medium text-zinc-400">Loading editor...</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className={`transition-opacity duration-300 ${!isEditorHydrated ? 'opacity-0' : 'opacity-100'}`}>
+                                        <EditorContent editor={editor} />
+                                    </div>
                                 </div>
                                 {editor && <BubbleToolbar editor={editor} onAskAI={(text) => { setAskAiText(text); setChatPanelOpen(true); }} />}
                                 {editor && <ImageToolbar editor={editor} />}

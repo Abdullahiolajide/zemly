@@ -4,9 +4,13 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { requireAuth } from '../_shared/auth.ts';
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return handleCors();
+
+    const { unauthorized } = await requireAuth(req);
+    if (unauthorized) return unauthorized;
 
     const speechKey = Deno.env.get('AZURE_SPEECH_KEY');
     const speechRegion = Deno.env.get('AZURE_SPEECH_REGION') || 'southafricanorth';
