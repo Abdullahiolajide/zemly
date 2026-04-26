@@ -305,7 +305,17 @@ const NotePage: React.FC = () => {
 
             try {
                 setDocumentViewerError(null);
-                const res = await fetch(note.source_url);
+
+                // Determine fetch URL - handle both storage paths and full URLs
+                let fetchUrl = note.source_url;
+                if (!note.source_url.startsWith('http')) {
+                    const { data: signedData } = await supabase.storage
+                        .from('documents')
+                        .createSignedUrl(note.source_url, 604800);
+                    fetchUrl = signedData?.signedUrl ?? '';
+                }
+
+                const res = await fetch(fetchUrl);
                 if (!res.ok) throw new Error(`Failed to fetch document (${res.status})`);
 
                 const blob = await res.blob();

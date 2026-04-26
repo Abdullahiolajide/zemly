@@ -429,6 +429,7 @@ const DashboardPage: React.FC = () => {
         noteContent: string;
         extractedText: string;
         publicUrls: string[];
+        paths?: string[];
     }) => {
         try {
             if (freeNoteLimitReached) {
@@ -441,7 +442,7 @@ const DashboardPage: React.FC = () => {
                 .join('\n')
                 .trim();
 
-            const sourceUrl = result.publicUrls[0] || '';
+            const sourceUrl = result.paths?.[0] || result.publicUrls[0] || '';
             const fileName = result.files.map((file) => file.name).join(' | ');
 
             const note = await createDocumentNote(

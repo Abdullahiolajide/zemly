@@ -564,6 +564,7 @@ interface DocumentUploadModalProps {
         noteContent: string;
         extractedText: string;
         publicUrls: string[];
+        paths?: string[];
     }) => void | Promise<void>;
 }
 
@@ -763,6 +764,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             noteContent: string;
             extractedText: string;
             publicUrl: string;
+            path: string;
         }[] = [];
 
         try {
@@ -796,6 +798,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                         file,
                         ...result,
                         publicUrl: uploaded.publicUrl,
+                        path: uploaded.path,
                     });
                 } catch (fileErr) {
                     const message = fileErr instanceof Error
@@ -837,6 +840,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 noteContent: combinedNoteContent,
                 extractedText: combinedExtractedText,
                 publicUrls: perFileResults.map((item) => item.publicUrl),
+                paths: perFileResults.map((item) => item.path),
             });
 
             generationCompletedRef.current = true;

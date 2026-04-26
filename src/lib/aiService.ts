@@ -205,11 +205,13 @@ export async function uploadDocumentToStorage(
         xhr.send(file);
     });
 
-    // 2. Get the public URL
-    const { data: urlData } = supabase.storage.from('documents').getPublicUrl(safeFileName);
+    // 2. Get the signed URL
+    const { data: signedData } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(safeFileName, 604800);
     return {
         path: safeFileName,
-        publicUrl: urlData.publicUrl,
+        publicUrl: signedData?.signedUrl ?? '',
     };
 }
 
@@ -277,7 +279,7 @@ export async function uploadAndExtractDocument(
     });
     return {
         ...extracted,
-        publicUrl: upload.publicUrl,
+        publicUrl: upload.path,
     };
 }
 

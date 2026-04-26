@@ -451,6 +451,10 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
         setRaiseHandTurns([]);
         questionBufferRef.current = '';
 
+        // Show loading state immediately
+        setRaiseHandStatus('connecting');
+        setMode('raise-hand-listening');
+
         // Pre-load Azure Speech SDK + token
         await warmupSpeechRecognition();
 

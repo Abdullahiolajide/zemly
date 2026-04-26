@@ -31,11 +31,11 @@ export async function getPodcastSession(noteId: number): Promise<PodcastSessionD
 
     let audioUrl: string | null = null;
     if (row.audio_path) {
-        const { data: publicUrlData } = supabase.storage
-            .from(PODCAST_AUDIO_BUCKET)
-            .getPublicUrl(row.audio_path);
-        audioUrl = publicUrlData.publicUrl;
-    }
+    const { data: signedData } = await supabase.storage
+        .from(PODCAST_AUDIO_BUCKET)
+        .createSignedUrl(row.audio_path, 604800);
+    audioUrl = signedData?.signedUrl ?? null;
+}
 
     return {
         script,
