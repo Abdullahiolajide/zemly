@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import posthog from 'posthog-js';
 import LandingPage from '../pages/LandingPage';
 import AuthPage from '../pages/AuthPage';
+import VerifyEmailPage from '../pages/VerifyEmailPage';
 import DashboardPage from '../pages/DashboardPage';
 import NotePage from '../pages/NotePage';
 import TermsPage from '../pages/TermsPage';
@@ -26,6 +27,7 @@ const AppRouter: React.FC = () => {
             <Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<AuthPage />} />
+                <Route path="/auth/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/about" element={<AboutPage />} />

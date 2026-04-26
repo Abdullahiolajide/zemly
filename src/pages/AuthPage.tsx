@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { supabase } from '../lib/supabaseClient';
 import Logo from '../components/Logo';
@@ -59,8 +59,11 @@ const EyeIcon: React.FC<EyeIconProps> = ({ visible }) => {
 };
 
 const AuthPage: React.FC = () => {
-    const [isSignUp, setIsSignUp] = useState(false);
-    const [email, setEmail] = useState('');
+    const [searchParams] = useSearchParams();
+    const [isSignUp, setIsSignUp] = useState(
+        searchParams.get('mode') === 'signup'
+    );
+    const [email, setEmail] = useState(searchParams.get('email') ?? '');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -72,6 +75,20 @@ const AuthPage: React.FC = () => {
 
     const { setLoading } = useAuthStore();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        const mode = searchParams.get('mode');
+        const prefillEmail = searchParams.get('email') ?? '';
+
+        setIsSignUp(mode === 'signup');
+        setEmail(prefillEmail);
+        setPassword('');
+        setConfirmPassword('');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+        setError('');
+        setSuccessMessage('');
+    }, [searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -106,10 +123,10 @@ const AuthPage: React.FC = () => {
 
                 // Check if email confirmation is required
                 if (data.user && !data.session) {
-                    setSuccessMessage(
-                        'Account created! Check your email for a confirmation link.'
-                    );
                     setConfirmPassword('');
+                    navigate(
+                        `/auth/verify-email?email=${encodeURIComponent(email)}`
+                    );
                     return;
                 }
 
