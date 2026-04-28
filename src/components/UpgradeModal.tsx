@@ -130,20 +130,22 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
         <>
             {/* Main Upgrade Modal */}
             <div
-                className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm transition-opacity duration-300 opacity-100 cursor-pointer sm:items-center sm:p-4 animate-[fadeIn_150ms_ease-out]"
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-300 opacity-100 cursor-pointer animate-[fadeIn_150ms_ease-out]"
                 onClick={onClose}
             >
                 <div
-                    className="relative w-full max-w-[600px] max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain rounded-t-3xl bg-[var(--bg-main)] p-0 cursor-default shadow-[0_32px_80px_rgba(0,0,0,0.28),0_0_0_1px_rgba(255,255,255,0.03)] sm:mx-4 sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl animate-[modalSlideUp_250ms_ease-out]"
+                    className="relative mx-4 w-full max-w-[520px] sm:max-w-[600px] max-h-[calc(100vh-1rem)] overflow-y-auto rounded-2xl p-0 cursor-default animate-[modalSlideUp_250ms_ease-out]"
                     style={{
+                        background: 'var(--bg-main)',
                         border: '1px solid var(--border-glass-strong)',
+                        boxShadow: '0 32px 80px rgba(0,0,0,0.28), 0 0 0 1px rgba(255,255,255,0.03)',
                     }}
                     onClick={(e) => e.stopPropagation()}
                 >
                 {/* Close button */}
                 <button
                     onClick={onClose}
-                    className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full transition-all sm:right-4 sm:top-4"
+                    className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full transition-all"
                     style={{
                         background: 'var(--bg-glass-hover)',
                         color: 'var(--text-sidebar)',
@@ -155,7 +157,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
 
                 {/* Header with gradient accent */}
                 <div
-                    className="relative overflow-hidden rounded-t-3xl px-5 pb-5 pt-12 text-center sm:px-10 sm:pb-6 sm:pt-10"
+                    className="relative overflow-hidden rounded-t-2xl px-6 pb-3 pt-6 sm:px-10 sm:pb-6 sm:pt-10 text-center"
                     style={{
                         background: 'linear-gradient(180deg, rgba(0,200,150,0.08) 0%, transparent 100%)',
                     }}
@@ -168,7 +170,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
 
                     <div className="relative">
                         <h2
-                            className="text-[1.05rem] font-bold leading-tight sm:text-xl"
+                            className="text-[15px] sm:text-xl font-bold"
                             style={{
                                 color: cardText,
                                 fontFamily: "'Bricolage Grotesque', sans-serif",
@@ -177,29 +179,29 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                         >
                             Unlock Everything with Unlimited
                         </h2>
-                        <p className="mt-2 text-sm leading-relaxed sm:text-[15px]" style={{ color: cardMutedText }}>
+                        <p className="mt-1 text-[12px] sm:mt-2 sm:text-[15px]" style={{ color: cardMutedText }}>
                             Zemly AI is Faster and more Intelligent with Unlimited
                         </p>
                     </div>
                 </div>
 
                 {/* Features list */}
-                <div className="px-5 py-4 sm:px-10 sm:py-5">
-                    <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                <div className="px-6 py-2 sm:px-10 sm:py-5">
+                    <div className="flex flex-col gap-y-1.5 sm:gap-y-0">
                         {features.map((feature) => (
                             <div
                                 key={feature.text}
-                                className="flex items-start gap-3 rounded-xl border border-transparent py-2"
+                                className="flex items-start gap-2 sm:gap-3 my-0.5 sm:my-2"
                             >
                                 <div
-                                    className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
+                                    className="mt-0.5 flex h-5 w-5 sm:h-6 sm:w-6 shrink-0 items-center justify-center rounded-full"
                                     style={{ background: `${feature.color}18` }}
                                 >
-                                    <IoCheckmarkCircle className="h-4 w-4" style={{ color: feature.color }} />
+                                    <IoCheckmarkCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: feature.color }} />
                                 </div>
-                                <div className="min-w-0 flex flex-col gap-0.5 text-[14px] leading-relaxed sm:text-[15px]">
+                                <div className="min-w-0 flex items-center gap-2 sm:gap-3 text-[13px] sm:text-[15px] leading-relaxed">
                                     <div className="font-semibold" style={{ color: cardText }}>{feature.text}</div>
-                                    <div className="text-[12px] sm:text-[13px]" style={{ color: cardMutedText }}>{feature.detail}</div>
+                                    <div className="text-[11px] sm:text-[13px]" style={{ color: cardMutedText }}>{feature.detail}</div>
                                 </div>
                             </div>
                         ))}
@@ -207,14 +209,14 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                 </div>
 
                 {/* Pricing Cards */}
-                <div className="px-5 pb-4 sm:px-10 sm:pb-5">
+                <div className="px-6 pb-3 sm:px-10 sm:pb-5">
                     <div className="flex flex-col gap-3">
                         {pricingOptions.map((option) => {
                             const isSelected = billing === option.billing;
                             const isAnnual = option.billing === 'annual';
 
                             return (
-                                <div key={option.billing} className="relative">
+                                <div key={option.billing} className="relative ">
                                     {option.badge && (
                                         <div className="absolute left-1/2 -top-3 z-10 -translate-x-1/2">
                                             <span
@@ -229,7 +231,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                                     <button
                                         type="button"
                                         onClick={() => setBilling(option.billing)}
-                                        className="flex w-full flex-col gap-3 rounded-[18px] px-4 py-3 text-left transition-all duration-200 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                                        className="flex w-full items-center justify-between gap-3 sm:gap-4 rounded-[14px] sm:rounded-[18px] px-3 sm:px-4 py-2.5 sm:py-3 text-left transition-all duration-200"
                                         style={{
                                             background: isSelected
                                                 ? 'linear-gradient(180deg, rgba(0,200,150,0.12) 0%, rgba(0,200,150,0.06) 100%)'
@@ -251,21 +253,21 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                                                 {isSelected && <span className="h-3 w-3 rounded-full bg-[#00C896]" />}
                                             </span>
 
-                                            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                                                <span className="text-[16px] font-semibold" style={{ color: cardText }}>
+                                            <div className="flex min-w-0 flex-col items-start gap-0.5">
+                                                <span className="text-[13px] sm:text-[16px] font-semibold" style={{ color: cardText }}>
                                                     {option.label}
                                                 </span>
                                                 {isAnnual && (
-                                                    <span className="rounded-md bg-emerald-100 px-2.5 py-1 text-[12px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-500">
+                                                    <span className="rounded-sm bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-500">
                                                         Save 45%
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
 
-                                        <div className="shrink-0 text-left sm:text-right">
+                                        <div className="shrink-0 text-right">
                                             <div
-                                                className="text-[18px] font-semibold leading-none sm:text-[20px]"
+                                                className="text-[15px] sm:text-[20px] font-semibold leading-none"
                                                 style={{
                                                     color: cardText,
                                                     fontFamily: "'Bricolage Grotesque', sans-serif",
@@ -273,7 +275,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                                             >
                                                 {option.weeklyPrice}
                                             </div>
-                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] sm:justify-end sm:text-[14px]" style={{ color: cardMutedText }}>
+                                            <div className="mt-0.5 flex flex-wrap items-center justify-end gap-1 sm:gap-1.5 text-[11px] sm:text-[14px]" style={{ color: cardMutedText }}>
                                                 <span className="line-through">{option.originalPrice}</span>
                                                 <span>{option.billedText}</span>
                                             </div>
@@ -286,7 +288,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                 </div>
 
                 {/* CTA Button */}
-                <div className="px-5 pb-5 pt-1 sm:px-10 sm:pb-8 sm:pt-2">
+                <div className="px-6 pb-5 pt-2 sm:px-10 sm:pb-8">
                     {error && (
                         <p className="mb-3 rounded-lg px-3 py-2 text-[12px] font-medium text-red-400"
                             style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}
@@ -298,7 +300,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
                     <button
                         onClick={handleUpgrade}
                         disabled={isLoading}
-                        className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl py-3.5 text-base font-bold text-white transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl py-2.5 sm:py-3.5 text-[14px] sm:text-base font-bold text-white transition-transform duration-200 disabled:cursor-not-allowed disabled:opacity-60"
                         style={{
                             background: 'linear-gradient(90deg, #00A87A 0%, #008F66 50%, #00A87A 100%)',
                             backgroundSize: '200% 100%',
