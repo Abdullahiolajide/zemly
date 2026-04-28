@@ -8,11 +8,11 @@
 //   event: done   — final event with the full reply text
 //   event: error  — an error occurred
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { encode as base64Encode } from 'https://deno.land/std@0.168.0/encoding/base64.ts';
 import { streamGemini, truncateNote } from '../_shared/gemini.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 interface RaiseHandRequest {
@@ -141,11 +141,13 @@ function extractSentences(
     return { sentences, newCursor };
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
-    const { unauthorized } = await requireAuth(req);
+serveWithCors(async (req: Request) => {
+    
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'raise-hand-response', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     // ── Parse & validate (before we start streaming) ──
     let parsed: RaiseHandRequest;
@@ -154,7 +156,7 @@ serve(async (req: Request) => {
     } catch {
         return new Response(
             JSON.stringify({ error: 'Invalid request body' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
@@ -163,7 +165,7 @@ serve(async (req: Request) => {
     if (!question || !question.trim()) {
         return new Response(
             JSON.stringify({ error: 'A non-empty "question" value is required' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 400, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
@@ -173,7 +175,7 @@ serve(async (req: Request) => {
     if (!speechKey) {
         return new Response(
             JSON.stringify({ error: 'Azure Speech key is not configured on the server' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
@@ -329,7 +331,6 @@ Rules:
 
     return new Response(readable, {
         headers: {
-            ...corsHeaders,
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
         },

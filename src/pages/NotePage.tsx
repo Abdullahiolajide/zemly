@@ -559,7 +559,7 @@ const NotePage: React.FC = () => {
                 </aside>
 
                 {/* ─── MAIN CONTENT ─── */}
-                <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+                <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-y-auto">
                     {/* Top Bar */}
                     <div className="flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3" style={{ borderBottom: glassBorder }}>
                         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
@@ -850,7 +850,7 @@ const NotePage: React.FC = () => {
                     {/* ── Chat Bot Section ── */}
                     {activeSection === 'Chat Bot' && (
                         note?.source_type === 'document' && note.source_url ? (
-                            <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
                                 {/* PDF Viewer – hidden on mobile, shown on lg+ */}
                                 <div className="hidden flex-1 flex-col overflow-hidden lg:flex" style={{ borderRight: glassBorder }}>
                                     <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: glassBorder }}>
@@ -876,7 +876,7 @@ const NotePage: React.FC = () => {
                                     )}
                                 </div>
                                 {/* Chat panel */}
-                                <div className="flex flex-1 flex-col lg:w-[380px] lg:flex-none lg:shrink-0">
+                                <div className="flex min-h-0 flex-1 flex-col lg:w-[380px] lg:flex-none lg:shrink-0">
                                     <div
                                         className="flex items-center justify-between px-4 py-3"
                                         style={{ borderBottom: glassBorder, background: 'rgba(255,255,255,0.02)' }}
@@ -902,7 +902,7 @@ const NotePage: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex-1 overflow-hidden">
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                                 <ChatPanel
                                     getNoteText={() => editor?.getText() || ''}
                                     highlightedText={askAiText}

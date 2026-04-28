@@ -1,6 +1,6 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { promptGemini } from '../_shared/gemini.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
@@ -410,11 +410,14 @@ async function generateNotes(sourceUrl: string, readableText: string): Promise<{
     };
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
+serveWithCors(async (req: Request) => {
+    
 
-    const { unauthorized } = await requireAuth(req);
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'extract-link', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     try {
         const body = (await req.json()) as ExtractLinkRequest;
@@ -423,7 +426,7 @@ serve(async (req: Request) => {
         if (!sourceUrl || !isSupportedHttpUrl(sourceUrl)) {
             return new Response(
                 JSON.stringify({ error: 'A valid HTTP/HTTPS URL is required.' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -444,7 +447,7 @@ serve(async (req: Request) => {
         if (!noteContent) {
             return new Response(
                 JSON.stringify({ error: 'Could not generate notes from this URL.' }),
-                { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 422, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -455,14 +458,14 @@ serve(async (req: Request) => {
                 extractedText: readableText.slice(0, 600000),
                 sourceUrl,
             }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
     } catch (err) {
         const error = err as Error;
         console.error('extract-link error:', error);
         return new Response(
             JSON.stringify({ error: sanitizeGeminiError(error.message || 'Internal server error') }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

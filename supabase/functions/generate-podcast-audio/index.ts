@@ -2,9 +2,9 @@
 // Converts a podcast script into audio using Azure Speech Service (TTS)
 // Uses sequential batched synthesis to stay within Supabase timeout limits
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 
 interface PodcastLine {
     speaker: string;
@@ -97,11 +97,13 @@ function chunk<T>(arr: T[], size: number): T[][] {
     return chunks;
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
-    const { unauthorized } = await requireAuth(req);
+serveWithCors(async (req: Request) => {
+    
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'generate-podcast-audio', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     try {
         const { script } = (await req.json()) as AudioRequest;
@@ -109,7 +111,7 @@ serve(async (req: Request) => {
         if (!script || !Array.isArray(script) || script.length === 0) {
             return new Response(
                 JSON.stringify({ error: 'A non-empty "script" array is required' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -119,7 +121,7 @@ serve(async (req: Request) => {
         if (!speechKey) {
             return new Response(
                 JSON.stringify({ error: 'Azure Speech key is not configured on the server' }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 500, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -151,7 +153,6 @@ serve(async (req: Request) => {
         // Return binary MP3 directly instead of base64 JSON — much faster and ~33% smaller
         return new Response(combined, {
             headers: {
-                ...corsHeaders,
                 'Content-Type': 'audio/mpeg',
                 'Content-Length': String(combined.length),
                 'X-Line-Count': String(trimmedScript.length),
@@ -162,7 +163,7 @@ serve(async (req: Request) => {
         console.error('[generate-podcast-audio] Error:', error);
         return new Response(
             JSON.stringify({ error: error.message || 'Internal server error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

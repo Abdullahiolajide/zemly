@@ -1,14 +1,50 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const DOCUMENTS_BUCKET = 'documents';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 const MAX_OUTPUT_TOKENS = 30000;
+
+function parseDocumentStoragePath(input: string): string | null {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+
+    if (!/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+
+    try {
+        const parsed = new URL(trimmed);
+        if (!SUPABASE_URL) return null;
+
+        const allowedOrigin = new URL(SUPABASE_URL).origin;
+        if (parsed.origin !== allowedOrigin) return null;
+
+        const publicPrefix = `/storage/v1/object/public/${DOCUMENTS_BUCKET}/`;
+        const signedPrefix = `/storage/v1/object/sign/${DOCUMENTS_BUCKET}/`;
+
+        if (parsed.pathname.startsWith(publicPrefix)) {
+            return decodeURIComponent(parsed.pathname.slice(publicPrefix.length));
+        }
+
+        if (parsed.pathname.startsWith(signedPrefix)) {
+            return decodeURIComponent(parsed.pathname.slice(signedPrefix.length));
+        }
+    } catch {
+        return null;
+    }
+
+    return null;
+}
 
 function uint8ToBase64(bytes: Uint8Array): string {
     const chunkSize = 8192;
@@ -164,14 +200,19 @@ function parseOutput(raw: string): { title: string; notes: string } {
     };
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
-    const { unauthorized } = await requireAuth(req);
+serveWithCors(async (req: Request) => {
+    
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'extract-document', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     try {
         const contentType = req.headers.get('content-type') || '';
+        const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+            ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+            : null;
 
         let fileBytes: Uint8Array;
         let mimeType = 'application/pdf';
@@ -183,7 +224,7 @@ serve(async (req: Request) => {
             if (!file) {
                 return new Response(JSON.stringify({ error: 'No file provided' }), {
                     status: 400,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                 });
             }
             mimeType = file.type || 'application/pdf';
@@ -195,26 +236,44 @@ serve(async (req: Request) => {
             if (!publicUrl) {
                 return new Response(JSON.stringify({ error: 'publicUrl is required for JSON requests' }), {
                     status: 400,
-                    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                 });
             }
 
-            const fileRes = await fetch(publicUrl);
-            if (!fileRes.ok) {
+            const documentPath = parseDocumentStoragePath(publicUrl);
+            if (!documentPath) {
                 return new Response(
-                    JSON.stringify({ error: `Failed to fetch uploaded file (${fileRes.status})` }),
-                    { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                    JSON.stringify({ error: 'publicUrl must point to a documents bucket object on this Supabase project' }),
+                    { status: 400, headers: { 'Content-Type': 'application/json' } },
                 );
             }
 
-            const fetchedType = fileRes.headers.get('content-type') || '';
+            if (!supabaseAdmin) {
+                return new Response(
+                    JSON.stringify({ error: 'Supabase service credentials are not configured' }),
+                    { status: 500, headers: { 'Content-Type': 'application/json' } },
+                );
+            }
+
+            const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+                .from(DOCUMENTS_BUCKET)
+                .download(documentPath);
+
+            if (downloadError || !fileData) {
+                return new Response(
+                    JSON.stringify({ error: 'Failed to load uploaded file from storage' }),
+                    { status: 400, headers: { 'Content-Type': 'application/json' } },
+                );
+            }
+
+            const fetchedType = fileData.type || '';
             mimeType = (typeof body?.mimeType === 'string' && body.mimeType) || fetchedType || 'application/pdf';
-            fileName = (typeof body?.fileName === 'string' && body.fileName) || 'document';
-            fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+            fileName = (typeof body?.fileName === 'string' && body.fileName) || documentPath.split('/').pop() || 'document';
+            fileBytes = new Uint8Array(await fileData.arrayBuffer());
         } else {
             return new Response(
                 JSON.stringify({ error: 'Request must be multipart/form-data or application/json' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -230,19 +289,19 @@ serve(async (req: Request) => {
         if (!noteContent) {
             return new Response(
                 JSON.stringify({ error: 'Could not extract content from this document.' }),
-                { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 422, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
         return new Response(JSON.stringify({ title: finalTitle, noteContent, extractedText: noteContent }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     } catch (err) {
         const error = err as Error;
         console.error('extract-document error:', error);
-        return new Response(JSON.stringify({ error: error.message || 'Internal server error' }), {
+        return new Response(JSON.stringify({ error: 'An error occurred. Please try again.' }), {
             status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 });

@@ -1,9 +1,9 @@
 // supabase/functions/chat/index.ts
 // Chat Bot — streaming responses, optimized for Gemini free tier
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { streamGemini, callGemini, truncateNote } from '../_shared/gemini.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
@@ -13,11 +13,12 @@ interface ChatRequest {
     memory?: string;
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
-    const { unauthorized } = await requireAuth(req);
+serveWithCors(async (req: Request) => {
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'chat', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     try {
         const { noteContent, messages, memory } = (await req.json()) as ChatRequest;
@@ -25,7 +26,7 @@ serve(async (req: Request) => {
         if (!noteContent && !memory && (!messages || messages.length === 0)) {
             return new Response(
                 JSON.stringify({ error: 'noteContent is required for the first message' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -52,22 +53,22 @@ serve(async (req: Request) => {
         const systemInstruction = isFirstMessage
             ? `You are Zemly AI, a concise study assistant. The student's note is provided below as context.
 
-You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response clearly. Use markdown formatting to make your answer easier to scan and understand. Keep it concise but well-structured (about 3-6 main points or paragraphs).
+            You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response clearly. Use markdown formatting to make your answer easier to scan and understand. Keep it concise but well-structured (about 3-6 main points or paragraphs).
 
-When answering:
-- Ground your response in the provided note when available
-- You can supplement with your knowledge base for clarity and deeper understanding
-- Use formatting to highlight key concepts, definitions, or important information
-- Format lists and key points with bullets or numbers for readability${contextBlock}`
-            : `You are Zemly AI, a concise study assistant. Continue helping based on the conversation so far.
+            When answering:
+            - Ground your response in the provided note when available
+            - You can supplement with your knowledge base for clarity and deeper understanding
+            - Use formatting to highlight key concepts, definitions, or important information
+            - Format lists and key points with bullets or numbers for readability${contextBlock}`
+                        : `You are Zemly AI, a concise study assistant. Continue helping based on the conversation so far.
 
-You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response. Use markdown formatting strategically to improve clarity. Keep follow-up answers concise but well-formatted (about 2-5 main points or short paragraphs).
+            You can use **bold**, *italic*, bullet points, numbered lists, and headings to format your response. Use markdown formatting strategically to improve clarity. Keep follow-up answers concise but well-formatted (about 2-5 main points or short paragraphs).
 
-When answering:
-- Ground your response in the provided note when available
-- You can supplement with your knowledge base for fuller explanations
-- Use formatting to highlight key concepts and make connections clear
-- Format lists and definitions with bullets or numbers for better readability${contextBlock}`;
+            When answering:
+            - Ground your response in the provided note when available
+            - You can supplement with your knowledge base for fuller explanations
+            - Use formatting to highlight key concepts and make connections clear
+            - Format lists and definitions with bullets or numbers for better readability${contextBlock}`;
 
         // --- Stream the main reply ---
         const geminiRes = await streamGemini(geminiMessages, {
@@ -180,7 +181,7 @@ ${sanitizeNoteForPrompt(truncateNote(noteContent))}`;
                 } catch (err) {
                     console.error('Stream processing error:', err);
                     controller.enqueue(
-                        encoder.encode(`event: error\ndata: ${JSON.stringify({ error: (err as Error).message })}\n\n`),
+                        encoder.encode(`event: error\ndata: ${JSON.stringify({ error: 'An error occurred. Please try again.' })}\n\n`),
                     );
                     controller.close();
                 }
@@ -189,7 +190,6 @@ ${sanitizeNoteForPrompt(truncateNote(noteContent))}`;
 
         return new Response(outputStream, {
             headers: {
-                ...corsHeaders,
                 'Content-Type': 'text/event-stream',
                 'Cache-Control': 'no-cache',
                 'Connection': 'keep-alive',
@@ -199,8 +199,8 @@ ${sanitizeNoteForPrompt(truncateNote(noteContent))}`;
         const error = err as Error;
         console.error('Chat function error:', error);
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal server error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            JSON.stringify({ error: 'An error occurred. Please try again.' }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

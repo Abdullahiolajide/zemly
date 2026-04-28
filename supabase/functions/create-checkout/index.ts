@@ -1,15 +1,14 @@
 // supabase/functions/create-checkout/index.ts
 // Creates a Dodo Payments checkout session for the Zemly Unlimited plan.
 
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
 
 const DODO_API_URL = 'https://api.dodopayments.com';       // live
 const DODO_TEST_API_URL = 'https://test.dodopayments.com'; // test
 
-Deno.serve(async (req: Request) => {
+serveWithCors(async (req: Request) => {
     // Handle CORS pre-flight
-    if (req.method === 'OPTIONS') return handleCors();
 
     const { unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
@@ -30,7 +29,7 @@ Deno.serve(async (req: Request) => {
         if (!product_id) {
             return new Response(
                 JSON.stringify({ error: 'product_id is required' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -77,7 +76,7 @@ Deno.serve(async (req: Request) => {
             console.error('Dodo Payments API error:', response.status, errorText);
             return new Response(
                 JSON.stringify({ error: 'Failed to create checkout session', details: errorText, dodo_status: response.status }),
-                { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 200, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -88,13 +87,13 @@ Deno.serve(async (req: Request) => {
                 session_id: data.session_id,
                 checkout_url: data.checkout_url,
             }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
     } catch (err) {
         console.error('create-checkout error:', err);
         return new Response(
-            JSON.stringify({ error: (err as Error).message || 'Internal server error' }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            JSON.stringify({ error: 'An error occurred. Please try again.' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

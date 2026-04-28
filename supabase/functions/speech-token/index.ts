@@ -2,15 +2,17 @@
 // Returns a short-lived Azure Speech auth token for client-side STT.
 // The token lasts 10 minutes; the frontend caches and refreshes it.
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
-    const { unauthorized } = await requireAuth(req);
+serveWithCors(async (req: Request) => {
+    
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'speech-token', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     const speechKey = Deno.env.get('AZURE_SPEECH_KEY');
     const speechRegion = Deno.env.get('AZURE_SPEECH_REGION') || 'southafricanorth';
@@ -18,7 +20,7 @@ serve(async (req: Request) => {
     if (!speechKey) {
         return new Response(
             JSON.stringify({ error: 'Azure Speech key is not configured' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
@@ -44,13 +46,13 @@ serve(async (req: Request) => {
 
         return new Response(
             JSON.stringify({ token, region: speechRegion }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { headers: { 'Content-Type': 'application/json' } },
         );
     } catch (err) {
         console.error('[speech-token] Error:', err);
         return new Response(
             JSON.stringify({ error: 'Failed to generate speech token' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

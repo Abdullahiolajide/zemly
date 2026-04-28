@@ -1,9 +1,9 @@
 // supabase/functions/generate-flashcards/index.ts
 // Flashcard Generator — optimized for Gemini free tier
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
+import { checkRateLimit } from '../_shared/rateLimit.ts';
 import { balanceMultiSourceNote, promptGemini } from '../_shared/gemini.ts';
 import { sanitizeNoteForPrompt } from '../_shared/sanitize.ts';
 
@@ -118,11 +118,14 @@ ${raw}`;
     return parseFlashcards(repaired);
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
+serveWithCors(async (req: Request) => {
+    
 
-    const { unauthorized } = await requireAuth(req);
+    const { user, unauthorized } = await requireAuth(req);
     if (unauthorized) return unauthorized;
+
+    const rateLimitExceeded = await checkRateLimit(user!.id, 'generate-flashcards', req);
+    if (rateLimitExceeded) return rateLimitExceeded;
 
     try {
         const { noteContent } = (await req.json()) as FlashcardsRequest;
@@ -130,7 +133,7 @@ serve(async (req: Request) => {
         if (!noteContent) {
             return new Response(
                 JSON.stringify({ error: 'noteContent is required' }),
-                { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                { status: 400, headers: { 'Content-Type': 'application/json' } },
             );
         }
 
@@ -168,14 +171,14 @@ serve(async (req: Request) => {
 
         return new Response(
             JSON.stringify({ flashcards }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { headers: { 'Content-Type': 'application/json' } },
         );
     } catch (err) {
         const error = err as Error;
         console.error('Flashcards function error:', error);
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal server error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            JSON.stringify({ error: 'An error occurred. Please try again.' }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

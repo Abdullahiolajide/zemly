@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
 
 const DODO_API_URL = 'https://api.dodopayments.com';
@@ -42,13 +42,13 @@ async function lookupSubscription(supabase: ReturnType<typeof createClient>, use
     return byEmail.data ?? byUserId.data ?? null;
 }
 
-Deno.serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
+serveWithCors(async (req: Request) => {
+    
 
     if (req.method !== 'POST') {
         return new Response(JSON.stringify({ error: 'Method not allowed' }), {
             status: 405,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 
@@ -84,7 +84,7 @@ Deno.serve(async (req: Request) => {
         if (!customerId) {
             return new Response(JSON.stringify({ error: 'No Dodo customer id is available for this account.' }), {
                 status: 404,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -116,7 +116,7 @@ Deno.serve(async (req: Request) => {
                 dodo_status: response.status,
             }), {
                 status: 200,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -127,19 +127,19 @@ Deno.serve(async (req: Request) => {
         if (!portalUrl) {
             return new Response(JSON.stringify({ error: 'Dodo portal session did not include a URL' }), {
                 status: 502,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
         return new Response(JSON.stringify({ portal_url: portalUrl, link: portalUrl }), {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     } catch (err) {
         console.error('create-billing-portal error:', err);
-        return new Response(JSON.stringify({ error: (err as Error).message || 'Internal server error' }), {
+        return new Response(JSON.stringify({ error: 'An error occurred. Please try again.' }), {
             status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 });

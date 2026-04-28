@@ -221,14 +221,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
 
     return (
         <div
-            className="flex h-full flex-col"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
             style={{
                 background:
                     'radial-gradient(120% 80% at 100% 0%, rgba(0,200,150,0.05) 0%, rgba(0,0,0,0) 40%), var(--bg-main)',
             }}
         >
             {/* ── Messages ── */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div
+                className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-5 pt-4 pb-4 touch-pan-y"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+            >
                 {messages.length === 0 && !isLoading && (
                     <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
                         <div
@@ -253,7 +256,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                     {messages.map((msg, i) => (
                         <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <div
-                                className="max-w-[82%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed"
+                                className={msg.role === 'user'
+                                    ? 'max-w-[82%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed'
+                                    : 'w-full max-w-none px-1 py-1 text-[14px] leading-relaxed'
+                                }
                                 style={msg.role === 'user'
                                     ? {
                                         background: 'linear-gradient(135deg, rgba(0,200,150,0.92), rgba(0,168,122,0.92))',
@@ -261,10 +267,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                                         boxShadow: '0 10px 24px rgba(0,200,150,0.18)',
                                     }
                                     : {
-                                        background: 'rgba(255,255,255,0.03)',
-                                        border: '1px solid var(--border-glass)',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        boxShadow: 'none',
                                         color: 'inherit',
-                                        backdropFilter: 'blur(10px)',
                                     }
                                 }
                             >
@@ -275,24 +281,24 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className={`prose prose-invert max-w-none text-[13px]${isStreaming && i === messages.length - 1 ? ' chat-streaming-fade' : ''}`}>
+                                    <div className={`prose prose-invert max-w-none text-[14px]${isStreaming && i === messages.length - 1 ? ' chat-streaming-fade' : ''}`}>
                                         <ReactMarkdown
                                             components={{
-                                                p: ({ children }) => <p className="mb-2 leading-relaxed">{children}</p>,
-                                                ul: ({ children }) => <ul className="mb-2 ml-4 list-inside list-disc space-y-1 leading-relaxed">{children}</ul>,
-                                                ol: ({ children }) => <ol className="mb-2 ml-4 list-inside list-decimal space-y-1 leading-relaxed">{children}</ol>,
+                                                p: ({ children }) => <p className="mb-3 leading-7">{children}</p>,
+                                                ul: ({ children }) => <ul className="mb-3 ml-4 list-inside list-disc space-y-1 leading-7">{children}</ul>,
+                                                ol: ({ children }) => <ol className="mb-3 ml-4 list-inside list-decimal space-y-1 leading-7">{children}</ol>,
                                                 li: ({ children }) => <li className="ml-0">{children}</li>,
-                                                h1: ({ children }) => <h1 className="mb-2 text-base font-bold">{children}</h1>,
-                                                h2: ({ children }) => <h2 className="mb-2 text-sm font-bold">{children}</h2>,
-                                                h3: ({ children }) => <h3 className="mb-1 text-sm font-semibold">{children}</h3>,
+                                                h1: ({ children }) => <h1 className="mb-3 text-[1.05rem] font-bold">{children}</h1>,
+                                                h2: ({ children }) => <h2 className="mb-2 text-[0.98rem] font-bold">{children}</h2>,
+                                                h3: ({ children }) => <h3 className="mb-2 text-[0.95rem] font-semibold">{children}</h3>,
                                                 strong: ({ children }) => <strong className="font-semibold text-emerald-300">{children}</strong>,
                                                 em: ({ children }) => <em className="italic text-zinc-300">{children}</em>,
                                                 code: ({ children, className }: { children?: ReactNode; className?: string }) => {
                                                     const isInline = !className?.includes('language-');
                                                     return isInline ? (
-                                                        <code className="inline-block rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-mono text-emerald-300">{children}</code>
+                                                        <code className="inline-block rounded bg-zinc-800 px-1.5 py-0.5 text-[0.82rem] font-mono text-emerald-300">{children}</code>
                                                     ) : (
-                                                        <code className="mb-2 block rounded bg-zinc-800 p-2 text-xs font-mono text-emerald-300">{children}</code>
+                                                        <code className="mb-3 block rounded bg-zinc-800 p-2 text-[0.82rem] font-mono text-emerald-300">{children}</code>
                                                     );
                                                 },
                                                 blockquote: ({ children }) => <blockquote className="mb-2 border-l-2 border-emerald-400/50 pl-3 italic text-zinc-400">{children}</blockquote>,
@@ -332,7 +338,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
 
             {/* ── Error ── */}
             {error && (
-                <div className="mx-5 mb-2 rounded-lg px-3 py-2 text-[12px] font-medium text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
+                <div className="mx-5 mb-2 rounded-lg px-3 py-2 text-[13px] font-medium text-red-400" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}>
                     {error}
                 </div>
             )}
@@ -344,7 +350,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                     style={{ border: '1px solid var(--border-glass)', background: 'var(--bg-glass-hover)' }}
                 >
                     <MdAutoAwesome className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: 'var(--brand-emerald)' }} />
-                    <p className="flex-1 text-[12px] leading-relaxed line-clamp-3 italic text-zinc-400">
+                    <p className="flex-1 text-[13px] leading-relaxed line-clamp-3 italic text-zinc-400">
                         "{highlightedText}"
                     </p>
                     <button
@@ -373,7 +379,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                         onKeyDown={handleKeyDown}
                         placeholder={highlightedText ? 'Ask about this text…' : 'Ask about your notes…'}
                         rows={1}
-                        className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent text-[13px] text-zinc-200 placeholder-zinc-500 outline-none"
+                        className="max-h-32 min-h-[36px] flex-1 resize-none bg-transparent text-[14px] text-zinc-200 placeholder-zinc-500 outline-none"
                         disabled={isLoading || isStreaming}
                     />
                     <button
@@ -391,7 +397,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
                         <FiSend className="h-3.5 w-3.5" />
                     </button>
                 </div>
-                <p className="mt-2 text-center text-[11px] text-zinc-600">
+                <p className="mt-2 text-center text-[12px] text-zinc-600">
                     {reachedMessageLimit ? 'Free plan limit reached. Upgrade to continue.' : 'Grounded in your note content'}
                 </p>
             </div>

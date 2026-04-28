@@ -1,6 +1,5 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -9,47 +8,63 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '
 const CLEANUP_CRON_SECRET = Deno.env.get('CLEANUP_CRON_SECRET') || '';
 const DOCUMENTS_BUCKET = 'documents';
 
-function parseDocumentPathFromPublicUrl(sourceUrl: string): string | null {
-    try {
-        const parsed = new URL(sourceUrl);
-        const marker = `/storage/v1/object/public/${DOCUMENTS_BUCKET}/`;
-        const idx = parsed.pathname.indexOf(marker);
-        if (idx === -1) return null;
+function parseDocumentStoragePath(sourceUrl: string): string | null {
+    const trimmed = sourceUrl.trim();
+    if (!trimmed) return null;
 
-        const encodedPath = parsed.pathname.slice(idx + marker.length);
-        return decodeURIComponent(encodedPath);
+    if (!/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+
+    try {
+        const parsed = new URL(trimmed);
+        if (!SUPABASE_URL) return null;
+
+        const allowedOrigin = new URL(SUPABASE_URL).origin;
+        if (parsed.origin !== allowedOrigin) return null;
+
+        const publicPrefix = `/storage/v1/object/public/${DOCUMENTS_BUCKET}/`;
+        const signedPrefix = `/storage/v1/object/sign/${DOCUMENTS_BUCKET}/`;
+
+        if (parsed.pathname.startsWith(publicPrefix)) {
+            return decodeURIComponent(parsed.pathname.slice(publicPrefix.length));
+        }
+
+        if (parsed.pathname.startsWith(signedPrefix)) {
+            return decodeURIComponent(parsed.pathname.slice(signedPrefix.length));
+        }
     } catch {
         return null;
     }
+
+    return null;
 }
 
 function isAuthorized(req: Request): boolean {
-    if (!CLEANUP_CRON_SECRET) return true;
+    if (!CLEANUP_CRON_SECRET) return false;
     const provided = req.headers.get('x-cleanup-secret') || '';
     return provided === CLEANUP_CRON_SECRET;
 }
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
-
+serveWithCors(async (req: Request) => {
     if (req.method !== 'POST') {
         return new Response(
             JSON.stringify({ error: 'Method not allowed' }),
-            { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 405, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
     if (!isAuthorized(req)) {
         return new Response(
             JSON.stringify({ error: 'Unauthorized' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
         return new Response(
             JSON.stringify({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 
@@ -75,8 +90,8 @@ serve(async (req: Request) => {
         while (true) {
             const { data, error } = await supabaseAdmin
                 .from('notes')
-                .select('source_url')
-                .eq('source_type', 'document')
+                .select('source_url, source_type')
+                .in('source_type', ['document', 'audio'])
                 .not('source_url', 'is', null)
                 .range(noteFrom, noteFrom + notePageSize - 1);
 
@@ -85,7 +100,7 @@ serve(async (req: Request) => {
 
             for (const row of data) {
                 const sourceUrl = typeof row.source_url === 'string' ? row.source_url : '';
-                const path = parseDocumentPathFromPublicUrl(sourceUrl);
+                const path = parseDocumentStoragePath(sourceUrl);
                 if (path) referencedPaths.add(path);
             }
 
@@ -93,37 +108,71 @@ serve(async (req: Request) => {
             noteFrom += notePageSize;
         }
 
-        // List uploaded objects and choose orphans older than threshold.
-        const orphanPaths: string[] = [];
-        const listPageSize = 1000;
-        let offset = 0;
+        const podcastPageSize = 1000;
+        let podcastFrom = 0;
 
         while (true) {
-            const { data, error } = await supabaseAdmin.storage
-                .from(DOCUMENTS_BUCKET)
-                .list('', {
-                    limit: listPageSize,
-                    offset,
-                    sortBy: { column: 'created_at', order: 'asc' },
-                });
+            const { data, error } = await supabaseAdmin
+                .from('podcast_sessions')
+                .select('audio_path')
+                .not('audio_path', 'is', null)
+                .range(podcastFrom, podcastFrom + podcastPageSize - 1);
 
-            if (error) throw new Error(`Failed to list storage objects: ${error.message}`);
+            if (error) throw new Error(`Failed to query podcast sessions: ${error.message}`);
             if (!data || data.length === 0) break;
 
-            for (const object of data) {
-                if (!object.name) continue;
-
-                const created = object.created_at || object.updated_at || '';
-                const createdMs = created ? new Date(created).getTime() : NaN;
-                if (!Number.isFinite(createdMs) || createdMs > cutoffMs) continue;
-
-                if (referencedPaths.has(object.name)) continue;
-                orphanPaths.push(object.name);
+            for (const row of data) {
+                const audioPath = typeof row.audio_path === 'string' ? row.audio_path : '';
+                if (audioPath) referencedPaths.add(audioPath);
             }
 
-            if (data.length < listPageSize) break;
-            offset += listPageSize;
+            if (data.length < podcastPageSize) break;
+            podcastFrom += podcastPageSize;
         }
+
+        // List uploaded objects and choose orphans older than threshold.
+        const orphanPaths: string[] = [];
+        async function scanStoragePrefix(prefix: string, depth = 0): Promise<void> {
+            const listPageSize = 1000;
+            let offset = 0;
+
+            while (true) {
+                const { data, error } = await supabaseAdmin.storage
+                    .from(DOCUMENTS_BUCKET)
+                    .list(prefix, {
+                        limit: listPageSize,
+                        offset,
+                        sortBy: { column: 'created_at', order: 'asc' },
+                    });
+
+                if (error) throw new Error(`Failed to list storage objects: ${error.message}`);
+                if (!data || data.length === 0) break;
+
+                for (const object of data) {
+                    if (!object.name) continue;
+
+                    const objectPath = prefix ? `${prefix}/${object.name}` : object.name;
+                    const looksLikeFolder = !object.name.includes('.') && depth < 4;
+
+                    if (looksLikeFolder) {
+                        await scanStoragePrefix(objectPath, depth + 1);
+                        continue;
+                    }
+
+                    const created = object.created_at || object.updated_at || '';
+                    const createdMs = created ? new Date(created).getTime() : NaN;
+                    if (!Number.isFinite(createdMs) || createdMs > cutoffMs) continue;
+
+                    if (referencedPaths.has(objectPath)) continue;
+                    orphanPaths.push(objectPath);
+                }
+
+                if (data.length < listPageSize) break;
+                offset += listPageSize;
+            }
+        }
+
+        await scanStoragePrefix('');
 
         let deleted = 0;
         const errors: string[] = [];
@@ -151,14 +200,14 @@ serve(async (req: Request) => {
                 deleted: dryRun ? 0 : deleted,
                 errors,
             }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            { headers: { 'Content-Type': 'application/json' } },
         );
     } catch (err) {
         const error = err as Error;
         console.error('cleanup-orphan-documents error:', error);
         return new Response(
-            JSON.stringify({ error: error.message || 'Internal server error' }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            JSON.stringify({ error: 'An error occurred. Please try again.' }),
+            { status: 500, headers: { 'Content-Type': 'application/json' } },
         );
     }
 });

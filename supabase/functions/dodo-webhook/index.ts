@@ -1,6 +1,6 @@
 // import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 // import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-// import { corsHeaders, handleCors } from '../_shared/cors.ts';
+// import { serveWithCors } from '../_shared/server.ts';
 
 // type RawPayload = Record<string, unknown>;
 
@@ -153,8 +153,8 @@
 //     return providedSignatures.includes(computedSignature);
 // }
 
-// serve(async (req: Request) => {
-//     if (req.method === 'OPTIONS') return handleCors();
+// serveWithCors(async (req: Request) => {
+//     
 
 //     const supabaseUrl = Deno.env.get('SUPABASE_URL');
 //     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -162,7 +162,7 @@
 //     if (!supabaseUrl || !serviceRoleKey) {
 //         return new Response(JSON.stringify({ error: 'Supabase service credentials are not configured' }), {
 //             status: 500,
-//             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+//             headers: { 'Content-Type': 'application/json' },
 //         });
 //     }
 
@@ -175,7 +175,7 @@
 //         if (!(await verifyWebhookSignature(req, rawBody))) {
 //             return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), {
 //                 status: 401,
-//                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+//                 headers: { 'Content-Type': 'application/json' },
 //             });
 //         }
 
@@ -195,7 +195,7 @@
 //         if (!resolvedEmail) {
 //             return new Response(JSON.stringify({ error: 'Webhook payload did not include a customer email' }), {
 //                 status: 400,
-//                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+//                 headers: { 'Content-Type': 'application/json' },
 //             });
 //         }
 
@@ -218,21 +218,20 @@
 
 //         return new Response(JSON.stringify({ ok: true }), {
 //             status: 200,
-//             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+//             headers: { 'Content-Type': 'application/json' },
 //         });
 //     } catch (err) {
 //         console.error('dodo-webhook error:', err);
 //         return new Response(JSON.stringify({ error: (err as Error).message || 'Internal server error' }), {
 //             status: 200,
-//             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+//             headers: { 'Content-Type': 'application/json' },
 //         });
 //     }
 // });
 
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { corsHeaders, handleCors } from '../_shared/cors.ts';
+import { serveWithCors } from '../_shared/server.ts';
 
 type RawPayload = Record<string, unknown>;
 
@@ -424,8 +423,8 @@ function inferTier(eventType: string, status: string): 'free' | 'premium' {
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
-serve(async (req: Request) => {
-    if (req.method === 'OPTIONS') return handleCors();
+serveWithCors(async (req: Request) => {
+    
 
     const supabaseUrl    = Deno.env.get('SUPABASE_URL');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -433,7 +432,7 @@ serve(async (req: Request) => {
     if (!supabaseUrl || !serviceRoleKey) {
         return new Response(JSON.stringify({ error: 'Supabase credentials not configured' }), {
             status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 
@@ -447,12 +446,29 @@ serve(async (req: Request) => {
         if (!(await verifyWebhookSignature(req, rawBody))) {
             return new Response(JSON.stringify({ error: 'Invalid webhook signature' }), {
                 status: 401,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
-        const payload   = JSON.parse(rawBody) as RawPayload;
-        const eventType = normalizeEventType(payload);
+        const payload   = JSON.parse(rawBody) as RawPayload;        
+        // 1. Webhook replay prevention check
+        const webhookId = req.headers.get('webhook-id');
+        if (webhookId) {
+            const { data: existingWebhook } = await supabase
+                .from('processed_webhooks')
+                .select('webhook_id')
+                .eq('webhook_id', webhookId)
+                .maybeSingle();
+                
+            if (existingWebhook) {
+                console.log(`Webhook ${webhookId} already processed, skipping.`);
+                return new Response(JSON.stringify({ ok: true, message: 'Already processed' }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+        }
+                const eventType = normalizeEventType(payload);
         const status    = extractNestedStatus(payload);
         const tier      = inferTier(eventType, status);
         const eventData = asObject(payload.data);
@@ -466,7 +482,7 @@ serve(async (req: Request) => {
             console.error('No email found in webhook payload', JSON.stringify(payload));
             return new Response(JSON.stringify({ error: 'Webhook payload did not include a customer email' }), {
                 status: 400,
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' },
             });
         }
 
@@ -487,17 +503,22 @@ serve(async (req: Request) => {
             .upsert(row, { onConflict: 'email' });
 
         if (error) throw error;
+        
+        // 2. Mark webhook as processed to prevent replay
+        if (webhookId) {
+            await supabase.from('processed_webhooks').insert({ webhook_id: webhookId });
+        }
 
         return new Response(JSON.stringify({ ok: true }), {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
 
     } catch (err) {
         console.error('dodo-webhook error:', err);
-        return new Response(JSON.stringify({ error: (err as Error).message || 'Internal server error' }), {
+        return new Response(JSON.stringify({ error: 'An error occurred. Please try again.' }), {
             status: 200,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 });

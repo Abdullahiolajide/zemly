@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders } from './cors.ts';
 
 export async function requireAuth(req: Request) {
     const authHeader = req.headers.get('Authorization');
@@ -19,7 +18,7 @@ export async function requireAuth(req: Request) {
             user: null,
             unauthorized: new Response(
                 JSON.stringify({ error: 'Unauthorized' }),
-                { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+                { status: 401, headers: { 'Content-Type': 'application/json' } }
             )
         };
     }
