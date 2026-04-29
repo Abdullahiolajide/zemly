@@ -536,7 +536,10 @@ Explain why "${options[correctIndex]}" is correct.`,
 export async function generatePodcast(
     noteContent: string,
 ): Promise<PodcastLine[]> {
+    const authHeaders = await getEdgeFunctionAuthHeaders();
+
     const { data, error } = await supabase.functions.invoke('generate-podcast', {
+        headers: authHeaders,
         body: { noteContent },
     });
 
