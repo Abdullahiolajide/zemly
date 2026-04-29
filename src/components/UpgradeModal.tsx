@@ -114,7 +114,8 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
 
                     if (event.event_type === 'checkout.error') {
                         setIsLoading(false);
-                        setError(event.data?.message || 'Checkout error occurred');
+                        console.error('[Checkout] checkout.error event:', event.data);
+                        setError('Something went wrong with checkout. Please try again.');
                     }
                 },
             });
@@ -122,7 +123,7 @@ const UpgradeModal: React.FC<UpgradeModalProps> = ({ isOpen, onClose, userEmail,
         } catch (err) {
             console.error('Checkout error:', err);
             setIsLoading(false);
-            setError((err as Error).message || 'Failed to open checkout');
+            setError('Something went wrong. Please try again.');
         }
     };
 

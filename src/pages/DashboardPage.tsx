@@ -27,6 +27,7 @@ import type { Note } from '../types';
 import type { Folder } from '../lib/foldersService';
 import ThemeModal from '../components/ThemeModal';
 import UpgradeModal from '../components/UpgradeModal';
+import OnboardingModal from '../components/OnboardingModal';
 import AccountSettingsModal from '../components/AccountSettingsModal';
 import { getUserSubscription, getSubscriptionPlanLabel, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
 import { supabase } from '../lib/supabaseClient';
@@ -202,6 +203,8 @@ const DashboardPage: React.FC = () => {
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
     const [accountModalOpen, setAccountModalOpen] = useState(false);
+    const [onboardingOpen, setOnboardingOpen] = useState(false);
+    const [googleDisplayName, setGoogleDisplayName] = useState<string | null>(null);
     const [billingPortalLoading, setBillingPortalLoading] = useState(false);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -289,6 +292,42 @@ const DashboardPage: React.FC = () => {
     useEffect(() => {
         fetchNotes();
     }, [fetchNotes]);
+
+    /* ── Check onboarding status ── */
+    useEffect(() => {
+        if (!user?.id) return;
+        let cancelled = false;
+
+        const checkOnboarding = async () => {
+            try {
+                // Fetch Google display name from auth metadata
+                const { data: { user: authUser } } = await supabase.auth.getUser();
+                const metaName =
+                    authUser?.user_metadata?.full_name ||
+                    authUser?.user_metadata?.name ||
+                    null;
+                if (!cancelled && metaName) setGoogleDisplayName(metaName);
+
+                // Check profile for onboarding flag
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('has_completed_onboarding')
+                    .eq('id', user.id)
+                    .single();
+
+                if (!cancelled) {
+                    if (!profile || profile.has_completed_onboarding !== true) {
+                        setOnboardingOpen(true);
+                    }
+                }
+            } catch (err) {
+                console.error('[Dashboard] Failed to check onboarding:', err);
+            }
+        };
+
+        void checkOnboarding();
+        return () => { cancelled = true; };
+    }, [user?.id]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1525,6 +1564,12 @@ const DashboardPage: React.FC = () => {
                 onClose={() => setUpgradeModalOpen(false)}
                 userEmail={user?.email}
                 userId={user?.id}
+            />
+            <OnboardingModal
+                open={onboardingOpen}
+                onComplete={() => setOnboardingOpen(false)}
+                userId={user?.id || ''}
+                googleDisplayName={googleDisplayName}
             />
         </div>
     );

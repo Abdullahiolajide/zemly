@@ -129,7 +129,7 @@ serveWithCors(async (req: Request) => {
             );
         }
 
-        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 100000));
+        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 50000));
 
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
@@ -150,7 +150,7 @@ ${note}`;
 
         const raw = await promptGemini(prompt, {
         temperature: 0.5,
-        maxOutputTokens: 16000,
+        maxOutputTokens: 6144,
         responseMimeType: 'application/json', // add this
     });
 

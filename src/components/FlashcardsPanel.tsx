@@ -69,7 +69,7 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
             setView('overview');
         } catch (err) {
             console.error('Flashcard generation failed:', err);
-            setError(err instanceof Error ? err.message : 'Failed to generate flashcards. Please try again.');
+            setError('Could not generate your flashcards. Please try again.');
         } finally {
             setIsGenerating(false);
         }

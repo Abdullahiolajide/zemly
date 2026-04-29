@@ -422,7 +422,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             // Ignore abort errors — they're expected when user exits
             if (err instanceof DOMException && err.name === 'AbortError') return;
             console.error('Raise hand response failed:', err);
-            setRaiseHandError(err instanceof Error ? err.message : 'Failed to answer your question');
+            setRaiseHandError('Could not get a response. Please try again.');
             if (raiseHandActiveRef.current) {
                 setRaiseHandStatus('idle');
                 setMode('raise-hand-listening');
@@ -556,7 +556,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             } catch (err) {
                 console.error('Failed to load podcast session:', err);
                 if (cancelled) return;
-                setError(err instanceof Error ? err.message : 'Failed to load podcast data');
+                setError('Something went wrong loading your podcast. Please try again.');
                 setView('generate');
             }
         })();
@@ -715,7 +715,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             setView('player');
         } catch (err) {
             console.error('Podcast generation failed:', err);
-            setError(err instanceof Error ? err.message : 'Failed to generate podcast');
+            setError('Could not generate your podcast. Please try again.');
         } finally {
             setIsGenerating(false);
         }
@@ -740,7 +740,7 @@ const PodcastPanel: React.FC<PodcastPanelProps> = ({ noteId, noteTitle, getNoteT
             posthog.capture('podcast_audio_regenerated', { note_id: noteId });
         } catch (err) {
             console.error('Audio regeneration failed:', err);
-            setError(err instanceof Error ? err.message : 'Failed to regenerate audio');
+            setError('Could not regenerate the audio. Please try again.');
         } finally {
             setIsRegeneratingAudio(false);
         }

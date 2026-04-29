@@ -342,8 +342,8 @@ export const AudioModal: React.FC<AudioModalProps> = ({
             setIsRecording(true);
             startTimer();
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Microphone access failed.';
-            setError(message);
+            console.error('[AudioModal] Mic access error:', err);
+            setError('Could not access your microphone. Please check browser permissions and try again.');
             setIsRecording(false);
             setIsRecordingPaused(false);
             stopTimer();
@@ -390,8 +390,8 @@ export const AudioModal: React.FC<AudioModalProps> = ({
             await onGenerate?.(audioItems.map((item) => item.file));
             onClose();
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Failed to generate note from audio.';
-            setError(message);
+            console.error('[AudioModal] Generate note error:', err);
+            setError('Could not generate your note from audio. Please try again.');
         } finally {
             setIsGenerating(false);
         }
@@ -666,13 +666,10 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                     [fileId]: { stage: 'uploaded', progress: 100 },
                 }));
             } catch (uploadErr) {
-                const message = uploadErr instanceof Error
-                    ? uploadErr.message
-                    : 'Upload failed. Please try again.';
-
+                console.error('[DocumentModal] File upload error:', uploadErr);
                 setUploadStates((prev) => ({
                     ...prev,
-                    [fileId]: { stage: 'error', progress: 0, error: message },
+                    [fileId]: { stage: 'error', progress: 0, error: 'Upload failed. Please try again.' },
                 }));
             }
         }));
@@ -801,16 +798,13 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                         path: uploaded.path,
                     });
                 } catch (fileErr) {
-                    const message = fileErr instanceof Error
-                        ? fileErr.message
-                        : 'Something went wrong. Please try again.';
-
+                    console.error('[DocumentModal] File processing error:', fileErr);
                     setUploadStates((prev) => ({
                         ...prev,
                         [fileId]: {
                             ...(prev[fileId] ?? { stage: 'error', progress: 0 }),
                             stage: 'error',
-                            error: message,
+                            error: 'Could not process this file. Please try again.',
                         },
                     }));
                 }
@@ -846,7 +840,8 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
             generationCompletedRef.current = true;
             await handleClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+            console.error('[DocumentModal] Generate combined note error:', err);
+            setError('Something went wrong generating your note. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -1084,7 +1079,8 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
             await onGenerate(normalizeUrl(url));
             onClose();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to generate notes from this link.');
+            console.error('[LinkModal] Generate note error:', err);
+            setError('Could not generate notes from this link. Please check the URL and try again.');
         } finally {
             setIsGenerating(false);
         }

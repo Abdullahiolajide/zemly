@@ -137,7 +137,7 @@ serveWithCors(async (req: Request) => {
             );
         }
 
-        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 100000));
+        const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 50000));
 
         const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
         If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.

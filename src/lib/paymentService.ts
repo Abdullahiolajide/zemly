@@ -103,19 +103,9 @@ export async function openPremiumCheckout(opts?: {
     });
 
     if (error || !data?.checkout_url) {
-        console.error('Failed to create checkout session. Error object:', error);
-        console.error('Response data:', data);
-        
-        let errorMessage = 'Could not create checkout session.';
-        if (data?.details) {
-            errorMessage += `\nDodo API Error: ${data.details}`;
-        } else if (data?.error) {
-            errorMessage += `\nError: ${data.error}`;
-        } else if (error?.message) {
-            errorMessage += `\nError: ${error.message}`;
-        }
-
-        throw new Error(errorMessage);
+        console.error('[Payment] Failed to create checkout session. Error:', error);
+        console.error('[Payment] Response data:', data);
+        throw new Error('Could not start checkout. Please try again or contact support.');
     }
 
     // Open the hosted Dodo Payments checkout in an overlay.

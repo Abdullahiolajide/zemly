@@ -24,8 +24,8 @@ const ImageUploadModal: React.FC<ImageUploadModalProps> = ({ open, onClose, onIm
             onImageInserted(publicUrl);
             setPreview(null);
         } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Upload failed';
-            setError(message);
+            console.error('[ImageUpload] Upload error:', err);
+            setError('Could not upload your image. Please try again.');
         } finally {
             setUploading(false);
         }

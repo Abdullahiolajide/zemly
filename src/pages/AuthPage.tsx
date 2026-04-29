@@ -117,7 +117,8 @@ const AuthPage: React.FC = () => {
                 });
 
                 if (signUpError) {
-                    setError(signUpError.message);
+                    console.error('[Auth] Sign-up error:', signUpError);
+                    setError('Could not create your account. Please check your details and try again.');
                     return;
                 }
 
@@ -144,7 +145,8 @@ const AuthPage: React.FC = () => {
                     });
 
                 if (signInError) {
-                    setError(signInError.message);
+                    console.error('[Auth] Sign-in error:', signInError);
+                    setError('Invalid email or password. Please try again.');
                     return;
                 }
 
@@ -172,7 +174,8 @@ const AuthPage: React.FC = () => {
             });
 
             if (googleError) {
-                setError(googleError.message);
+                console.error('[Auth] Google sign-in error:', googleError);
+                setError('Could not sign in with Google. Please try again.');
             }
             // If successful, user will be redirected to Google's OAuth page
             // and then back to /dashboard. The onAuthStateChange listener

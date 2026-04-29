@@ -203,11 +203,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ getNoteText, highlightedText, onC
             );
         } catch (err) {
             if ((err as Error).name === 'AbortError') return;
-            const msg = err instanceof Error ? err.message : 'Failed to get response';
+            console.error('[Chat] AI response error:', err);
             if (!streamTextRef.current) {
                 setMessages(newMessages);
             }
-            setError(msg);
+            setError('Something went wrong. Please try again.');
         } finally {
             setIsLoading(false);
             setIsStreaming(false);

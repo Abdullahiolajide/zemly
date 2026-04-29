@@ -77,7 +77,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                 }
             } catch (err) {
                 console.error('Failed to load quiz:', err);
-                if (!cancelled) { setError(err instanceof Error ? err.message : 'Failed to load quiz'); setView('generate'); }
+                if (!cancelled) { setError('Something went wrong loading your quiz. Please try again.'); setView('generate'); }
             }
         };
         load();
@@ -103,7 +103,7 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
             setView('quiz');
         } catch (err) {
             console.error('Quiz generation failed:', err);
-            setError(err instanceof Error ? err.message : 'Failed to generate quiz');
+            setError('Could not generate your quiz. Please try again.');
         } finally {
             setIsGenerating(false);
         }
