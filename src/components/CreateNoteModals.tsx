@@ -3,6 +3,7 @@ import { IoClose, IoMicOutline, IoLinkOutline, IoDocumentTextOutline } from 'rea
 import { MdUploadFile } from 'react-icons/md';
 import { FiUploadCloud } from 'react-icons/fi';
 import { AUDIO_UPLOAD_ACCEPT, isLikelyAudioFile } from '../lib/aiService';
+import GenerationProgressBar, { NOTE_GENERATION_PHASES } from './GenerationProgressBar';
 
 /* ─────────────────────────────────────────────
    Shared Modal Wrapper
@@ -545,8 +546,8 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                     disabled={isGenerating || isRecording || !audioItems.length}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    {isGenerating ? 'Generating Notes...' : 'Generate Note'}
                 </button>
+                <GenerationProgressBar active={isGenerating} phases={NOTE_GENERATION_PHASES} />
             </div>
         </ModalWrapper>
     );
@@ -1013,6 +1014,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                         'Generate Note'
                     )}
                 </button>
+                <GenerationProgressBar active={isLoading} phases={NOTE_GENERATION_PHASES} />
             </div>
         </ModalWrapper>
     );
@@ -1147,8 +1149,8 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
                     disabled={isGenerating}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                    {isGenerating ? 'Generating Notes...' : 'Generate Notes'}
                 </button>
+                <GenerationProgressBar active={isGenerating} phases={NOTE_GENERATION_PHASES} />
             </div>
         </ModalWrapper>
     );

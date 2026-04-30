@@ -7,6 +7,7 @@ import { FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { IoCheckmark, IoClose } from 'react-icons/io5';
 import { MdAutoAwesome } from 'react-icons/md';
 import { PiExam } from 'react-icons/pi';
+import GenerationProgressBar, { QUIZ_PHASES } from './GenerationProgressBar';
 import type { QuizQuestionRow, QuizStatus } from '../types';
 import type { QuizQuestion } from '../lib/aiService';
 import { generateQuiz, generateQuizExplanation } from '../lib/aiService';
@@ -213,6 +214,8 @@ const QuizPanel: React.FC<QuizPanelProps> = ({ noteId, getNoteText }) => {
                         </>
                     )}
                 </button>
+
+                <GenerationProgressBar active={isGenerating} phases={QUIZ_PHASES} />
             </div>
         );
     }

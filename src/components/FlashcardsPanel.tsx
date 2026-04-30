@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import posthog from 'posthog-js';
 import { MdAutoAwesome } from 'react-icons/md';
+import GenerationProgressBar, { FLASHCARD_PHASES } from './GenerationProgressBar';
 import type { FlashcardCard, FlashcardStatus } from '../types';
 import type { Flashcard } from '../lib/aiService';
 import { generateFlashcards } from '../lib/aiService';
@@ -169,6 +170,8 @@ const FlashcardsPanel: React.FC<FlashcardsPanelProps> = ({ noteId, getNoteText }
                     </>
                 )}
             </button>
+
+            <GenerationProgressBar active={isGenerating} phases={FLASHCARD_PHASES} />
         </div>
     );
 };

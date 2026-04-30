@@ -134,13 +134,12 @@ serveWithCors(async (req: Request) => {
         const prompt = `You are a quiz generator. Read the note below and generate multiple-choice questions.
 
 RULES:
-- Handle content coverage: If the note has multiple SOURCE blocks, sample questions across all sources.
-- Meaningful depth: Decide the number of high-quality questions you can generate depending on the note length, max - 100 questions
-- Generate well though natural questons a way humans would ask them, not like a robot
-- Do not stop early. Cover the entire note. and a bit of inbetweens
-- Prioritize quality and coverage over quantity.
+- Target range: 10–15 questions for short notes, 15-30 for medium, 30–50 for very long notes. Never exceed 50.
+- Only ask questions on the most important and testable concepts. Skip trivial details.
 - Each question must have exactly 4 options.
 - correctIndex is 0-based.
+- Write questions the way a teacher would naturally phrase them in an exam.
+- If the note has multiple SOURCE blocks, sample proportionally across all sources.
 - Return ONLY valid JSON, no markdown fences.
 
 Return format: {"questions":[{"question":"...","options":["A","B","C","D"],"correctIndex":0}]}

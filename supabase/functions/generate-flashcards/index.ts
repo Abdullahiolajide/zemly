@@ -140,13 +140,16 @@ serveWithCors(async (req: Request) => {
         const note = sanitizeNoteForPrompt(balanceMultiSourceNote(noteContent, 50000));
 
         const prompt = `Generate flashcards from this note. Each has "front" (question/term) and "back" (short answer).
-        If the note contains multiple SOURCE blocks, cover all of them rather than focusing on only the first one.
-        Meaningful depth: Decide the number of high-quality flashcards you can generate depending on the note length, max - 100 questions
-        - Generate well though natural questons a way humans would ask them, not like a robot
-        - Do not stop early. Cover the entire note.
-        Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
 
-        ${note}`;
+RULES:
+- Count the number of distinct concepts, terms, or ideas in the note. Generate AT MOST 1 flashcard per concept.
+- Target range: 5–15 flashcards for short notes, 15–30 for medium, 30–50 for very long notes. Never exceed 50.
+- Prioritize the most important concepts. Drop minor details.
+- Write questions the way a student would naturally ask them.
+- If the note has multiple SOURCE blocks, spread coverage across all of them proportionally.
+Return ONLY JSON: {"flashcards":[{"front":"...","back":"..."}]}
+
+${note}`;
 
         const raw = await promptGemini(prompt, {
             temperature: 0.5,
