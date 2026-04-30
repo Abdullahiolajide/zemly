@@ -22,9 +22,21 @@ export function isPremiumSubscription(subscription: UserSubscriptionRecord | nul
     const customerId = String(subscription.customer_id || '').trim();
 
     if (!customerId) return false;
-    if (inactiveStatuses.has(status)) return false;
+    
+    let isPeriodActive = false;
+    if (subscription.current_period_end) {
+        const periodEnd = new Date(subscription.current_period_end).getTime();
+        if (periodEnd > Date.now()) {
+            isPeriodActive = true;
+        }
+    }
 
-    return tier === 'premium' || tier === 'unlimited' || status === 'active' || status === 'trialing';
+    if (inactiveStatuses.has(status)) {
+        if (isPeriodActive) return true;
+        return false;
+    }
+
+    return tier === 'premium' || tier === 'unlimited' || status === 'active' || status === 'trialing' || isPeriodActive;
 }
 
 export function getSubscriptionPlanLabel(subscription: UserSubscriptionRecord | null | undefined): string {
