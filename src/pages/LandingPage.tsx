@@ -84,7 +84,7 @@ const features = [
 
 const LandingPage: React.FC = () => {
     const { user } = useAuthStore();
-    const ctaDestination = user ? '/dashboard' : '/auth';
+    const ctaDestination = user ? '/dashboard' : '/auth?mode=signup';
 
     return (
         <div className="relative min-h-screen bg-zinc-950">

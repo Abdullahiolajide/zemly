@@ -76,7 +76,7 @@ const Navbar: React.FC = () => {
                                 Log in
                             </Link>
                             <Link
-                                to="/auth"
+                                to="/auth?mode=signup"
                                 className="btn-emerald rounded-lg px-5 py-2 text-sm"
                             >
                                 Get Started
@@ -156,7 +156,7 @@ const Navbar: React.FC = () => {
                                         Log in
                                     </Link>
                                     <Link
-                                        to="/auth"
+                                        to="/auth?mode=signup"
                                         className="btn-emerald w-full py-3 text-sm"
                                         onClick={() => setMobileOpen(false)}
                                     >
