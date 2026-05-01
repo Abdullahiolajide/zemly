@@ -73,8 +73,14 @@ const AuthPage: React.FC = () => {
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
 
-    const { setLoading } = useAuthStore();
+    const { setLoading, user } = useAuthStore();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (user) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [user, navigate]);
 
     useEffect(() => {
         const mode = searchParams.get('mode');

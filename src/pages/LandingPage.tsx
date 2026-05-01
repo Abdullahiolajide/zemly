@@ -6,6 +6,7 @@ import { TbCards } from 'react-icons/tb';
 import { PiExam } from 'react-icons/pi';
 import Navbar from '../components/Navbar';
 import Logo from '../components/Logo';
+import { useAuthStore } from '../store/useAuthStore';
 
 const inputMethods = [
     {
@@ -82,6 +83,9 @@ const features = [
 ];
 
 const LandingPage: React.FC = () => {
+    const { user } = useAuthStore();
+    const ctaDestination = user ? '/dashboard' : '/auth';
+
     return (
         <div className="relative min-h-screen bg-zinc-950">
             <Navbar />
@@ -143,7 +147,7 @@ const LandingPage: React.FC = () => {
                         {/* CTAs */}
                         <div className="animate-fade-up animate-delay-3 flex w-full flex-col gap-3 sm:flex-row sm:items-center">
                             <Link
-                                to="/auth"
+                                to={ctaDestination}
                                 className="btn-emerald px-8 py-4 text-base"
                             >
                                 Start Learning Faster →
@@ -373,7 +377,7 @@ const LandingPage: React.FC = () => {
                         <p className="mx-auto mb-10 max-w-md text-base text-zinc-400">
                             Join students who use Zemly AI to study smarter — not harder. Upload your first note in under 30 seconds.
                         </p>
-                        <Link to="/auth" className="btn-emerald px-10 py-4 text-base">
+                        <Link to={ctaDestination} className="btn-emerald px-10 py-4 text-base">
                             Get Started — It's Free
                         </Link>
                     </div>

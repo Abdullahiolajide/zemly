@@ -470,16 +470,8 @@ serveWithCors(async (req: Request) => {
         }
                 const eventType = normalizeEventType(payload);
         const status    = extractNestedStatus(payload);
-        let tier      = inferTier(eventType, status);
+        const tier      = inferTier(eventType, status);
         const eventData = asObject(payload.data);
-        
-        const currentPeriodEnd = extractCurrentPeriodEnd(payload);
-
-        // If the subscription is canceled but the current period end is in the future,
-        // they should remain on the premium tier until that date.
-        if (currentPeriodEnd && new Date(currentPeriodEnd).getTime() > Date.now() && tier === 'free') {
-            tier = 'premium';
-        }
 
         const email  = extractNestedEmail(payload) ?? (typeof eventData.email === 'string' ? eventData.email.trim().toLowerCase() : null);
         const userId = extractNestedUserId(payload) ?? (typeof eventData.user_id === 'string' ? eventData.user_id.trim() : null);

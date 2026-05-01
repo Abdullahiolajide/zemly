@@ -546,6 +546,14 @@ export const AudioModal: React.FC<AudioModalProps> = ({
                     disabled={isGenerating || isRecording || !audioItems.length}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
+                    {isGenerating ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
+                            Generating note...
+                        </span>
+                    ) : (
+                        'Generate Note'
+                    )}
                 </button>
                 <GenerationProgressBar active={isGenerating} phases={NOTE_GENERATION_PHASES} />
             </div>
@@ -1149,6 +1157,14 @@ export const WebsiteLinkModal: React.FC<WebsiteLinkModalProps> = ({
                     disabled={isGenerating}
                     className="btn-emerald mt-5 w-full py-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
                 >
+                    {isGenerating ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <span className="h-4 w-4 animate-spin rounded-full border-2" style={{ borderColor: 'rgba(13,15,18,0.3)', borderTopColor: '#0D0F12' }} />
+                            Generating note...
+                        </span>
+                    ) : (
+                        'Generate Note'
+                    )}
                 </button>
                 <GenerationProgressBar active={isGenerating} phases={NOTE_GENERATION_PHASES} />
             </div>
