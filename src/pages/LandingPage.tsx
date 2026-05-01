@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MdUploadFile } from 'react-icons/md';
 import { IoDocumentTextOutline, IoMicOutline, IoLinkOutline } from 'react-icons/io5';
@@ -85,6 +86,13 @@ const features = [
 const LandingPage: React.FC = () => {
     const { user } = useAuthStore();
     const ctaDestination = user ? '/dashboard' : '/auth?mode=signup';
+    const [showModal, setShowModal] = useState(false);
+
+    useEffect(() => {
+        if (user) {
+            setShowModal(true);
+        }
+    }, [user]);
 
     return (
         <div className="relative min-h-screen bg-zinc-950">
@@ -399,6 +407,39 @@ const LandingPage: React.FC = () => {
                     </p>
                 </div>
             </footer>
+
+            {/* ── Logged In Modal ── */}
+            {showModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+                    <div className="relative w-full max-w-sm rounded-2xl border border-zinc-800 bg-zinc-900/90 p-8 shadow-2xl text-center backdrop-blur-md">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10">
+                            <svg className="h-7 w-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <h3 className="mb-2 text-xl font-bold text-zinc-100" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
+                            You're logged in
+                        </h3>
+                        <p className="mb-6 text-sm text-zinc-400">
+                            You have successfully confirmed your email. Let's get back to studying.
+                        </p>
+                        <div className="flex flex-col gap-3">
+                            <Link 
+                                to="/dashboard" 
+                                className="btn-emerald w-full py-3"
+                            >
+                                Go to Dashboard
+                            </Link>
+                            <button 
+                                onClick={() => setShowModal(false)}
+                                className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-300"
+                            >
+                                Stay on this page
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
