@@ -218,11 +218,24 @@ const DashboardPage: React.FC = () => {
     const [paymentBanner, setPaymentBanner] = useState<'success' | 'failed' | null>(null);
 
     useEffect(() => {
-        const paymentResult = searchParams.get('payment');
+        const dodoStatus = searchParams.get('status');
+        let paymentResult = searchParams.get('payment');
+
+        // Dodo Payments appends ?status=failed or ?status=cancelled on failure
+        if (dodoStatus === 'failed' || dodoStatus === 'cancelled') {
+            paymentResult = 'failed';
+        } else if (dodoStatus === 'success') {
+            paymentResult = 'success';
+        }
+
         if (paymentResult === 'success' || paymentResult === 'failed') {
             setPaymentBanner(paymentResult);
             // Clean up the URL
             searchParams.delete('payment');
+            searchParams.delete('status');
+            searchParams.delete('subscription_id');
+            searchParams.delete('customer_id');
+            searchParams.delete('payment_id');
             setSearchParams(searchParams, { replace: true });
             // Auto-dismiss after 6 seconds
             const timer = setTimeout(() => setPaymentBanner(null), 6000);
