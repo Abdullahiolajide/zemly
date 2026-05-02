@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
 
-const DODO_API_URL = 'https://api.dodopayments.com';
+const DODO_API_URL = 'https://live.dodopayments.com';
 const DODO_TEST_API_URL = 'https://test.dodopayments.com';
 
 type UserSubscriptionRow = {

@@ -4,7 +4,7 @@
 import { serveWithCors } from '../_shared/server.ts';
 import { requireAuth } from '../_shared/auth.ts';
 
-const DODO_API_URL = 'https://api.dodopayments.com';       // live
+const DODO_API_URL = 'https://live.dodopayments.com';       // live
 const DODO_TEST_API_URL = 'https://test.dodopayments.com'; // test
 
 serveWithCors(async (req: Request) => {
