@@ -13,7 +13,7 @@ import { BiHome } from 'react-icons/bi';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { HiOutlineChevronDoubleLeft } from 'react-icons/hi';
 import { RiMoonLine } from 'react-icons/ri';
-import { FiTrash2, FiEdit3 } from 'react-icons/fi';
+import { FiTrash2, FiEdit3, FiHelpCircle, FiMessageSquare } from 'react-icons/fi';
 import { useAuthStore } from '../store/useAuthStore';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import Logo from '../components/Logo';
@@ -29,6 +29,7 @@ import ThemeModal from '../components/ThemeModal';
 import UpgradeModal from '../components/UpgradeModal';
 import OnboardingModal from '../components/OnboardingModal';
 import AccountSettingsModal from '../components/AccountSettingsModal';
+import ContactModal from '../components/ContactModal';
 import { getUserSubscription, getSubscriptionPlanLabel, isPremiumSubscription, type UserSubscriptionRecord } from '../lib/subscriptionService';
 import { supabase } from '../lib/supabaseClient';
 import { getEdgeFunctionAuthHeaders } from '../lib/edgeFunctionAuth';
@@ -203,6 +204,7 @@ const DashboardPage: React.FC = () => {
     const [themeModalOpen, setThemeModalOpen] = useState(false);
     const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
     const [accountModalOpen, setAccountModalOpen] = useState(false);
+    const [contactModalOpen, setContactModalOpen] = useState(false);
     const [onboardingOpen, setOnboardingOpen] = useState(false);
     const [googleDisplayName, setGoogleDisplayName] = useState<string | null>(null);
     const [billingPortalLoading, setBillingPortalLoading] = useState(false);
@@ -1047,10 +1049,28 @@ const DashboardPage: React.FC = () => {
 
                 {/* Sidebar Footer */}
                 <div className="px-3 py-3" style={{ borderTop: '1px solid var(--border-glass)' }}>
+                    {/* Support */}
+                    <button
+                        onClick={() => setContactModalOpen(true)}
+                        className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-zinc-200"
+                    >
+                        <FiHelpCircle className="h-[18px] w-[18px]" />
+                        <span>Support</span>
+                    </button>
+
+                    {/* Feedback */}
+                    <button
+                        onClick={() => setContactModalOpen(true)}
+                        className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-zinc-200"
+                    >
+                        <FiMessageSquare className="h-[18px] w-[18px]" />
+                        <span>Feedback</span>
+                    </button>
+
                     {/* Theme Toggle */}
                     <button
                         onClick={() => setThemeModalOpen(true)}
-                        className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-zinc-200"
+                        className="mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium text-zinc-400 transition-colors duration-150 hover:bg-zinc-800/70 hover:text-zinc-200"
                     >
                         <RiMoonLine className="h-[18px] w-[18px]" />
                         <span>Theme</span>
@@ -1577,6 +1597,10 @@ const DashboardPage: React.FC = () => {
                 onClose={() => setUpgradeModalOpen(false)}
                 userEmail={user?.email}
                 userId={user?.id}
+            />
+            <ContactModal
+                open={contactModalOpen}
+                onClose={() => setContactModalOpen(false)}
             />
             <OnboardingModal
                 open={onboardingOpen}
